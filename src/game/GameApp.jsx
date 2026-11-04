@@ -8,6 +8,11 @@ import {loadOrbiterKernel, TICKS_PER_SECOND, WEAPON, WORLD, CONDUIT_ERR, CONDUIT
 import {ARMORY, drawCage, drawMagma, drawIrradiated, drawBlackHole, drawSupernova} from "./armory.js";
 import {STAR_COLLAPSE, VORTEX, DRILL_CRACK_DISTANCE, PLANETS as PLANET_DEFS} from "../../config/planets.js";
 import {IntroScreen} from "./IntroScreen.jsx";
+import {PauseMenu} from "./PauseMenu.jsx";
+import {DIFFICULTIES, seedOffset} from "./campaign.js";
+import {getSettings} from "./settings.js";
+import {saveGame, loadGame} from "./saveManager.js";
+import "./system.css";
 import {CommsTerminal} from "./CommsTerminal.jsx";
 import {applyChoice, openComms} from "./comms.js";
 import {GovernorPanel} from "./GovernorPanel.jsx";
@@ -42,12 +47,14 @@ const planetName = (id) => GAME_GALAXY.planets.find((p) => p.id === id)?.name ??
 const planetIndex = (id) => GAME_GALAXY.planets.findIndex((p) => p.id === id);
 
 // The live session. The kernel is loaded once by GameApp and passed in; each session starts it from zero.
-function GameSession({kernel}) {
-  const canvasRef = useRef(null), overlayRef = useRef(null);
+// session: {key, seed, difficulty, save}. A save (a record from saveManager) restores the sector instead of starting it.
+function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
+  const canvasRef = useRef(null), overlayRef = useRef(null), appRef = useRef(null);
   const st = useRef(newState());
-  const u = useRef({drag: null, mode: null, msg: START_MSG, msgWin: false, paused: false, speed: 1, tick: 0, shipyard: false, armory: false, comms: false, governor: null, tech: false, senate: false, arm: null, hover: null, pointer: null});
+  const u = useRef({drag: null, mode: null, msg: START_MSG, msgWin: false, paused: false, speed: 1, tick: 0, shipyard: false, armory: false, comms: false, governor: null, tech: false, senate: false, arm: null, hover: null, pointer: null, menu: false, confirm: null, autosaveAt: -1e9, fps: 0});
   const [ui, setUi] = useState({...u.current});
   const refresh = () => setUi({...u.current});
+  const difficulty = DIFFICULTIES[session.difficulty] ?? DIFFICULTIES.commander;
 
   useEffect(() => {
     const scene = new OrbitScene(canvasRef.current, {}, {galaxies: {game: GAME_GALAXY}, galaxyId: "game"});
@@ -59,11 +66,20 @@ function GameSession({kernel}) {
     // The simulation kernel is the source of truth for planet positions. It ticks to match the
     // game clock (sim.c[5], seconds) so pause and speed controls still apply.
     let kBase = null;
-    kernel.reset();
+    // A new sector starts at its seeded offset; a save is replayed from its log and the game state put back.
+    if (session.save) {
+      const r = kernel.importState(session.save.kernel);
+      if (!r.ok) console.warn("Save restored with planet drift", r.drift);
+      st.current = {...newState(), ...session.save.state};
+    } else {
+      kernel.beginAt(seedOffset(session.seed));
+    }
+    scene.orbitScale = getSettings().orbitOpacity / 35;
     const syncKernel = () => {
       if (!kernel || !scene.sim) return false;
       const gameT = scene.sim.c[5];
-      if (kBase === null) kBase = gameT;
+      // the kernel is already at its start (or save) tick, so the game clock is pinned to that tick
+      if (kBase === null) kBase = gameT - kernel.tickCount / TICKS_PER_SECOND;
       const n = Math.floor((gameT - kBase) * TICKS_PER_SECOND) - kernel.tickCount;
       if (n > 0) kernel.tick(n);
       return true;
@@ -129,9 +145,11 @@ function GameSession({kernel}) {
       return px * px + py * py <= R * R ? "shadow" : null;
     };
     const snapSeen = new Set();
-    const gainSeen = PLANET_OUTPUT.map(() => 0); // kernel totals already credited to the stockpile
-    let creditSeen = 0;                          // kernel credit total already credited
-    let buildTick = 0;                           // kernel tick up to which structure income has been paid
+    // Kernel totals already paid into the stockpiles. A restored save starts from its own totals, so the
+    // replayed history is not paid out a second time.
+    const gainSeen = PLANET_OUTPUT.map((o) => kernel.planets.gainTotal[planetIndex(o.planet)]);
+    let creditSeen = kernel.creditTotal;         // kernel credit total already credited
+    let buildTick = kernel.tickCount;            // kernel tick up to which structure income has been paid
 
     const onDown = (e) => {
       const P = positions(); if (!P) return;
@@ -159,20 +177,29 @@ function GameSession({kernel}) {
         const id = hitBody(st.current, P, p);
         const valid = id && (W.target === "core" ? id === "core" : isPlanet(id));
         if (!valid) { say(`Click ${W.target === "core" ? "Sol Core" : "a world"} to target ${W.name}. Esc cancels.`); refresh(); return; }
-        const r = fireWeapon(st.current, W.type);
-        if (!r.ok) { s0.arm = null; say(r.msg); refresh(); return; }
-        if (W.target !== "core" && absorbStrike(st.current, id)) {
-          // a barrier intercepts the strike: the shot never reaches the world, the shield is spent
-          st.current.flashes.push({x: P[id].x, y: P[id].y, t: performance.now()});
-          say(`${planetName(id)}'s barrier shield absorbed the ${W.name}.`, true);
-          s0.arm = null; refresh();
+        const doFire = () => {
+          const r = fireWeapon(st.current, W.type);
+          if (!r.ok) { s0.arm = null; say(r.msg); refresh(); return; }
+          if (W.target !== "core" && absorbStrike(st.current, id)) {
+            // a barrier intercepts the strike: the shot never reaches the world, the shield is spent
+            st.current.flashes.push({x: P[id].x, y: P[id].y, t: performance.now()});
+            say(`${planetName(id)}'s barrier shield absorbed the ${W.name}.`, true);
+            s0.arm = null; refresh();
+            return;
+          }
+          const f = P.ferrum;
+          kernel.launch(W.type, f.x, f.y, W.target === "core" ? -1 : planetIndex(id));
+          s0.arm = null;
+          say(`${W.name} launched at ${W.target === "core" ? "Sol Core" : planetName(id)}.`, true);
+          refresh();
+        };
+        if (getSettings().confirmSuperweapon) {
+          const cost = Object.entries(W.cost).map(([k, v]) => `${v} ${COST_LABEL[k]}`).join(" · ");
+          s0.confirm = {text: `${W.name} at ${W.target === "core" ? "Sol Core" : planetName(id)}. Costs ${cost}.`, run: doFire};
+          refresh();
           return;
         }
-        const f = P.ferrum;
-        kernel.launch(W.type, f.x, f.y, W.target === "core" ? -1 : planetIndex(id));
-        s0.arm = null;
-        say(`${W.name} launched at ${W.target === "core" ? "Sol Core" : planetName(id)}.`, true);
-        refresh();
+        doFire();
         return;
       }
       const id = hitBody(st.current, P, p);
@@ -367,7 +394,10 @@ function GameSession({kernel}) {
       ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
     };
 
+    let frames = 0, fpsT = performance.now(), prevStatus = null, lastAutosave = performance.now();
     const loop = (now) => {
+      frames += 1;
+      if (now - fpsT >= 1000) { s0.fps = Math.round((frames * 1000) / (now - fpsT)); frames = 0; fpsT = now; }
       const sim = scene.sim, P = positions();
       if (P && sim) {
         const s = st.current, gameT = sim.c[5];
@@ -375,7 +405,7 @@ function GameSession({kernel}) {
         for (const msg of snapTethers(s, P, now)) say(msg);
         if (kernel) {
           const total = kernel.creditTotal, d = total - creditSeen;
-          if (d > 0) { s.credits += d; creditSeen = total; }
+          if (d > 0) { s.credits += d * difficulty.income; creditSeen = total; }
         }
         // Siphoning: the kernel adds each world's output to its running total every tick; credit the difference.
         // High-Tensile Beams: each conduit's snap limit follows the researched perk
@@ -393,7 +423,7 @@ function GameSession({kernel}) {
             if (kernel.planets.flow[idx] > 0) {
               for (const key of infraOf(s, p.id)) {
                 const d = INFRA.find((x) => x.key === key);
-                if (d.resource) s[d.resource] += d.rate * dt / TICKS_PER_SECOND * (key === "freeport" ? fpMult : 1);
+                if (d.resource) s[d.resource] += d.rate * dt / TICKS_PER_SECOND * (key === "freeport" ? fpMult : 1) * difficulty.income;
               }
             } else if (pz.occlusionShare > 0) {
               // Phase Plating: a world shadowed by the sun still earns part of its output
@@ -408,7 +438,7 @@ function GameSession({kernel}) {
         }
         if (kernel) PLANET_OUTPUT.forEach((o, i) => {
           const idx = planetIndex(o.planet), total = kernel.planets.gainTotal[idx], d = total - gainSeen[i];
-          if (d > 0) { s[o.resource] += d; gainSeen[i] = total; }
+          if (d > 0) { s[o.resource] += d * difficulty.income; gainSeen[i] = total; }
         });
         if (kernel) for (let c = 0; c < kernel.conduitCount; c++) {
           if (kernel.conduits.snapped[c] && !snapSeen.has(c)) {
@@ -442,6 +472,23 @@ function GameSession({kernel}) {
             s.victoryAck = false; say(`Victory: ${VICTORIES[v].title}.`, true); refresh();
           }
         }
+        // a world struck from pristine shakes the screen (Settings: None / Subtle / Heavy)
+        if (kernel) {
+          const n = kernel.planetCount;
+          let struck = false;
+          if (prevStatus) for (let i = 0; i < n; i++) if (prevStatus[i] === 0 && kernel.planets.status[i] !== 0) struck = true;
+          prevStatus = Uint8Array.from(kernel.planets.status.subarray(0, n));
+          if (struck && getSettings().shake !== "none" && appRef.current) {
+            appRef.current.classList.remove("shake"); void appRef.current.offsetWidth; appRef.current.classList.add("shake");
+            setTimeout(() => appRef.current?.classList.remove("shake"), 450);
+          }
+        }
+        // autosave on the Settings interval (0 turns it off)
+        const cfg = getSettings();
+        if (cfg.autosave > 0 && now - lastAutosave >= cfg.autosave * 1000) {
+          lastAutosave = now;
+          if (persist("autosave")) s0.autosaveAt = now;
+        }
         if (s.won || s.lost) scene.speed = 0;
         drawOverlay(P, now);
         s0.tick = Math.floor(gameT);
@@ -451,19 +498,45 @@ function GameSession({kernel}) {
     };
     raf = requestAnimationFrame(loop);
 
-    const setSpeedKey = (v) => { s0.speed = v; s0.paused = false; scene.speed = v; refresh(); };
+    const setSpeedKey = (v) => { s0.speed = v; s0.paused = false; applySpeed(); refresh(); };
     const onKey = (e) => {
+      if (e.key === "Escape") {
+        // Esc backs out of the innermost thing first, and only then opens the pause menu
+        if (s0.confirm) { s0.confirm = null; s0.arm = null; say("Strike cancelled."); }
+        else if (s0.menu) closeMenu();
+        else if (s0.arm) { s0.arm = null; say("Targeting cancelled."); }
+        else if (s0.governor) s0.governor = null;
+        else openMenu();
+        refresh();
+        return;
+      }
+      if (s0.menu) return;
+      if (e.key === "F5") { e.preventDefault(); persist("quicksave", "Quick save made."); }
+      if (e.key === "F9") {
+        e.preventDefault();
+        const data = loadGame("quicksave");
+        if (data) onLoad(data); else { say("No quick save yet. Press F5 during a campaign to make one."); refresh(); }
+      }
       if (e.code === "Space") { e.preventDefault(); togglePause(); }
       if (e.key === "1" || e.key === "2" || e.key === "4") setSpeedKey(Number(e.key));
-      if (e.key === "Escape" && s0.arm) { s0.arm = null; say("Targeting cancelled."); refresh(); }
-      else if (e.key === "Escape" && s0.governor) { s0.governor = null; refresh(); }
     };
     window.addEventListener("keydown", onKey);
+    // Settings: pause when the window loses focus; resume when it comes back if we paused it
+    const onBlur = () => {
+      if (getSettings().pauseOnDefocus && !s0.paused && !s0.menu && !st.current.won && !st.current.lost) {
+        s0.paused = true; s0.blurPaused = true; applySpeed(); refresh();
+      }
+    };
+    const onFocus = () => { if (s0.blurPaused) { s0.blurPaused = false; s0.paused = false; applySpeed(); refresh(); } };
+    window.addEventListener("blur", onBlur);
+    window.addEventListener("focus", onFocus);
     window.__relic = {scene, u: s0, st, say, refresh, get kernel() { return kernel; }, resetKernel: () => { kernel.reset(); kBase = null; gainSeen.fill(0); creditSeen = 0; buildTick = 0; snapSeen.clear(); }};
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", sizeOverlay);
       window.removeEventListener("keydown", onKey);
+      window.removeEventListener("blur", onBlur);
+      window.removeEventListener("focus", onFocus);
       ov.removeEventListener("pointerdown", onDown);
       ov.removeEventListener("pointermove", onMove);
       ov.removeEventListener("pointerup", onUp);
@@ -474,11 +547,29 @@ function GameSession({kernel}) {
   }, []);
 
   function togglePause() {
-    const sc = window.__relic?.scene; if (!sc || st.current.won || st.current.lost) return;
+    if (!window.__relic?.scene || st.current.won || st.current.lost || u.current.menu) return;
     u.current.paused = !u.current.paused;
-    sc.speed = u.current.paused ? 0 : u.current.speed;
+    applySpeed();
     refresh();
   }
+  // The sim runs at the chosen speed only when nothing holds it: the pause button, the pause menu, a finished match.
+  function applySpeed() {
+    const sc = window.__relic?.scene; if (!sc) return;
+    const cur = u.current, over = st.current.won || st.current.lost;
+    sc.speed = cur.paused || cur.menu || over ? 0 : cur.speed;
+  }
+  function openMenu() { if (u.current.menu) return; u.current.menu = true; applySpeed(); refresh(); }
+  function closeMenu() { u.current.menu = false; applySpeed(); refresh(); }
+  function syncSettings() { const sc = window.__relic?.scene; if (sc) sc.orbitScale = getSettings().orbitOpacity / 35; refresh(); }
+  function notify(text, win = false) { u.current.msg = text; u.current.msgWin = win; refresh(); }
+  // Writes the live game to a slot. Manual saves say so; autosaves stay quiet. Returns whether it stuck.
+  function persist(slot, text) {
+    const ok = !!saveGame(slot, {kernel, state: st.current, seed: session.seed, difficulty: session.difficulty});
+    if (text) notify(ok ? text : "Save failed: browser storage is unavailable.", ok);
+    return ok;
+  }
+  function runStrike() { const c = u.current.confirm; u.current.confirm = null; c?.run(); refresh(); }
+  function cancelStrike() { u.current.confirm = null; u.current.arm = null; notify("Strike cancelled."); }
   function toggleShipyard() { u.current.shipyard = !u.current.shipyard; u.current.armory = false; refresh(); }
   function toggleArmory() { u.current.armory = !u.current.armory; u.current.shipyard = false; refresh(); }
   function toggleTech() { u.current.tech = !u.current.tech; u.current.shipyard = false; u.current.armory = false; refresh(); }
@@ -527,7 +618,7 @@ function GameSession({kernel}) {
   function buildHull(type) { const r = orderShip(st.current, type); u.current.msg = r.msg; refresh(); }
   function setSpeed(v) {
     u.current.speed = v; u.current.paused = false;
-    const sc = window.__relic?.scene; if (sc) sc.speed = v;
+    applySpeed();
     refresh();
   }
   function setMode(m) {
@@ -542,22 +633,15 @@ function GameSession({kernel}) {
     const r = build(st.current, "repair", {x: 0, y: 0}, P || {});
     u.current.msg = r.msg; refresh();
   }
-  function restart() {
-    const sc = window.__relic?.scene;
-    window.__relic?.resetKernel?.();
-    st.current = newState();
-    st.current.lastTick = Math.floor(sc?.sim?.c?.[5] ?? 0);
-    Object.assign(u.current, {drag: null, mode: null, arm: null, hover: null, msg: START_MSG, msgWin: false});
-    if (sc) sc.speed = u.current.paused ? 0 : u.current.speed;
-    refresh();
-  }
+  // Restart is a fresh sector with the same seed and difficulty: a new session, so kernel and scene start clean.
+  function restart() { onRestart(); }
 
   const s = st.current;
   const over = s.won || s.lost;
   const yr = s.year || 1;
   const radiationLabel = ["Low", "Rising", "High", "Severe", "Critical"][Math.min(4, Math.max(0, s.radiation))];
   return (
-    <div className="app">
+    <div className="app" ref={appRef}>
       <canvas ref={canvasRef} className="stage" />
       <canvas ref={overlayRef} className="stage" style={{pointerEvents: "auto", cursor: u.current.arm ? "none" : u.current.mode ? "crosshair" : "default"}} />
 
@@ -576,9 +660,11 @@ function GameSession({kernel}) {
         <div className="row"><span>🌀 Singularity data</span><b>{Math.floor(s.data)} / {RULES.DATA_GOAL}</b></div>
         <div className="row"><span>☢️ Radiation</span><b>{radiationLabel}</b></div>
         <div className="row"><span>Year</span><b>{yr}</b></div>
+        {getSettings().fps ? <div className="row"><span>Frame rate</span><b>{u.current.fps} fps</b></div> : null}
       </div>
 
       <div className="top-right" style={{gap: 8}}>
+        <button className="pill glass zelo" title="Menu (Esc)" aria-label="Menu" onClick={openMenu}>⚙</button>
         <button className="pill glass zelo" onClick={togglePause}>{u.current.paused ? "Resume" : "Pause"}</button>
         {[1, 2, 4].map((v) => (
           <button key={v} className={"pill glass zelo" + (u.current.speed === v && !u.current.paused ? " on" : "")} onClick={() => setSpeed(v)}>{v}x</button>
@@ -607,6 +693,25 @@ function GameSession({kernel}) {
 
       {u.current.tech ? <TechWeb s={s} onResearch={researchNow} onClose={toggleTech} /> : null}
       {u.current.senate && s.senate.current ? <SenateChamber s={s} onClose={closeSenate} /> : null}
+      {performance.now() - u.current.autosaveAt < 1500 ? <div className="autosave-tag mono">AUTOSAVING…</div> : null}
+      {u.current.confirm ? (
+        <div className="overlay" style={{zIndex: 35}}>
+          <div className="sheet small glass" style={{padding: 20, gap: 12}}>
+            <b>Confirm strategic strike</b>
+            <p style={{margin: 0, fontSize: 13}}>{u.current.confirm.text} Launch now?</p>
+            <div style={{display: "flex", gap: 8, justifyContent: "flex-end"}}>
+              <button className="pill zelo" onClick={cancelStrike}>Cancel</button>
+              <button className="cta" onClick={runStrike}>Launch</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {u.current.menu ? (
+        <PauseMenu onResume={closeMenu} onQuickSave={() => persist("quicksave", "Quick save made.")}
+          onSave={(slot) => persist(slot, "Game saved.")}
+          onLoad={(id) => { const data = loadGame(id); if (data) onLoad(data); }}
+          onQuit={onQuit} onSettingsChanged={syncSettings} />
+      ) : null}
       {s.victory && !s.victoryAck ? <VictoryModal s={s} onKeep={keepPlaying} onRestart={restart} /> : null}
       {u.current.senateToast ? (
         <div key={u.current.senateToast.id} className={"senate-toast glass" + (u.current.senateToast.passed ? " passed" : " failed")}>
@@ -680,6 +785,7 @@ function GameSession({kernel}) {
 export function GameApp() {
   const [kernel, setKernel] = useState(null);
   const [screen, setScreen] = useState("intro");
+  const [session, setSession] = useState(null);
   useEffect(() => {
     let alive = true;
     loadOrbiterKernel()
@@ -687,8 +793,15 @@ export function GameApp() {
       .catch((err) => console.error("Orbiter kernel failed to load:", err));
     return () => { alive = false; };
   }, []);
-  if (screen === "intro" || !kernel) {
-    return <IntroScreen kernelStatus={kernel ? "ONLINE" : "LOADING"} onLaunch={() => setScreen("game")} />;
+  // Each new, restarted or loaded game is a new session with its own key, so the screen mounts clean.
+  const startNew = (opts) => { setSession({key: Date.now(), seed: opts.seed, difficulty: opts.difficulty, save: null}); setScreen("game"); };
+  const startLoad = (save) => { setSession({key: Date.now(), seed: save.seed, difficulty: save.difficulty, save}); setScreen("game"); };
+  if (screen === "intro" || !kernel || !session) {
+    return <IntroScreen kernelStatus={kernel ? "ONLINE" : "LOADING"} onStart={startNew} onLoad={startLoad} />;
   }
-  return <GameSession kernel={kernel} />;
+  return (
+    <GameSession key={session.key} kernel={kernel} session={session}
+      onRestart={() => startNew({seed: session.seed, difficulty: session.difficulty})}
+      onLoad={startLoad} onQuit={() => setScreen("intro")} />
+  );
 }

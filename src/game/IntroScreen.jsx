@@ -1,10 +1,14 @@
-// Title screen for Orbiter: Stellar Conquest. Ported from the cinematic intro: starfield, warp
-// sequence, faction roster. "Initialize Sector" starts the warp and then calls onLaunch().
+// Title screen for Orbiter: Stellar Conquest. Starfield and orbits, then Continue Campaign, New Campaign
+// (sector seed and difficulty), Load Game (save slots), Settings, the Faction Database and Credits.
+// Every route into the game plays the warp sequence first.
 import {useEffect, useRef, useState} from "react";
 import "./intro.css";
 import {FACTIONS} from "./factions.js";
-
-
+import {DIFFICULTIES, randomSeed, sectorName} from "./campaign.js";
+import {createAudio} from "./audio.js";
+import {listSaves, loadGame, fmtElapsed} from "./saveManager.js";
+import {SlotBrowser} from "./SlotBrowser.jsx";
+import {SettingsModal} from "./SettingsModal.jsx";
 
 // Decorative orbits for the title backdrop (not the game simulation).
 const BACKDROP_PLANETS = [
@@ -14,43 +18,20 @@ const BACKDROP_PLANETS = [
   {r: 370, angle: 4.8, speed: 0.0018, size: 10, color: "#34d399"},
 ];
 
-// Synthesised audio (Web Audio). Created on the first user gesture.
-function makeAudio() {
-  let ctx = null;
-  const start = () => {
-    if (ctx) return;
-    try {
-      const AC = window.AudioContext || window.webkitAudioContext;
-      ctx = new AC();
-      const osc = ctx.createOscillator(), gain = ctx.createGain();
-      osc.type = "sine"; osc.frequency.setValueAtTime(55, ctx.currentTime);
-      gain.gain.setValueAtTime(0.01, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.15, ctx.currentTime + 2);
-      osc.connect(gain); gain.connect(ctx.destination); osc.start();
-    } catch (e) { ctx = null; }
-    return ctx;
-  };
-  const warp = () => {
-    if (!ctx) start();
-    if (!ctx) return;
-    const now = ctx.currentTime, osc = ctx.createOscillator(), gain = ctx.createGain();
-    osc.type = "sawtooth";
-    osc.frequency.setValueAtTime(150, now); osc.frequency.exponentialRampToValueAtTime(800, now + 1.2);
-    gain.gain.setValueAtTime(0.01, now); gain.gain.exponentialRampToValueAtTime(0.3, now + 0.4);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 1.4);
-    osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(now + 1.5);
-  };
-  return {start, warp};
-}
-
-export function IntroScreen({kernelStatus, onLaunch}) {
+export function IntroScreen({kernelStatus, onStart, onLoad}) {
   const canvasRef = useRef(null);
   const warpRef = useRef(false);
   const audioRef = useRef(null);
   const [warping, setWarping] = useState(false);
-  const [rosterOpen, setRosterOpen] = useState(false);
-  if (!audioRef.current) audioRef.current = makeAudio();
+  const [panel, setPanel] = useState(null); // null | "new" | "load" | "settings" | "roster" | "credits"
+  const [, setSaveTick] = useState(0);      // re-reads the save list after a delete
+  const [seedText, setSeedText] = useState("");
+  const [difficulty, setDifficulty] = useState("commander");
+  if (!audioRef.current) audioRef.current = createAudio();
   const kernelOnline = kernelStatus === "ONLINE";
+  const saves = listSaves();
+  const latest = saves[0]?.data ?? null;
+  const seedPreview = seedText.trim() ? sectorName(seedText.trim()) : null;
 
   useEffect(() => {
     const canvas = canvasRef.current, ctx = canvas.getContext("2d");
@@ -115,13 +96,23 @@ export function IntroScreen({kernelStatus, onLaunch}) {
     };
   }, []);
 
-  const launch = () => {
+  // Plays the warp, then hands over to the game (or the loaded save) once the sequence ends.
+  const go = (next) => {
     if (!kernelOnline || warpRef.current) return;
     audioRef.current.warp();
     warpRef.current = true;
     setWarping(true);
-    setTimeout(onLaunch, 1400);
+    setPanel(null);
+    setTimeout(next, 1400);
   };
+  const beginNew = () => {
+    const seed = seedText.trim() || randomSeed();
+    go(() => onStart({seed, difficulty}));
+  };
+  const continueLatest = () => { if (latest) go(() => onLoad(latest)); };
+  const loadSlot = (id) => { const data = loadGame(id); if (data) go(() => onLoad(data)); };
+  const closePanel = () => setPanel(null);
+  const modalOpen = panel === "new" || panel === "roster" || panel === "credits";
 
   return (
     <div className="intro-root">
@@ -144,12 +135,22 @@ export function IntroScreen({kernelStatus, onLaunch}) {
           Dynamic orbital motion meets interspecies warfare. Weave hardlight supply tethers between moving worlds,
           construct modular starfleets, and negotiate survival with 20 galactic factions.
         </p>
-        <div className="intro-buttons">
-          <button className="intro-start" onClick={launch} disabled={!kernelOnline}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
-            {kernelOnline ? "Initialize Sector" : "Kernel loading…"}
+        <div className="intro-buttons" style={{display: "flex", flexDirection: "column", gap: 8, alignItems: "stretch"}}>
+          <button className={latest ? "intro-start" : "intro-secondary"} onClick={continueLatest} disabled={!kernelOnline || !latest}>
+            Continue Campaign
+            <small style={{display: "block", fontWeight: 400, opacity: 0.85, fontSize: 12}}>
+              {latest
+                ? `${latest.sector} · ${fmtElapsed(latest.elapsed)} · Pop ${(latest.population / 1e6).toFixed(1)}M`
+                : "No saved campaign yet"}
+            </small>
           </button>
-          <button className="intro-secondary" onClick={() => setRosterOpen(true)}>Faction Database (20)</button>
+          <button className={latest ? "intro-secondary" : "intro-start"} onClick={() => setPanel("new")} disabled={!kernelOnline}>
+            {kernelOnline ? "New Campaign" : "Kernel loading…"}
+          </button>
+          <button className="intro-secondary" onClick={() => setPanel("load")} disabled={!kernelOnline || !saves.length}>Load Game</button>
+          <button className="intro-secondary" onClick={() => setPanel("settings")}>Settings</button>
+          <button className="intro-secondary" onClick={() => setPanel("roster")}>Faction Database (20)</button>
+          <button className="intro-secondary" onClick={() => setPanel("credits")}>Credits</button>
         </div>
         <div className="intro-grid">
           <div><span>ORBITS</span><strong style={{color: "#38bdf8"}}>Keplerian Loop</strong></div>
@@ -167,25 +168,69 @@ export function IntroScreen({kernelStatus, onLaunch}) {
         <div style={{fontFamily: "monospace", fontSize: 13, color: "#64748b"}}>Synchronizing Planetary Orbits to Sol Core...</div>
       </div>
 
-      <div className={`intro-modal${rosterOpen ? " open" : ""}`} onClick={(e) => { if (e.target === e.currentTarget) setRosterOpen(false); }}>
-        <div className="intro-box">
-          <div className="intro-box-head">
-            <div>
-              <h3 style={{fontSize: 18, fontWeight: 800, letterSpacing: "0.1em", color: "#38bdf8", textTransform: "uppercase"}}>Galactic Senate Factions</h3>
-              <p style={{fontSize: 12, color: "#64748b", fontFamily: "monospace"}}>20 Interspecies Factions Across 5 Blocs</p>
-            </div>
-            <button className="intro-close" onClick={() => setRosterOpen(false)} aria-label="Close">×</button>
-          </div>
-          <div className="intro-list">
-            {FACTIONS.map((f) => (
-              <div className="intro-faction" key={f.id}>
-                <div><strong style={{color: f.color, display: "block"}}>{f.name} (#{f.number})</strong><small>{f.sub}</small><small style={{display: "block", opacity: 0.85}}>{f.trait}</small></div>
-                <span className="intro-badge-faction" style={{color: f.color}}>{f.bloc}</span>
+      {modalOpen ? (
+        <div className="intro-modal open" onClick={(e) => { if (e.target === e.currentTarget) closePanel(); }}>
+          <div className="intro-box">
+            <div className="intro-box-head">
+              <div>
+                <h3 style={{fontSize: 18, fontWeight: 800, letterSpacing: "0.1em", color: "#38bdf8", textTransform: "uppercase"}}>
+                  {panel === "new" ? "New Campaign" : panel === "roster" ? "Galactic Senate Factions" : "Credits"}
+                </h3>
+                <p style={{fontSize: 12, color: "#64748b", fontFamily: "monospace"}}>
+                  {panel === "new" ? "Sector seed and difficulty" : panel === "roster" ? "20 Interspecies Factions Across 5 Blocs" : "Orbiter: Stellar Conquest"}
+                </p>
               </div>
-            ))}
+              <button className="intro-close" onClick={closePanel} aria-label="Close">×</button>
+            </div>
+
+            {panel === "new" ? (
+              <div style={{display: "flex", flexDirection: "column", gap: 12, padding: 4}}>
+                <div style={{fontSize: 13, opacity: 0.85}}>The seed sets where the worlds start in their orbits and names the sector. Leave it blank for a random sector.</div>
+                <div style={{display: "flex", gap: 8}}>
+                  <input value={seedText} onChange={(e) => setSeedText(e.target.value.slice(0, 24))} placeholder="random"
+                    style={{flex: 1, padding: "8px 10px", borderRadius: 8, border: "1px solid #334155", background: "#0b1220", color: "#e2e8f0", fontFamily: "monospace"}} />
+                  <button className="intro-secondary" onClick={() => setSeedText(randomSeed())}>Roll</button>
+                </div>
+                {seedPreview ? <div className="mono" style={{fontSize: 12, color: "#64748b"}}>Sector: {seedPreview}</div> : null}
+                {Object.entries(DIFFICULTIES).map(([key, d]) => (
+                  <button key={key} className={difficulty === key ? "intro-start" : "intro-secondary"} onClick={() => setDifficulty(key)}
+                    style={{textAlign: "left"}}>
+                    <b>{d.label}</b> <span style={{opacity: 0.85, fontSize: 12}}>· {d.blurb}</span>
+                  </button>
+                ))}
+                <button className="intro-start" onClick={beginNew} disabled={!kernelOnline}>Begin</button>
+              </div>
+            ) : null}
+
+            {panel === "roster" ? (
+              <div className="intro-list">
+                {FACTIONS.map((f) => (
+                  <div className="intro-faction" key={f.id}>
+                    <div><strong style={{color: f.color, display: "block"}}>{f.name} (#{f.number})</strong><small>{f.sub}</small><small style={{display: "block", opacity: 0.85}}>{f.trait}</small></div>
+                    <span className="intro-badge-faction" style={{color: f.color}}>{f.bloc}</span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {panel === "credits" ? (
+              <div style={{display: "flex", flexDirection: "column", gap: 10, fontSize: 13, lineHeight: 1.5, padding: 4}}>
+                <div><b>Orbit kernel</b>: C++17 compiled to WebAssembly with Emscripten 4.0.9. Capacity: 64 worlds, 256 conduits, 128 missiles, 1,024 asteroids. Runs at 60 ticks per second.</div>
+                <div><b>Front end</b>: React and Vite, drawn on HTML canvas.</div>
+                <div><b>Audio</b>: synthesised in the browser with the Web Audio API. No sound files.</div>
+                <div><b>Saves</b>: the kernel stores a replay of your changes; autosave, quick save and three manual slots are kept in this browser.</div>
+              </div>
+            ) : null}
           </div>
         </div>
-      </div>
+      ) : null}
+
+      {panel === "load" ? (
+        <SlotBrowser mode="load" onPick={loadSlot} onClose={closePanel} onChanged={() => setSaveTick((t) => t + 1)} />
+      ) : null}
+      {panel === "settings" ? (
+        <SettingsModal onChange={() => audioRef.current.applyLevels()} onClose={closePanel} />
+      ) : null}
     </div>
   );
 }

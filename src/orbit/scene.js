@@ -307,7 +307,7 @@ export class OrbitScene {
     ctx.lineWidth = 1;
     for (const p of g.planets) {
       if (p.hidden) continue;
-      ctx.strokeStyle = 'rgba(160,170,220,0.045)';
+      ctx.strokeStyle = `rgba(160,170,220,${(0.045 * (this.orbitScale ?? 1)).toFixed(4)})`; // Settings: orbit path opacity
       ctx.beginPath();
       ctx.ellipse(sun.x, sun.y, p.orbit * z, p.orbit * ORBIT_Y * z, 0, 0, TAU);
       ctx.stroke();

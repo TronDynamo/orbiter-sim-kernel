@@ -2,6 +2,10 @@
 // orbiter-sim-kernel with scripts/build-wasm.sh). Call tick() from the 60 FPS loop; read the
 // state through the typed-array views, which point straight into WebAssembly memory.
 // Capacities match the kernel's MAX_* constants.
+//
+// Saves: every change made from the game (conduits, snap limits, launches) is logged with the tick it
+// happened on. The kernel is deterministic, so a save is the start offset plus that log: importState()
+// resets the kernel, replays each change at its tick, and checks the planet positions against the save.
 export const MAX = { planets: 64, conduits: 256, missiles: 128, asteroids: 1024 };
 export const TICKS_PER_SECOND = 60;
 
@@ -32,6 +36,8 @@ export class OrbiterKernel {
   constructor(m) {
     this.m = m;
     this.accumulator = 0;
+    this.log = [];        // changes made from the game, each stamped with the tick it happened on
+    this.startOffset = 0; // ticks run before the first change (a seeded sector start)
     m._orbiter_reset();
     // Views are created once: memory does not grow, so the buffers stay valid.
     const f64 = (ptr, n) => new Float64Array(m.HEAPF64.buffer, ptr, n);
@@ -71,7 +77,13 @@ export class OrbiterKernel {
     };
   }
 
-  reset() { this.m._orbiter_reset(); this.accumulator = 0; }
+  reset() { this.m._orbiter_reset(); this.accumulator = 0; this.log = []; this.startOffset = 0; }
+  // Starts a sector partway through its orbits: the seed picks the offset, so each sector opens at a different alignment.
+  beginAt(offset) {
+    this.reset();
+    if (offset > 0) this.m._orbiter_tick(offset);
+    this.startOffset = offset;
+  }
   tick(n = 1) { this.m._orbiter_tick(n); }
   // Advance by real time in whole 1/60 s ticks, so the sim speed does not depend on frame rate.
   advance(dtSeconds) {
@@ -80,18 +92,78 @@ export class OrbiterKernel {
     if (n > 0) { this.tick(n); this.accumulator -= n; }
     return n;
   }
-  launch(type, x, y, targetPlanet = -1) { this.m._orbiter_launch(type, x, y, targetPlanet); }
+  launch(type, x, y, targetPlanet = -1) {
+    this._record({ op: "launch", type, x, y, target: targetPlanet });
+    this.m._orbiter_launch(type, x, y, targetPlanet);
+  }
   // Builds a conduit between two planets (indices). Returns the conduit index, or a CONDUIT_ERR code.
-  addConduit(source, target) { return this.m._orbiter_conduit_add(source, target); }
+  addConduit(source, target) {
+    const code = this.m._orbiter_conduit_add(source, target);
+    if (code >= 0) this._record({ op: "add", source, target });
+    return code;
+  }
   // Removes a conduit by index. Returns 0, or -1 if there is none.
-  removeConduit(index) { return this.m._orbiter_conduit_remove(index); }
+  removeConduit(index) {
+    const r = this.m._orbiter_conduit_remove(index);
+    if (r === 0) this._record({ op: "remove", index });
+    return r;
+  }
   // Tech tuning: raises or lowers one conduit's snap limit (the physics is unchanged).
-  setConduitMaxLength(index, value) { this.m._orbiter_conduit_set_max_length(index, value); }
+  setConduitMaxLength(index, value) {
+    this.m._orbiter_conduit_set_max_length(index, value);
+    this._record({ op: "max", index, value });
+  }
 
+  _record(op) { this.log.push({ t: this.tickCount, ...op }); }
+  _applyRaw(op) {
+    switch (op.op) {
+      case "add": this.m._orbiter_conduit_add(op.source, op.target); break;
+      case "remove": this.m._orbiter_conduit_remove(op.index); break;
+      case "max": this.m._orbiter_conduit_set_max_length(op.index, op.value); break;
+      case "launch": this.m._orbiter_launch(op.type, op.x, op.y, op.target); break;
+      default: throw new Error(`unknown kernel op ${op.op}`);
+    }
+  }
+
+  // The save form of the kernel: where it started, every change with its tick, and the planet positions to check against.
+  exportState() {
+    const n = this.planetCount;
+    return {
+      version: 1,
+      startOffset: this.startOffset,
+      tick: this.tickCount,
+      log: this.log.map((o) => ({ ...o })),
+      planetX: Array.from(this.planets.x.subarray(0, n)),
+      planetY: Array.from(this.planets.y.subarray(0, n)),
+    };
+  }
+  // Restores a save by replaying it. Returns {ok, drift}: drift is the largest planet position error against the save.
+  importState(snap) {
+    this.m._orbiter_reset();
+    this.accumulator = 0;
+    this.startOffset = snap.startOffset ?? 0;
+    if (this.startOffset > 0) this.m._orbiter_tick(this.startOffset);
+    for (const op of snap.log) {
+      const dt = op.t - this.tickCount;
+      if (dt < 0) throw new Error("save log out of order");
+      if (dt > 0) this.m._orbiter_tick(dt);
+      this._applyRaw(op);
+    }
+    const rest = snap.tick - this.tickCount;
+    if (rest < 0) throw new Error("save tick is behind its log");
+    if (rest > 0) this.m._orbiter_tick(rest);
+    this.log = snap.log.map((o) => ({ ...o }));
+    let drift = 0;
+    snap.planetX.forEach((x, i) => {
+      drift = Math.max(drift, Math.abs(this.planets.x[i] - x), Math.abs(this.planets.y[i] - snap.planetY[i]));
+    });
+    return { ok: drift < 1e-9, drift };
+  }
+
+  get planetCount() { return this.m._orbiter_planet_count(); }
   get tickCount() { return this.m._orbiter_tick_count(); }
   // Credits earned since reset (connected worlds plus conduit fees).
   get creditTotal() { return this.m._orbiter_credit_total(); }
-  get planetCount() { return this.m._orbiter_planet_count(); }
   get conduitCount() { return this.m._orbiter_conduit_count(); }
   get missileCount() { return this.m._orbiter_missile_count(); }
   get asteroidCount() { return this.m._orbiter_asteroid_count(); }

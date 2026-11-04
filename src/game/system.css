@@ -1,0 +1,21 @@
+/* Game shell extras: screen shake on world strikes, the CRT toggle, and the autosave tag. */
+.app.shake { animation: orbiter-shake 0.45s linear; }
+@keyframes orbiter-shake {
+  0%, 100% { transform: translate(0, 0); }
+  20% { transform: translate(calc(var(--shake-px) * -1), var(--shake-px)); }
+  40% { transform: translate(var(--shake-px), calc(var(--shake-px) * -1)); }
+  60% { transform: translate(calc(var(--shake-px) * -1), calc(var(--shake-px) * -1)); }
+  80% { transform: translate(var(--shake-px), var(--shake-px)); }
+}
+
+:root[data-crt="off"] .intro-crt,
+:root[data-crt="off"] .scanlines,
+:root[data-crt="off"] .comms::after { display: none; }
+
+.autosave-tag {
+  position: absolute; left: 16px; bottom: 74px; z-index: 6;
+  font-size: 11px; letter-spacing: 0.12em; color: #94a3b8; pointer-events: none;
+}
+
+/* The title menu stacks its buttons at natural height rather than sharing the screen height. */
+.intro-root .intro-buttons > button { flex: 0 0 auto; height: auto; min-height: 46px; padding: 12px 18px; }
