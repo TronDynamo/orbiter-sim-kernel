@@ -74,10 +74,20 @@ export class JsSim {
 }
 
 // Loads the C++ engine; resolves to a JsSim if WebAssembly is unavailable.
+// Vite will not import files from public/ as modules in dev, so the engine module is fetched and imported
+// through a blob URL; the wasm file is located explicitly so it still loads in dev and in builds.
+async function importEngineModule(moduleUrl) {
+  const res = await fetch(moduleUrl);
+  if (!res.ok) throw new Error(`engine module HTTP ${res.status}`);
+  const url = URL.createObjectURL(new Blob([await res.text()], { type: "text/javascript" }));
+  try { return await import(/* @vite-ignore */ url); } finally { URL.revokeObjectURL(url); }
+}
+
 export async function loadSim({stars = 700, seed = 1234, moduleUrl = "/engine/orbit-sim.js", importer} = {}) {
   try {
-    const mod = importer ? await importer() : await import(/* @vite-ignore */ moduleUrl);
-    const m = await mod.default();
+    const base = moduleUrl.slice(0, moduleUrl.lastIndexOf("/") + 1);
+    const mod = importer ? await importer() : await importEngineModule(moduleUrl);
+    const m = await mod.default(importer ? undefined : { locateFile: (file) => base + file });
     const sim = new WasmSim(m);
     sim.starTotal = stars;
     sim.init(stars, seed);

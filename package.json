@@ -7,10 +7,22 @@
     "node": ">=22"
   },
   "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build:web": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "build:engine": "scripts/build-orbit-engine.sh",
     "gen": "node scripts/gen-config.mjs",
     "build": "npm run gen && mkdir -p build && g++ -std=c++17 -O2 -Wall -Wextra -Isrc src/orbiter_kernel.cpp src/main.cpp -o build/orbiter_kernel",
     "test": "node --test tests/world_states.test.mjs tests/wasm_smoke.test.mjs && npm run build && g++ -std=c++17 -O2 -Wall -Wextra -Isrc src/orbiter_kernel.cpp tests/kernel_test.cpp -o build/kernel_test && ./build/kernel_test",
     "run": "npm run build && ./build/orbiter_kernel",
-    "build:wasm": "scripts/build-wasm.sh"
+    "build:wasm": "scripts/build-wasm.sh && mkdir -p public/engine && cp build/wasm/orbiter_kernel.mjs build/wasm/orbiter_kernel.wasm public/engine/"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^6.0.0"
   }
 }

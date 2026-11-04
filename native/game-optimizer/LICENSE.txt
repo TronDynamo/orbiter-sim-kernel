@@ -1,0 +1,74 @@
+BotStudio9 Commercial Source Licence
+====================================
+
+Copyright (c) 2026 Zacharee Jordan Burchfield, trading as BotStudio9. All rights reserved.
+
+Product : orbit
+Category: Game Optimizer
+Order   : orbit
+Issued  : 2026-10-23
+Seller  : BotStudio9 — botstudio9.com
+
+Price paid  : $199 (one-time)
+Build tier  : Standard
+
+Licence Type: Personal - Single deployment
+Licence fee : Included
+Deployments : 1
+Keys        : 1
+Agency use  : No
+White-label : No
+Support     : None
+Updates     : None
+
+1. Grant
+   The purchaser is granted a perpetual, worldwide, non-exclusive licence to
+   use, modify and compile this source code for the purposes set out below.
+
+   This licence covers one person and a single deployment, for the
+   purchaser's own personal, non-commercial use. It does not permit use by
+   a business or deployment on behalf of paying clients.
+
+2. Restrictions
+   The source code is licensed, not sold, and is confidential. The purchaser
+   may not sell, resell, relicense, sublicense, publish, post, share, lend,
+   leak, mirror or otherwise make the source code or the compilation files
+   available to any third party, in whole or in substantial part, whether or
+   not modified and whether or not for payment. This includes public and
+   private code repositories, file-sharing services, courses, templates, code
+   libraries and machine-learning training corpora.
+
+   The compiled result may not be distributed to anyone else. Distributing
+   the sources is not. The purchaser shall take reasonable care to keep the
+   source code secure and to prevent access by anyone outside their
+   organisation.
+
+   The product may not be presented under the purchaser's own branding.
+
+3. Ownership
+   The source code is and remains the exclusive property of BotStudio9. All
+   right, title and interest in it, including copyright and every other
+   intellectual property right, are reserved to BotStudio9. This licence
+   transfers ownership of nothing and grants no trademark rights.
+   Modifications the purchaser makes to the source do not transfer ownership
+   of the underlying code.
+
+   Third-party components are the exception: they remain the property of
+   their respective owners under their own licences, and their copyright,
+   patent, trademark and attribution notices must be retained wherever the
+   compiled result is distributed.
+
+4. No warranty
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   LIABILITY ARISING FROM THE SOFTWARE OR ITS USE.
+
+5. Third-party components
+   This project can link the following components. They are NOT distributed
+   with this archive and remain under their own licences, which the
+   purchaser is responsible for reviewing and complying with:
+
+     - OpenSSL (optional, enables https://)
+
