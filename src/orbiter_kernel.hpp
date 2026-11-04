@@ -46,6 +46,8 @@ struct StellarSystemState {
     double star_mass{orbiter_config::STAR_MASS};
     bool star_destabilized{false};
     bool star_supernova_triggered{false};
+    uint32_t star_blast_ticks_left{0};   // stage 1: supernova ring
+    bool star_collapsed{false};          // stage 2: black hole, pulls planets inward
 
     size_t planet_count{0};
     uint32_t planet_id[MAX_PLANETS];
@@ -58,6 +60,7 @@ struct StellarSystemState {
     double planet_population[MAX_PLANETS];
     double planet_yield_rate[MAX_PLANETS];
     WorldStatus planet_status[MAX_PLANETS];
+    uint32_t planet_vortex_ticks_left[MAX_PLANETS];  // singularity vortex pull
 
     size_t conduit_count{0};
     uint32_t conduit_source[MAX_CONDUITS];
@@ -115,6 +118,7 @@ public:
     void ExecuteImpact(size_t missile_idx, int32_t planet_idx);
     void SpawnDebrisRing(double cx, double cy, size_t count);
     void UpdateDebris();
+    void UpdateStar();
     void RunBenchmark(uint64_t total_ticks);
 
     uint64_t tick() const { return current_tick; }

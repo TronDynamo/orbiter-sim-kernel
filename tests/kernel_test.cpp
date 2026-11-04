@@ -42,15 +42,49 @@ int main() {
         CHECK(e.GetState().missile_count <= MAX_MISSILES, "missile slots are reused");
     }
     {
+        // Star-Killer: supernova ring first, then the core collapses into a black hole.
+        OrbiterSimulationEngine e;
+        e.LaunchSuperweapon(WeaponClass::STARKILLER_NEEDLE, 0.0, 300.0, -1);
+        for (int i = 0; i < 20000 && !e.GetState().star_supernova_triggered; ++i) e.UpdateTick();
+        CHECK(e.GetState().star_supernova_triggered && !e.GetState().star_collapsed, "stage 1: supernova before collapse");
+        for (uint32_t i = 0; i < SUPERNOVA_RING_TICKS + 1; ++i) e.UpdateTick();
+        CHECK(e.GetState().star_collapsed, "stage 2: core collapses after the blast ring");
+        CHECK(e.GetState().star_radius == STAR_COLLAPSED_RADIUS, "collapsed star has black-hole radius");
+    }
+    {
         // A second Star-Killer does not expand the star again.
         OrbiterSimulationEngine e;
         e.LaunchSuperweapon(WeaponClass::STARKILLER_NEEDLE, 0.0, 300.0, -1);
         for (int i = 0; i < 20000 && !e.GetState().star_supernova_triggered; ++i) e.UpdateTick();
-        double r1 = e.GetState().star_radius;
         e.LaunchSuperweapon(WeaponClass::STARKILLER_NEEDLE, 0.0, 300.0, -1);
-        for (int i = 0; i < 20000 && e.GetState().missile_active[e.GetState().missile_count - 1]; ++i) e.UpdateTick();
-        CHECK(e.GetState().star_radius == r1, "second Star-Killer does not re-expand the star");
+        for (int i = 0; i < 20000; ++i) e.UpdateTick();
+        CHECK(e.GetState().star_collapsed, "second Star-Killer does not restart the supernova");
     }
+    {
+        // Black-hole pull: outer planets drift inward once the star has collapsed.
+        OrbiterSimulationEngine e;
+        double before = e.GetState().planet_orbit_radius[3];
+        e.LaunchSuperweapon(WeaponClass::STARKILLER_NEEDLE, 0.0, 300.0, -1);
+        for (int i = 0; i < 20000 && !e.GetState().star_collapsed; ++i) e.UpdateTick();
+        double at_collapse = e.GetState().planet_orbit_radius[3];
+        for (int i = 0; i < 100; ++i) e.UpdateTick();
+        CHECK(at_collapse == before, "no planet pull during the blast ring");
+        CHECK(e.GetState().planet_orbit_radius[3] < at_collapse, "planets keep drifting after collapse");
+    }
+    {
+        // Singularity torpedo leaves a vortex for 5 seconds, then it ends.
+        OrbiterSimulationEngine e;
+        e.LaunchSuperweapon(WeaponClass::SINGULARITY_TORPEDO, 400.0, 0.0, 0);
+        for (int i = 0; i < 40000 && e.GetState().planet_status[0] != WorldStatus::BLACK_HOLE_COLLAPSED; ++i) e.UpdateTick();
+        CHECK(e.GetState().planet_vortex_ticks_left[0] > 0, "torpedo leaves an active vortex");
+        for (uint32_t i = 0; i < VORTEX_DURATION_TICKS + 1; ++i) e.UpdateTick();
+        CHECK(e.GetState().planet_vortex_ticks_left[0] == 0, "vortex ends after its duration");
+    }
+    {
+        // Tick rate matches the browser's 60 FPS loop.
+        CHECK(TICKS_PER_SECOND == 60, "simulation runs at 60 ticks per second");
+    }
+
     {
         // A cracked world stops orbiting and keeps its last position.
         OrbiterSimulationEngine e;

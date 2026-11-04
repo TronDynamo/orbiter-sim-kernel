@@ -9,6 +9,13 @@ constexpr double STAR_RADIUS = 45.0;
 constexpr double STAR_MASS = 10000.0;
 constexpr uint32_t DEBRIS_LIFETIME_TICKS = 20000.0;
 constexpr double DRILL_CRACK_DISTANCE = 45.0;
+constexpr uint32_t TICKS_PER_SECOND = 60.0;
+constexpr uint32_t SUPERNOVA_RING_TICKS = 120.0;
+constexpr double STAR_COLLAPSED_RADIUS = 8.0;
+constexpr double STAR_PULL_PER_TICK = 0.002;
+constexpr uint32_t VORTEX_DURATION_TICKS = 300.0;
+constexpr double VORTEX_RADIUS = 60.0;
+constexpr double VORTEX_PULL_PER_TICK = 0.5;
 
 struct PlanetDef {
     uint32_t id;
@@ -46,7 +53,7 @@ inline constexpr WeaponDef WEAPONS[WEAPON_COUNT] = {
     { 1.8 }, // Titan-Buster Thermonuclear Warhead
     { 0.9 }, // Planetary Core-Drill
     { 18.0 }, // Stellar Inversion Needle
-    { 1.2 }, // Resonance Singularity Torpedo
+    { 2.5 }, // Resonance Singularity Torpedo
 };
 
 inline constexpr ConduitDef CONDUITS[CONDUIT_COUNT] = {

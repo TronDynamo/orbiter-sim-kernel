@@ -27,6 +27,7 @@ void OrbiterSimulationEngine::InitFromConfig() {
         state.planet_population[i] = p.population;
         state.planet_yield_rate[i] = p.yield_rate;
         state.planet_status[i] = WorldStatus::ACTIVE_PRISTINE;
+        state.planet_vortex_ticks_left[i] = 0;
     }
 
     state.conduit_count = CONDUIT_COUNT;
@@ -49,6 +50,11 @@ void OrbiterSimulationEngine::UpdateTick() {
     for (size_t i = 0; i < state.planet_count; ++i) {
         if (state.planet_status[i] == WorldStatus::BLACK_HOLE_COLLAPSED ||
             state.planet_status[i] == WorldStatus::FRACTURED_DEBRIS) continue;
+        if (state.star_collapsed) {
+            // Black-hole pull: the orbit shrinks each tick, but never inside the star.
+            double floor = state.star_radius + state.planet_radius[i];
+            state.planet_orbit_radius[i] = std::max(floor, state.planet_orbit_radius[i] - orbiter_config::STAR_PULL_PER_TICK);
+        }
         state.planet_angle[i] += state.planet_speed[i];
         if (state.planet_angle[i] >= TWO_PI) state.planet_angle[i] -= TWO_PI;
         state.planet_x[i] = state.star_x + state.planet_orbit_radius[i] * std::cos(state.planet_angle[i]);
@@ -91,7 +97,10 @@ void OrbiterSimulationEngine::UpdateTick() {
     // 4. Weapon kinematics and impacts
     UpdateProjectiles();
 
-    // 5. Debris drift
+    // 5. Star collapse and planet pull
+    UpdateStar();
+
+    // 6. Debris drift and vortex pull
     UpdateDebris();
 }
 
@@ -185,6 +194,7 @@ void OrbiterSimulationEngine::ExecuteImpact(size_t missile_idx, int32_t planet_i
             state.planet_status[planet_idx] = WorldStatus::BLACK_HOLE_COLLAPSED;
             state.planet_population[planet_idx] = 0.0;
             state.planet_yield_rate[planet_idx] = 0.0;
+            state.planet_vortex_ticks_left[planet_idx] = orbiter_config::VORTEX_DURATION_TICKS;
             for (size_t c = 0; c < state.conduit_count; ++c) {
                 if (state.conduit_source[c] == static_cast<uint32_t>(planet_idx) ||
                     state.conduit_target[c] == static_cast<uint32_t>(planet_idx)) {
@@ -204,9 +214,11 @@ void OrbiterSimulationEngine::ExecuteImpact(size_t missile_idx, int32_t planet_i
             SpawnDebrisRing(state.planet_x[planet_idx], state.planet_y[planet_idx], 32);
         }
     } else if (wep == WeaponClass::STARKILLER_NEEDLE && !state.star_supernova_triggered) {
+        // Stage 1: supernova blast ring. Stage 2 (UpdateStar) collapses the core.
         state.star_supernova_triggered = true;
         state.star_destabilized = true;
         state.star_radius *= 2.5;
+        state.star_blast_ticks_left = orbiter_config::SUPERNOVA_RING_TICKS;
         for (size_t c = 0; c < state.conduit_count; ++c) state.conduit_snapped[c] = true;
     }
 }
@@ -224,9 +236,42 @@ void OrbiterSimulationEngine::SpawnDebrisRing(double cx, double cy, size_t count
     }
 }
 
+void OrbiterSimulationEngine::UpdateStar() {
+    if (state.star_blast_ticks_left > 0) {
+        if (--state.star_blast_ticks_left == 0 && !state.star_collapsed) {
+            state.star_collapsed = true;
+            state.star_radius = orbiter_config::STAR_COLLAPSED_RADIUS;
+        }
+    }
+}
+
 void OrbiterSimulationEngine::UpdateDebris() {
+    // Debris is pulled toward the black hole and toward any active vortex.
+    for (size_t p = 0; p < state.planet_count; ++p) {
+        if (state.planet_vortex_ticks_left[p] > 0) --state.planet_vortex_ticks_left[p];
+    }
+
     size_t i = 0;
     while (i < state.asteroid_count) {
+        for (size_t p = 0; p < state.planet_count; ++p) {
+            if (state.planet_vortex_ticks_left[p] == 0) continue;
+            double dx = state.planet_x[p] - state.asteroid_x[i];
+            double dy = state.planet_y[p] - state.asteroid_y[i];
+            double d = std::sqrt(dx * dx + dy * dy);
+            if (d > 0.0 && d <= orbiter_config::VORTEX_RADIUS) {
+                state.asteroid_x[i] += dx / d * orbiter_config::VORTEX_PULL_PER_TICK;
+                state.asteroid_y[i] += dy / d * orbiter_config::VORTEX_PULL_PER_TICK;
+            }
+        }
+        if (state.star_collapsed) {
+            double dx = state.star_x - state.asteroid_x[i];
+            double dy = state.star_y - state.asteroid_y[i];
+            double d = std::sqrt(dx * dx + dy * dy);
+            if (d > 0.0) {
+                state.asteroid_x[i] += dx / d * orbiter_config::STAR_PULL_PER_TICK;
+                state.asteroid_y[i] += dy / d * orbiter_config::STAR_PULL_PER_TICK;
+            }
+        }
         state.asteroid_x[i] += state.asteroid_vx[i];
         state.asteroid_y[i] += state.asteroid_vy[i];
         if (state.asteroid_ttl[i] > 0) --state.asteroid_ttl[i];

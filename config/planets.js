@@ -13,6 +13,24 @@ export const PLANETS = [
   { key: 'kryos',   id: 104, name: 'Kryos Vault',   orbit: 360, angle: 4.8, speed: 0.00008, r: 22, population: 2100000,  yield: 8 },
 ];
 
+// Simulation rate. The browser loop runs one tick per frame at 60 FPS.
+export const TICKS_PER_SECOND = 60;
+
+// Star-Killer: stage 1 is the supernova blast ring, stage 2 is the black-hole collapse.
+// PLACEHOLDER values marked below are not in the balance table yet.
+export const STAR_COLLAPSE = {
+  ringTicks: 120,        // 2 s blast ring before the core collapses
+  collapsedRadius: 8,    // PLACEHOLDER: black-hole event radius
+  pullPerTick: 0.002,    // PLACEHOLDER: how far outer planets drift in each tick
+};
+
+// Singularity Torpedo vortex left on the target world.
+export const VORTEX = {
+  durationTicks: 300,    // 5 s
+  radius: 60,            // PLACEHOLDER: pull range around the world
+  pullPerTick: 0.5,      // PLACEHOLDER: debris pull per tick
+};
+
 // Weapons, in WeaponClass order. speed: world units per tick.
 // Values marked PLACEHOLDER are not yet in the asset manifest's balance table.
 // cost / reload / effect are game-layer values; the kernel reads only speed.
@@ -20,7 +38,7 @@ export const WEAPONS = [
   { key: 'thermonuclear_icbm', name: 'Titan-Buster Thermonuclear Warhead', speed: 1.8,  cost: { credits: 2500,  alloys: 1200 }, reloadSeconds: 45,  effect: 'Glasses surface; -85% pop, -75% yield' },
   { key: 'planet_cracker',     name: 'Planetary Core-Drill',               speed: 0.9,  cost: { credits: 8000,  alloys: 4500 }, reloadSeconds: 120, effect: 'Cracks within 45 units, then shatters world into an asteroid belt; -100% pop' },
   { key: 'starkiller',         name: 'Stellar Inversion Needle',           speed: 18.0, cost: { credits: 25000, alloys: 15000 }, reloadSeconds: null, effect: 'Supernova shockwave; severs all conduits; one per match' },
-  { key: 'singularity_torpedo', name: 'Resonance Singularity Torpedo',     speed: 1.2,  cost: null, reloadSeconds: null, effect: 'Collapses world into a black hole' },  // not in locked table; speed is a placeholder
+  { key: 'singularity_torpedo', name: 'Resonance Singularity Torpedo',     speed: 2.5,  cost: { credits: 5000,  alloys: 3000 }, reloadSeconds: 90, effect: 'Kills 100% pop; gravity vortex pulls debris for 5 s' },
 ];
 
 // Drill begins the cracking stage when it is this close to its target (world units).
@@ -36,6 +54,7 @@ export const WORLD_SPRITES = {
   BLACK_HOLE_COLLAPSED: 'planet_blackhole_vortex.png',
 };
 export const DEBRIS_SPRITE = 'planet_dust_ring.png';  // ring left where a fractured world was
+export const STAR_SPRITES = { SUPERNOVA: 'fx_supernova_ring.png', COLLAPSED: 'sun_collapsed_singularity.png' };
 
 // Debris from a destroyed world expires after this many ticks.
 export const DEBRIS = { lifetimeTicks: 20000 };
