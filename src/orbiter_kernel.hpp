@@ -60,7 +60,8 @@ struct StellarSystemState {
     double planet_population[MAX_PLANETS];
     double planet_yield_rate[MAX_PLANETS];   // output per second
     double planet_gain_total[MAX_PLANETS];   // output siphoned through conduits since reset
-    uint8_t planet_flow[MAX_PLANETS];        // 0 = not siphoned this tick, 1 = flowing, 3 = harmonic surge
+    uint8_t planet_flow[MAX_PLANETS];
+    double credit_total{0.0};                // credits earned since reset        // 0 = not siphoned this tick, 1 = flowing, 3 = harmonic surge
     WorldStatus planet_status[MAX_PLANETS];
     uint32_t planet_vortex_ticks_left[MAX_PLANETS];  // singularity vortex pull
 

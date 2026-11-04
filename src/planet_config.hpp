@@ -42,6 +42,8 @@ constexpr size_t PLANET_COUNT = 4;
 constexpr size_t CONDUIT_COUNT = 0;
 constexpr double CONDUIT_MAX_LENGTH = 440.0;
 constexpr double CONDUIT_AMBER_LENGTH = 340.0;
+constexpr double CREDITS_PER_MILLION_POP = 1.0;
+constexpr double CREDITS_PER_CONDUIT = 5.0;
 constexpr size_t WEAPON_COUNT = 4;
 
 inline constexpr PlanetDef PLANETS[PLANET_COUNT] = {

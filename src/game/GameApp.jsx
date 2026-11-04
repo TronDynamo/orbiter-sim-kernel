@@ -6,7 +6,8 @@ import {BODY_STRIDE} from "../orbit/engine.js";
 import {GAME_GALAXY, PLANET_IDS, ARK_POS} from "./galaxy.js";
 import {loadOrbiterKernel, TICKS_PER_SECOND, WEAPON, CONDUIT_ERR, CONDUIT_RULES} from "./kernel/orbiterKernel.js";
 import {IntroScreen} from "./IntroScreen.jsx";
-import {RULES, newState, snapTethers, network, tick, tryTether, checkTether, cut, tetherAt, tensionOf, tensionColor, build, hitBody, distToTether} from "./rules.js";
+import {RULES, newState, snapTethers, network, tick, tryTether, checkTether, cut, tetherAt, tensionOf, tensionColor, build, hitBody, distToTether, orderShip, shortfall} from "./rules.js";
+import {SHIPS, SHIP_ORDER, COST_LABEL, drawShip, fleetPower} from "./ships.js";
 
 const START_MSG = "Drag from one world to another to build a conduit. Conduits snap beyond " + CONDUIT_RULES.maxLength + " units.";
 const CONDUIT_MSG = {
@@ -18,6 +19,7 @@ const CONDUIT_MSG = {
 };
 const isPlanet = (id) => GAME_GALAXY.planets.some((p) => p.id === id);
 // Which stockpile each world's siphoned output feeds (game data; the kernel only produces the flow).
+const FLEET_ORBIT = 26;   // world units around Ferrum where hulls hold orbit
 const PLANET_OUTPUT = [
   {planet: "thalassa", resource: "biomass"},
   {planet: "aeros", resource: "cryo"},   // Coolant
@@ -31,7 +33,7 @@ const planetIndex = (id) => GAME_GALAXY.planets.findIndex((p) => p.id === id);
 function GameSession({kernel}) {
   const canvasRef = useRef(null), overlayRef = useRef(null);
   const st = useRef(newState());
-  const u = useRef({drag: null, mode: null, msg: START_MSG, msgWin: false, paused: false, speed: 1, tick: 0});
+  const u = useRef({drag: null, mode: null, msg: START_MSG, msgWin: false, paused: false, speed: 1, tick: 0, shipyard: false});
   const [ui, setUi] = useState({...u.current});
   const refresh = () => setUi({...u.current});
 
@@ -116,6 +118,7 @@ function GameSession({kernel}) {
     };
     const snapSeen = new Set();
     const gainSeen = PLANET_OUTPUT.map(() => 0); // kernel totals already credited to the stockpile
+    let creditSeen = 0;                          // kernel credit total already credited
 
     const onDown = (e) => {
       const P = positions(); if (!P) return;
@@ -238,6 +241,17 @@ function GameSession({kernel}) {
         }
       }
 
+      // fleet: procedurally drawn hulls holding orbit around Ferrum
+      const fer = P.ferrum;
+      if (fer && s.fleet.length) {
+        const t = kernel ? kernel.tickCount / TICKS_PER_SECOND : 0;
+        for (const f of s.fleet) {
+          const ang = f.phase + t * 0.7;
+          const q = toS({x: fer.x + Math.cos(ang) * FLEET_ORBIT, y: fer.y + Math.sin(ang) * FLEET_ORBIT});
+          drawShip(ctx, f.type, q.x, q.y, ang + Math.PI / 2, 11);
+        }
+      }
+
       // Ark, relays, labels
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
       const ark = toS(ARK_POS);
@@ -259,6 +273,10 @@ function GameSession({kernel}) {
         const s = st.current, gameT = sim.c[5];
         if (lastGame < 0) { lastGame = Math.floor(gameT); s.lastTick = lastGame; }
         for (const msg of snapTethers(s, P, now)) say(msg);
+        if (kernel) {
+          const total = kernel.creditTotal, d = total - creditSeen;
+          if (d > 0) { s.credits += d; creditSeen = total; }
+        }
         // Siphoning: the kernel adds each world's output to its running total every tick; credit the difference.
         if (kernel) PLANET_OUTPUT.forEach((o, i) => {
           const idx = planetIndex(o.planet), total = kernel.planets.gainTotal[idx], d = total - gainSeen[i];
@@ -290,7 +308,7 @@ function GameSession({kernel}) {
       if (e.key === "1" || e.key === "2" || e.key === "4") setSpeedKey(Number(e.key));
     };
     window.addEventListener("keydown", onKey);
-    window.__relic = {scene, u: s0, st, say, refresh, get kernel() { return kernel; }, resetKernel: () => { kernel.reset(); kBase = null; gainSeen.fill(0); snapSeen.clear(); }};
+    window.__relic = {scene, u: s0, st, say, refresh, get kernel() { return kernel; }, resetKernel: () => { kernel.reset(); kBase = null; gainSeen.fill(0); creditSeen = 0; snapSeen.clear(); }};
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", sizeOverlay);
@@ -310,6 +328,8 @@ function GameSession({kernel}) {
     sc.speed = u.current.paused ? 0 : u.current.speed;
     refresh();
   }
+  function toggleShipyard() { u.current.shipyard = !u.current.shipyard; refresh(); }
+  function buildHull(type) { const r = orderShip(st.current, type); u.current.msg = r.msg; refresh(); }
   function setSpeed(v) {
     u.current.speed = v; u.current.paused = false;
     const sc = window.__relic?.scene; if (sc) sc.speed = v;
@@ -352,6 +372,8 @@ function GameSession({kernel}) {
         <div className="row"><span>🔩 Alloys</span><b>{Math.floor(s.alloys)}</b></div>
         <div className="row"><span>🧠 Compute</span><b>{Math.floor(s.compute)}</b></div>
         <div className="row"><span>❄️ Coolant</span><b>{Math.floor(s.cryo)}</b></div>
+        <div className="row"><span>🚀 Fleet</span><b>{s.fleet.length}</b></div>
+        <div className="row"><span>⚡ Fleet power</span><b>{fleetPower(s.fleet)}</b></div>
         <div className="row"><span>🛡️ Hull</span><b>{Math.max(0, Math.round(s.hull))}%</b></div>
         <div className="row"><span>⛽ Fuel</span><b>{Math.floor(s.fuel)}</b></div>
         <div className="row"><span>🔥 Propellant</span><b>{Math.floor(s.propellant)}</b></div>
@@ -374,7 +396,32 @@ function GameSession({kernel}) {
         <button className={"pill zelo" + (u.current.mode === "relay" ? " on" : "")} onClick={() => setMode("relay")}>📡 Relay satellite · 15🔩 5❄️</button>
         <button className={"pill zelo" + (u.current.mode === "repair" ? " on" : "")} onClick={() => setMode("repair")}>🛡️ Patch hull · 10🔩</button>
         <button className={"pill zelo" + (u.current.mode === "cut" ? " on" : "")} onClick={() => setMode("cut")}>✂️ Decouple tether</button>
+        <button className={"pill zelo" + (u.current.shipyard ? " on" : "")} onClick={toggleShipyard}>🚀 Shipyard</button>
       </footer>
+
+      {u.current.shipyard ? (
+        <aside className="glass" style={{position: "absolute", right: 16, top: 84, width: 300, padding: 14, zIndex: 8, borderRadius: 12}}>
+          <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6}}>
+            <b>Shipyard</b>
+            <button className="pill zelo" onClick={toggleShipyard}>Close</button>
+          </div>
+          {SHIP_ORDER.map((id) => {
+            const ship = SHIPS[id], short = shortfall(s, ship.cost);
+            return (
+              <div key={id} style={{borderTop: "1px solid rgba(255,255,255,0.08)", padding: "8px 0"}}>
+                <div style={{display: "flex", justifyContent: "space-between"}}><b>{ship.name}</b><span>{ship.seconds}s build</span></div>
+                <div style={{fontSize: 12, opacity: 0.8, margin: "2px 0 4px"}}>{ship.blurb} · power {ship.power}</div>
+                <div style={{fontSize: 12, marginBottom: 6}}>{Object.entries(ship.cost).map(([k, v]) => `${v} ${COST_LABEL[k]}`).join(" · ")}</div>
+                <button className="pill zelo" disabled={!!short} title={short ? `Short: ${short}` : `Build ${ship.name}`}
+                  onClick={() => buildHull(id)} style={{opacity: short ? 0.45 : 1, cursor: short ? "not-allowed" : "pointer"}}>Build</button>
+              </div>
+            );
+          })}
+          <div style={{fontSize: 12, opacity: 0.85, marginTop: 6}}>
+            In production: {s.queue.length ? s.queue.map((q) => `${SHIPS[q.type].name} ${q.left}s`).join(", ") : "none"}
+          </div>
+        </aside>
+      ) : null}
 
       {over ? (
         <div className="overlay">

@@ -1,7 +1,7 @@
 // Generates src/planet_config.hpp from config/planets.js. Do not edit the header by hand.
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { STAR, PLANETS, CONDUITS, CONDUIT_RULES, DEBRIS, WEAPONS, DRILL_CRACK_DISTANCE, TICKS_PER_SECOND, STAR_COLLAPSE, VORTEX } from '../config/planets.js';
+import { STAR, PLANETS, CONDUITS, CONDUIT_RULES, CREDIT_RULES, DEBRIS, WEAPONS, DRILL_CRACK_DISTANCE, TICKS_PER_SECOND, STAR_COLLAPSE, VORTEX } from '../config/planets.js';
 
 const lit = (n) => (Number.isInteger(n) ? `${n}.0` : String(n));
 const indexOf = (key) => {
@@ -62,6 +62,8 @@ constexpr size_t PLANET_COUNT = ${PLANETS.length};
 constexpr size_t CONDUIT_COUNT = ${CONDUITS.length};
 constexpr double CONDUIT_MAX_LENGTH = ${lit(CONDUIT_RULES.maxLength)};
 constexpr double CONDUIT_AMBER_LENGTH = ${lit(CONDUIT_RULES.amberLength)};
+constexpr double CREDITS_PER_MILLION_POP = ${lit(CREDIT_RULES.perMillionPopPerSecond)};
+constexpr double CREDITS_PER_CONDUIT = ${lit(CREDIT_RULES.perConduitPerSecond)};
 constexpr size_t WEAPON_COUNT = ${WEAPONS.length};
 
 inline constexpr PlanetDef PLANETS[PLANET_COUNT] = {

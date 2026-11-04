@@ -108,6 +108,20 @@ void OrbiterSimulationEngine::UpdateTick() {
         }
     }
 
+    // Credits: connected worlds pay per million people, and each intact, unshadowed conduit pays a fee.
+    double credits_per_second = 0.0;
+    for (size_t p = 0; p < state.planet_count; ++p) {
+        if (state.planet_flow[p]) {
+            credits_per_second += orbiter_config::CREDITS_PER_MILLION_POP * state.planet_population[p] / 1e6;
+        }
+    }
+    for (size_t c = 0; c < state.conduit_count; ++c) {
+        if (!state.conduit_snapped[c] && !state.conduit_occluded[c]) {
+            credits_per_second += orbiter_config::CREDITS_PER_CONDUIT;
+        }
+    }
+    state.credit_total += credits_per_second / orbiter_config::TICKS_PER_SECOND;
+
     // 3. Syzygy detection every 16 ticks
     if ((current_tick & 0x0F) == 0) CheckSyzygyAlignments();
 

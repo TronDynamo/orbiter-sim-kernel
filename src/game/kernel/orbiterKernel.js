@@ -85,6 +85,8 @@ export class OrbiterKernel {
   removeConduit(index) { return this.m._orbiter_conduit_remove(index); }
 
   get tickCount() { return this.m._orbiter_tick_count(); }
+  // Credits earned since reset (connected worlds plus conduit fees).
+  get creditTotal() { return this.m._orbiter_credit_total(); }
   get planetCount() { return this.m._orbiter_planet_count(); }
   get conduitCount() { return this.m._orbiter_conduit_count(); }
   get missileCount() { return this.m._orbiter_missile_count(); }

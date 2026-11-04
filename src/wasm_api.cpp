@@ -56,6 +56,7 @@ const uint8_t* orbiter_missile_type() {
 
 const double* orbiter_planet_gain_total() { return g_engine.GetState().planet_gain_total; }
 const uint8_t* orbiter_planet_flow() { return g_engine.GetState().planet_flow; }
+double orbiter_credit_total() { return g_engine.GetState().credit_total; }
 
 int32_t orbiter_conduit_add(uint32_t source, uint32_t target) { return g_engine.AddConduit(source, target); }
 int32_t orbiter_conduit_remove(uint32_t index) { return g_engine.RemoveConduit(index); }

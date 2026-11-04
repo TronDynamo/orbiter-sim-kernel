@@ -210,6 +210,21 @@ int main() {
         CHECK(!shadowFlow, "no output is delivered while the conduit is in shadow");
     }
 
+    {
+        // Credits: a live conduit pays both worlds' population rate plus its fee each tick.
+        OrbiterSimulationEngine e;
+        const auto& s = e.GetState();
+        e.AddConduit(0, 1);
+        double before = s.credit_total;
+        e.UpdateTick();
+        double expected = (CREDITS_PER_MILLION_POP * (s.planet_population[0] + s.planet_population[1]) / 1e6 + CREDITS_PER_CONDUIT) / 60.0;
+        CHECK(std::abs((s.credit_total - before) - expected) < 1e-9, "a live conduit pays population and conduit credits");
+
+        OrbiterSimulationEngine idle;
+        for (int i = 0; i < 300; ++i) idle.UpdateTick();
+        CHECK(idle.GetState().credit_total == 0.0, "no conduit, no credits");
+    }
+
     std::printf("%s (%d failures)\n", failures ? "FAILED" : "PASSED", failures);
     return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }

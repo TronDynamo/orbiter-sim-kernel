@@ -66,3 +66,5 @@ export const DEBRIS = { lifetimeTicks: 20000 };
 export const CONDUITS = [];
 // Player conduits snap beyond maxLength and are drawn amber from amberLength.
 export const CONDUIT_RULES = { maxLength: 440, amberLength: 340 };
+// Credits income: a connected world pays per million people; each intact, unshadowed conduit pays a fee.
+export const CREDIT_RULES = { perMillionPopPerSecond: 1, perConduitPerSecond: 5 };

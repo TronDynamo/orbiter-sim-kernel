@@ -1,6 +1,7 @@
 // Orbiter: Stellar Conquest rules (prototype). Pure functions. Positions come in as a map {id: {x, y}} in the
 // plane the engine draws, so the rules and the picture always agree.
 import {NAMES, ARK_POS} from './galaxy.js';
+import {SHIPS, COST_LABEL} from './ships.js';
 
 export const RULES = {
   START: {hull: 100, fuel: 120, propellant: 60, alloys: 60, cryo: 20},
@@ -34,7 +35,10 @@ export const newState = () => ({
   tethers: [],   // {a, b}
   biomass: 0,    // siphoned from Thalassa through conduits
   compute: 0,    // siphoned from Kryos through conduits
-  credits: 0,    // no source yet
+  credits: 0,    // conduit and population income (see GameApp)
+  queue: [],     // hulls under construction: {id, type, left}
+  fleet: [],     // launched hulls: {id, type, phase}
+  shipN: 0,
   relays: [],    // {id, x, y, hp}
   relayN: 0,
   won: null,
@@ -171,6 +175,14 @@ export function tick(state, P) {
   if (net.has('aeros')) state.propellant += 2 * (1 + 0.15 * rad);
   // Alloys, coolant, biomass and compute are siphoned through conduits by the kernel (see GameApp).
   if (net.has('core')) state.data += 1;
+  // Shipyard: each queued hull counts down one game second; finished hulls join the fleet.
+  state.queue = state.queue.filter((q) => {
+    q.left -= 1;
+    if (q.left > 0) return true;
+    state.fleet.push({id: q.id, type: q.type, phase: state.fleet.length * 2.4});
+    events.push({msg: `${SHIPS[q.type].name} launched. It holds orbit around Ferrum.`});
+    return false;
+  });
   for (const id of ['thalassa', 'aeros']) if (net.has(id)) state.hull -= 0.03 * rad;
   state.fuel -= RULES.LIFE_FUEL + state.tethers.length * RULES.TETHER_FUEL;
   state.fuel = Math.max(0, state.fuel);
@@ -193,6 +205,24 @@ export function hitBody(state, P, pt) {
     if (d <= r && d < bd) { best = id; bd = d; }
   }
   return best;
+}
+
+// Names the missing resources for a cost, or null when it is affordable.
+export function shortfall(state, cost) {
+  const parts = Object.entries(cost).filter(([k, v]) => state[k] < v)
+    .map(([k, v]) => `${Math.ceil(v - state[k])} more ${COST_LABEL[k] ?? k}`);
+  return parts.length ? parts.join(', ') : null;
+}
+
+// Orders a hull: deducts the cost now and queues the build. Returns {ok, msg}.
+export function orderShip(state, type) {
+  const ship = SHIPS[type];
+  if (!ship) return {ok: false, msg: 'Unknown hull.'};
+  const short = shortfall(state, ship.cost);
+  if (short) return {ok: false, msg: `${ship.name} needs ${short}.`};
+  for (const [k, v] of Object.entries(ship.cost)) state[k] -= v;
+  state.queue.push({id: ++state.shipN, type, left: ship.seconds});
+  return {ok: true, msg: `${ship.name} ordered. Launch in ${ship.seconds}s.`};
 }
 
 export function canAfford(state, cost) {
