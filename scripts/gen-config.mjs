@@ -1,7 +1,7 @@
 // Generates src/planet_config.hpp from config/planets.js. Do not edit the header by hand.
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { STAR, PLANETS, CONDUITS, DEBRIS } from '../config/planets.js';
+import { STAR, PLANETS, CONDUITS, DEBRIS, WEAPONS } from '../config/planets.js';
 
 const lit = (n) => (Number.isInteger(n) ? `${n}.0` : String(n));
 const indexOf = (key) => {
@@ -10,6 +10,7 @@ const indexOf = (key) => {
   return i;
 };
 
+const weaponRows = WEAPONS.map((w) => `    { ${lit(w.speed)} }, // ${w.name}`).join('\n');
 const planetRows = PLANETS.map((p) =>
   `    { ${p.id}u, ${lit(p.orbit)}, ${lit(p.angle)}, ${lit(p.speed)}, ${lit(p.r)}, ${lit(p.population)}, ${lit(p.yield)} }, // ${p.name}`
 ).join('\n');
@@ -38,6 +39,10 @@ struct PlanetDef {
     double yield_rate;
 };
 
+struct WeaponDef {
+    double speed;        // world units per tick
+};
+
 struct ConduitDef {
     uint32_t source;     // index into PLANETS
     uint32_t target;
@@ -47,9 +52,14 @@ struct ConduitDef {
 
 constexpr size_t PLANET_COUNT = ${PLANETS.length};
 constexpr size_t CONDUIT_COUNT = ${CONDUITS.length};
+constexpr size_t WEAPON_COUNT = ${WEAPONS.length};
 
 inline constexpr PlanetDef PLANETS[PLANET_COUNT] = {
 ${planetRows}
+};
+
+inline constexpr WeaponDef WEAPONS[WEAPON_COUNT] = {
+${weaponRows}
 };
 
 inline constexpr ConduitDef CONDUITS[CONDUIT_COUNT] = {

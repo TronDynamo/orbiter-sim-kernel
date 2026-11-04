@@ -128,9 +128,7 @@ void OrbiterSimulationEngine::LaunchSuperweapon(WeaponClass type, double origin_
     state.missile_target_planet[idx] = target_planet_idx;
     state.missile_active[idx] = true;
 
-    if (type == WeaponClass::THERMONUCLEAR_ICBM) state.missile_speed[idx] = 1.8;
-    else if (type == WeaponClass::PLANET_CRACKER_DRILL) state.missile_speed[idx] = 0.9;
-    else state.missile_speed[idx] = 3.5;
+    state.missile_speed[idx] = orbiter_config::WEAPONS[static_cast<size_t>(type)].speed;
 }
 
 void OrbiterSimulationEngine::UpdateProjectiles() {
@@ -175,6 +173,16 @@ void OrbiterSimulationEngine::ExecuteImpact(size_t missile_idx, int32_t planet_i
             state.planet_status[planet_idx] = WorldStatus::GLASSED_IRRADIATED;
             state.planet_population[planet_idx] *= 0.15;
             state.planet_yield_rate[planet_idx] *= 0.25;
+        } else if (wep == WeaponClass::SINGULARITY_TORPEDO) {
+            state.planet_status[planet_idx] = WorldStatus::BLACK_HOLE_COLLAPSED;
+            state.planet_population[planet_idx] = 0.0;
+            state.planet_yield_rate[planet_idx] = 0.0;
+            for (size_t c = 0; c < state.conduit_count; ++c) {
+                if (state.conduit_source[c] == static_cast<uint32_t>(planet_idx) ||
+                    state.conduit_target[c] == static_cast<uint32_t>(planet_idx)) {
+                    state.conduit_snapped[c] = true;
+                }
+            }
         } else if (wep == WeaponClass::PLANET_CRACKER_DRILL) {
             state.planet_status[planet_idx] = WorldStatus::FRACTURED_DEBRIS;
             state.planet_population[planet_idx] = 0.0;

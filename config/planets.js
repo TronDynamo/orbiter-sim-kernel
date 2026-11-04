@@ -13,6 +13,15 @@ export const PLANETS = [
   { key: 'kryos',   id: 104, name: 'Kryos Vault',   orbit: 360, angle: 4.8, speed: 0.00008, r: 22, population: 2100000,  yield: 8 },
 ];
 
+// Weapons, in WeaponClass order. speed: world units per tick.
+// Values marked PLACEHOLDER are not yet in the asset manifest's balance table.
+export const WEAPONS = [
+  { key: 'thermonuclear_icbm', name: 'Titan-Buster Thermonuclear Warhead', speed: 1.8 },
+  { key: 'planet_cracker',     name: 'Planetary Core-Drill',               speed: 0.9 },
+  { key: 'starkiller',         name: 'Stellar Inversion Needle',           speed: 3.5 },   // manifest says 10x missile speed; kept at 3.5 until confirmed
+  { key: 'singularity_torpedo', name: 'Resonance Singularity Torpedo',     speed: 1.2 },   // PLACEHOLDER
+];
+
 // Debris from a destroyed world expires after this many ticks.
 export const DEBRIS = { lifetimeTicks: 20000 };
 

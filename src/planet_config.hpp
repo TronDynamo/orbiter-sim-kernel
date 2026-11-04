@@ -19,6 +19,10 @@ struct PlanetDef {
     double yield_rate;
 };
 
+struct WeaponDef {
+    double speed;        // world units per tick
+};
+
 struct ConduitDef {
     uint32_t source;     // index into PLANETS
     uint32_t target;
@@ -28,12 +32,20 @@ struct ConduitDef {
 
 constexpr size_t PLANET_COUNT = 4;
 constexpr size_t CONDUIT_COUNT = 1;
+constexpr size_t WEAPON_COUNT = 4;
 
 inline constexpr PlanetDef PLANETS[PLANET_COUNT] = {
     { 101u, 110.0, 0.0, 0.00035, 14.0, 12500000.0, 25.0 }, // Aureus Prime
     { 102u, 190.0, 1.2, 0.00021, 18.0, 45000000.0, 18.0 }, // Verdant Hub
     { 103u, 270.0, 3.1, 0.00014, 16.0, 8200000.0, 12.0 }, // Ferrum Ridge
     { 104u, 360.0, 4.8, 0.00008, 22.0, 2100000.0, 8.0 }, // Kryos Vault
+};
+
+inline constexpr WeaponDef WEAPONS[WEAPON_COUNT] = {
+    { 1.8 }, // Titan-Buster Thermonuclear Warhead
+    { 0.9 }, // Planetary Core-Drill
+    { 3.5 }, // Stellar Inversion Needle
+    { 1.2 }, // Resonance Singularity Torpedo
 };
 
 inline constexpr ConduitDef CONDUITS[CONDUIT_COUNT] = {

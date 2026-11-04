@@ -22,6 +22,7 @@ constexpr size_t MAX_ASTEROIDS = 1024;
 
 static_assert(orbiter_config::PLANET_COUNT <= MAX_PLANETS, "too many planets in config");
 static_assert(orbiter_config::CONDUIT_COUNT <= MAX_CONDUITS, "too many conduits in config");
+static_assert(orbiter_config::WEAPON_COUNT == 4, "WeaponClass and WEAPONS table out of step");
 
 enum class WorldStatus : uint8_t {
     ACTIVE_PRISTINE = 0,
@@ -34,6 +35,7 @@ enum class WeaponClass : uint8_t {
     THERMONUCLEAR_ICBM = 0,
     PLANET_CRACKER_DRILL = 1,
     STARKILLER_NEEDLE = 2,
+    SINGULARITY_TORPEDO = 3,
 };
 
 struct StellarSystemState {

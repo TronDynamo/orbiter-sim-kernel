@@ -71,6 +71,18 @@ int main() {
         CHECK(e.GetState().asteroid_count == 0, "debris expires after its lifetime");
     }
 
+    {
+        // Singularity torpedo collapses the target into a black hole and it stops orbiting.
+        OrbiterSimulationEngine e;
+        e.LaunchSuperweapon(WeaponClass::SINGULARITY_TORPEDO, 110.0, 0.0, 0);
+        for (int i = 0; i < 40000 && e.GetState().planet_status[0] == WorldStatus::ACTIVE_PRISTINE; ++i) e.UpdateTick();
+        double x = e.GetState().planet_x[0], y = e.GetState().planet_y[0];
+        for (int i = 0; i < 500; ++i) e.UpdateTick();
+        CHECK(e.GetState().planet_status[0] == WorldStatus::BLACK_HOLE_COLLAPSED, "torpedo collapses its target");
+        CHECK(e.GetState().planet_population[0] == 0.0, "collapsed world has no population");
+        CHECK(e.GetState().planet_x[0] == x && e.GetState().planet_y[0] == y, "collapsed world stays put");
+    }
+
     std::printf("%s (%d failures)\n", failures ? "FAILED" : "PASSED", failures);
     return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }
