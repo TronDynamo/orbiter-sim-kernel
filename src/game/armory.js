@@ -44,21 +44,25 @@ export function drawCage(ctx, x, y, r) {
 export function drawMagma(ctx, x, y, r, t) {
   ctx.save();
   const pulse = 0.65 + 0.35 * Math.sin(t * 4);
-  ctx.strokeStyle = `rgba(255,120,30,${pulse.toFixed(3)})`; ctx.lineWidth = 1.6;
-  ctx.shadowColor = '#ff7a1a'; ctx.shadowBlur = 10;
-  for (let i = 0; i < 7; i++) {
-    const a = i * 0.9 + 0.4;
-    ctx.beginPath();
-    let px = x + Math.cos(a) * r * 0.2, py = y + Math.sin(a) * r * 0.2;
-    ctx.moveTo(px, py);
-    for (let seg = 1; seg <= 4; seg++) {
-      const jitter = Math.sin(seg * 7.3 + i * 2.1) * 0.22;
-      const rr = r * (0.2 + seg * 0.2);
-      px = x + Math.cos(a + jitter) * rr; py = y + Math.sin(a + jitter) * rr;
-      ctx.lineTo(px, py);
+  // Two passes: a wide soft bloom under a bright, crisp core line, so the fissures read at default zoom.
+  const web = (lineWidth, color, blur) => {
+    ctx.strokeStyle = color; ctx.lineWidth = lineWidth; ctx.shadowColor = '#ff7a1a'; ctx.shadowBlur = blur;
+    for (let i = 0; i < 7; i++) {
+      const a = i * 0.9 + 0.4;
+      ctx.beginPath();
+      let px = x + Math.cos(a) * r * 0.2, py = y + Math.sin(a) * r * 0.2;
+      ctx.moveTo(px, py);
+      for (let seg = 1; seg <= 4; seg++) {
+        const jitter = Math.sin(seg * 7.3 + i * 2.1) * 0.22;
+        const rr = r * (0.2 + seg * 0.2);
+        px = x + Math.cos(a + jitter) * rr; py = y + Math.sin(a + jitter) * rr;
+        ctx.lineTo(px, py);
+      }
+      ctx.stroke();
     }
-    ctx.stroke();
-  }
+  };
+  web(7, `rgba(255,110,30,${(0.35 * pulse + 0.15).toFixed(3)})`, 24);
+  web(3.2, `rgba(255,214,140,${pulse.toFixed(3)})`, 14);
   ctx.restore();
 }
 

@@ -6,10 +6,12 @@ import {BODY_STRIDE} from "../orbit/engine.js";
 import {GAME_GALAXY, PLANET_IDS, ARK_POS} from "./galaxy.js";
 import {loadOrbiterKernel, TICKS_PER_SECOND, WEAPON, WORLD, CONDUIT_ERR, CONDUIT_RULES} from "./kernel/orbiterKernel.js";
 import {ARMORY, drawCage, drawMagma, drawIrradiated, drawBlackHole, drawSupernova} from "./armory.js";
-import {STAR_COLLAPSE, VORTEX, DRILL_CRACK_DISTANCE} from "../../config/planets.js";
+import {STAR_COLLAPSE, VORTEX, DRILL_CRACK_DISTANCE, PLANETS as PLANET_DEFS} from "../../config/planets.js";
 import {IntroScreen} from "./IntroScreen.jsx";
 import {CommsTerminal} from "./CommsTerminal.jsx";
 import {applyChoice, openComms} from "./comms.js";
+import {GovernorPanel} from "./GovernorPanel.jsx";
+import {INFRA, infraOf, buildInfra, absorbStrike} from "./colony.js";
 import {RULES, newState, snapTethers, network, tick, tryTether, checkTether, cut, tetherAt, tensionOf, tensionColor, build, hitBody, distToTether, orderShip, shortfall, fireWeapon} from "./rules.js";
 import {SHIPS, SHIP_ORDER, COST_LABEL, drawShip, fleetPower} from "./ships.js";
 
@@ -37,7 +39,7 @@ const planetIndex = (id) => GAME_GALAXY.planets.findIndex((p) => p.id === id);
 function GameSession({kernel}) {
   const canvasRef = useRef(null), overlayRef = useRef(null);
   const st = useRef(newState());
-  const u = useRef({drag: null, mode: null, msg: START_MSG, msgWin: false, paused: false, speed: 1, tick: 0, shipyard: false, armory: false, comms: false, arm: null, hover: null, pointer: null});
+  const u = useRef({drag: null, mode: null, msg: START_MSG, msgWin: false, paused: false, speed: 1, tick: 0, shipyard: false, armory: false, comms: false, governor: null, arm: null, hover: null, pointer: null});
   const [ui, setUi] = useState({...u.current});
   const refresh = () => setUi({...u.current});
 
@@ -123,6 +125,7 @@ function GameSession({kernel}) {
     const snapSeen = new Set();
     const gainSeen = PLANET_OUTPUT.map(() => 0); // kernel totals already credited to the stockpile
     let creditSeen = 0;                          // kernel credit total already credited
+    let buildTick = 0;                           // kernel tick up to which structure income has been paid
 
     const onDown = (e) => {
       const P = positions(); if (!P) return;
@@ -152,6 +155,13 @@ function GameSession({kernel}) {
         if (!valid) { say(`Click ${W.target === "core" ? "Sol Core" : "a world"} to target ${W.name}. Esc cancels.`); refresh(); return; }
         const r = fireWeapon(st.current, W.type);
         if (!r.ok) { s0.arm = null; say(r.msg); refresh(); return; }
+        if (W.target !== "core" && absorbStrike(st.current, id)) {
+          // a barrier intercepts the strike: the shot never reaches the world, the shield is spent
+          st.current.flashes.push({x: P[id].x, y: P[id].y, t: performance.now()});
+          say(`${planetName(id)}'s barrier shield absorbed the ${W.name}.`, true);
+          s0.arm = null; refresh();
+          return;
+        }
         const f = P.ferrum;
         kernel.launch(W.type, f.x, f.y, W.target === "core" ? -1 : planetIndex(id));
         s0.arm = null;
@@ -160,7 +170,7 @@ function GameSession({kernel}) {
         return;
       }
       const id = hitBody(st.current, P, p);
-      if (id) s0.drag = {from: id, cur: p};
+      if (id) s0.drag = {from: id, cur: p, start: p};
       ov.setPointerCapture(e.pointerId);
     };
     const onMove = (e) => {
@@ -176,6 +186,9 @@ function GameSession({kernel}) {
         if (target && target !== s0.drag.from) {
           if (isPlanet(s0.drag.from) && isPlanet(target)) buildConduit(s0.drag.from, target);
           else { const r = tryTether(st.current, s0.drag.from, target, P); say(r.msg); }
+        } else if (isPlanet(s0.drag.from) && Math.hypot(s0.drag.cur.x - s0.drag.start.x, s0.drag.cur.y - s0.drag.start.y) < 4) {
+          // a click without a drag opens the world's Colony Governor
+          s0.governor = s0.drag.from; refresh();
         }
       }
       s0.drag = null;
@@ -359,6 +372,18 @@ function GameSession({kernel}) {
           if (d > 0) { s.credits += d; creditSeen = total; }
         }
         // Siphoning: the kernel adds each world's output to its running total every tick; credit the difference.
+        // Colony structures pay their rate per second while their world is connected to a conduit
+        if (kernel) {
+          const dt = kernel.tickCount - buildTick;
+          buildTick = kernel.tickCount;
+          if (dt > 0) for (const p of GAME_GALAXY.planets) {
+            if (kernel.planets.flow[planetIndex(p.id)] <= 0) continue;
+            for (const key of infraOf(s, p.id)) {
+              const d = INFRA.find((x) => x.key === key);
+              if (d.resource) s[d.resource] += d.rate * dt / TICKS_PER_SECOND;
+            }
+          }
+        }
         if (kernel) PLANET_OUTPUT.forEach((o, i) => {
           const idx = planetIndex(o.planet), total = kernel.planets.gainTotal[idx], d = total - gainSeen[i];
           if (d > 0) { s[o.resource] += d; gainSeen[i] = total; }
@@ -388,9 +413,10 @@ function GameSession({kernel}) {
       if (e.code === "Space") { e.preventDefault(); togglePause(); }
       if (e.key === "1" || e.key === "2" || e.key === "4") setSpeedKey(Number(e.key));
       if (e.key === "Escape" && s0.arm) { s0.arm = null; say("Targeting cancelled."); refresh(); }
+      else if (e.key === "Escape" && s0.governor) { s0.governor = null; refresh(); }
     };
     window.addEventListener("keydown", onKey);
-    window.__relic = {scene, u: s0, st, say, refresh, get kernel() { return kernel; }, resetKernel: () => { kernel.reset(); kBase = null; gainSeen.fill(0); creditSeen = 0; snapSeen.clear(); }};
+    window.__relic = {scene, u: s0, st, say, refresh, get kernel() { return kernel; }, resetKernel: () => { kernel.reset(); kBase = null; gainSeen.fill(0); creditSeen = 0; buildTick = 0; snapSeen.clear(); }};
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", sizeOverlay);
@@ -417,6 +443,8 @@ function GameSession({kernel}) {
     if (u.current.comms) openComms(st.current, st.current.comms.selected); // first visit shows the leader's opener
     refresh();
   }
+  function govBuild(key) { const r = buildInfra(st.current, u.current.governor, key); u.current.msg = r.msg; refresh(); }
+  function closeGovernor() { u.current.governor = null; refresh(); }
   function commsOpen(id) { openComms(st.current, id); refresh(); }
   function commsChoose(key) { const r = applyChoice(st.current, st.current.comms.selected, key); u.current.msg = r.msg; refresh(); }
   // Why a strategic weapon cannot be armed right now, or null.
@@ -507,6 +535,13 @@ function GameSession({kernel}) {
         <button className={"pill zelo" + (u.current.armory ? " on" : "")} onClick={toggleArmory}>☢️ Armory</button>
         <button className={"pill zelo" + (u.current.comms ? " on" : "")} onClick={toggleComms}>📡 Comms</button>
       </footer>
+
+      {u.current.governor ? (() => {
+        const id = u.current.governor, idx = planetIndex(id), def = PLANET_DEFS.find((p) => p.key === id);
+        const out = PLANET_OUTPUT.find((o) => o.planet === id);
+        return <GovernorPanel s={s} kernel={kernel} planet={GAME_GALAXY.planets[idx]} idx={idx} base={def.yield}
+          outputLabel={out.resource} onBuild={govBuild} onClose={closeGovernor} />;
+      })() : null}
 
       {u.current.comms ? <CommsTerminal s={s} onOpen={commsOpen} onChoose={commsChoose} onClose={toggleComms} /> : null}
 

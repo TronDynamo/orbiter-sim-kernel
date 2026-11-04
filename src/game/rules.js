@@ -42,6 +42,7 @@ export const newState = () => ({
   shipN: 0,
   reload: {},    // seconds until each weapon can fire again, by kernel WeaponClass index
   spent: {},     // one-shot weapons already fired (Star-Killer)
+  infra: {},     // Colony Governor: planet id -> built structure keys
   opinion: {},   // diplomacy: per-faction opinion, -100..100
   comms: {selected: 'aurelius', log: []},
   relays: [],    // {id, x, y, hp}
