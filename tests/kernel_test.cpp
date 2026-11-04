@@ -83,6 +83,19 @@ int main() {
         CHECK(e.GetState().planet_x[0] == x && e.GetState().planet_y[0] == y, "collapsed world stays put");
     }
 
+    {
+        // Drill enters the cracking stage inside the threshold, then shatters the world.
+        OrbiterSimulationEngine e;
+        e.LaunchSuperweapon(WeaponClass::PLANET_CRACKER_DRILL, 400.0, 0.0, 0);
+        bool sawCracking = false;
+        for (int i = 0; i < 40000 && e.GetState().planet_status[0] != WorldStatus::FRACTURED_DEBRIS; ++i) {
+            e.UpdateTick();
+            if (e.GetState().planet_status[0] == WorldStatus::CRACKING_STAGE1) sawCracking = true;
+        }
+        CHECK(sawCracking, "drill enters cracking stage before impact");
+        CHECK(e.GetState().planet_status[0] == WorldStatus::FRACTURED_DEBRIS, "cracked world then fractures");
+    }
+
     std::printf("%s (%d failures)\n", failures ? "FAILED" : "PASSED", failures);
     return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }

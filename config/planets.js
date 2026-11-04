@@ -15,17 +15,22 @@ export const PLANETS = [
 
 // Weapons, in WeaponClass order. speed: world units per tick.
 // Values marked PLACEHOLDER are not yet in the asset manifest's balance table.
+// cost / reload / effect are game-layer values; the kernel reads only speed.
 export const WEAPONS = [
-  { key: 'thermonuclear_icbm', name: 'Titan-Buster Thermonuclear Warhead', speed: 1.8 },
-  { key: 'planet_cracker',     name: 'Planetary Core-Drill',               speed: 0.9 },
-  { key: 'starkiller',         name: 'Stellar Inversion Needle',           speed: 3.5 },   // manifest says 10x missile speed; kept at 3.5 until confirmed
-  { key: 'singularity_torpedo', name: 'Resonance Singularity Torpedo',     speed: 1.2 },   // PLACEHOLDER
+  { key: 'thermonuclear_icbm', name: 'Titan-Buster Thermonuclear Warhead', speed: 1.8,  cost: { credits: 2500,  alloys: 1200 }, reloadSeconds: 45,  effect: 'Glasses surface; -85% pop, -75% yield' },
+  { key: 'planet_cracker',     name: 'Planetary Core-Drill',               speed: 0.9,  cost: { credits: 8000,  alloys: 4500 }, reloadSeconds: 120, effect: 'Cracks within 45 units, then shatters world into an asteroid belt; -100% pop' },
+  { key: 'starkiller',         name: 'Stellar Inversion Needle',           speed: 18.0, cost: { credits: 25000, alloys: 15000 }, reloadSeconds: null, effect: 'Supernova shockwave; severs all conduits; one per match' },
+  { key: 'singularity_torpedo', name: 'Resonance Singularity Torpedo',     speed: 1.2,  cost: null, reloadSeconds: null, effect: 'Collapses world into a black hole' },  // not in locked table; speed is a placeholder
 ];
+
+// Drill begins the cracking stage when it is this close to its target (world units).
+export const DRILL_CRACK_DISTANCE = 45.0;
 
 // Sprite for each world state (presentation only; the kernel reports the state name).
 // Keys must match WorldStatus in src/orbiter_kernel.hpp. Checked by tests/world_states.test.mjs.
 export const WORLD_SPRITES = {
   ACTIVE_PRISTINE: null,                             // intact planet: its normal sprite
+  CRACKING_STAGE1: 'planet_cracking_stage1.png',
   GLASSED_IRRADIATED: 'planet_nuked_wasteland.png',
   FRACTURED_DEBRIS: 'planet_shattered_debris.png',
   BLACK_HOLE_COLLAPSED: 'planet_blackhole_vortex.png',

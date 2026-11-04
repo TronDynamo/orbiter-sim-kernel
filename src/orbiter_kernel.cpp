@@ -151,6 +151,13 @@ void OrbiterSimulationEngine::UpdateProjectiles() {
         double dy = target_y - state.missile_y[m];
         double dist = std::sqrt(dx * dx + dy * dy);
 
+        if (state.missile_type[m] == WeaponClass::PLANET_CRACKER_DRILL && p_idx >= 0 &&
+            p_idx < static_cast<int32_t>(state.planet_count) &&
+            state.planet_status[p_idx] == WorldStatus::ACTIVE_PRISTINE &&
+            dist <= orbiter_config::DRILL_CRACK_DISTANCE) {
+            state.planet_status[p_idx] = WorldStatus::CRACKING_STAGE1;
+        }
+
         if (dist <= hit_radius) {
             ExecuteImpact(m, p_idx);
             state.missile_active[m] = false;
@@ -168,8 +175,9 @@ void OrbiterSimulationEngine::ExecuteImpact(size_t missile_idx, int32_t planet_i
     if (planet_idx >= 0 && planet_idx < static_cast<int32_t>(state.planet_count)) {
         WorldStatus status = state.planet_status[planet_idx];
         if (status == WorldStatus::FRACTURED_DEBRIS || status == WorldStatus::BLACK_HOLE_COLLAPSED) return;
+        if (status == WorldStatus::GLASSED_IRRADIATED && wep != WeaponClass::PLANET_CRACKER_DRILL) return;
         if (wep == WeaponClass::THERMONUCLEAR_ICBM) {
-            if (status != WorldStatus::ACTIVE_PRISTINE) return;
+            if (status != WorldStatus::ACTIVE_PRISTINE && status != WorldStatus::CRACKING_STAGE1) return;
             state.planet_status[planet_idx] = WorldStatus::GLASSED_IRRADIATED;
             state.planet_population[planet_idx] *= 0.15;
             state.planet_yield_rate[planet_idx] *= 0.25;

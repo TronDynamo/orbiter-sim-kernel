@@ -29,6 +29,7 @@ enum class WorldStatus : uint8_t {
     GLASSED_IRRADIATED = 1,
     FRACTURED_DEBRIS = 2,
     BLACK_HOLE_COLLAPSED = 3,
+    CRACKING_STAGE1 = 4,  // drill within DRILL_CRACK_DISTANCE; visual only, ends at impact
 };
 
 enum class WeaponClass : uint8_t {

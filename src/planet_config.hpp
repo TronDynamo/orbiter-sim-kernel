@@ -8,6 +8,7 @@ namespace orbiter_config {
 constexpr double STAR_RADIUS = 45.0;
 constexpr double STAR_MASS = 10000.0;
 constexpr uint32_t DEBRIS_LIFETIME_TICKS = 20000.0;
+constexpr double DRILL_CRACK_DISTANCE = 45.0;
 
 struct PlanetDef {
     uint32_t id;
@@ -44,7 +45,7 @@ inline constexpr PlanetDef PLANETS[PLANET_COUNT] = {
 inline constexpr WeaponDef WEAPONS[WEAPON_COUNT] = {
     { 1.8 }, // Titan-Buster Thermonuclear Warhead
     { 0.9 }, // Planetary Core-Drill
-    { 3.5 }, // Stellar Inversion Needle
+    { 18.0 }, // Stellar Inversion Needle
     { 1.2 }, // Resonance Singularity Torpedo
 };
 
