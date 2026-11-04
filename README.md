@@ -25,4 +25,4 @@ Orbiter: Stellar Conquest runs in the browser. The title screen waits for the ke
 - `npm run dev`: start the dev server at http://127.0.0.1:5173/
 - `npm run build:web`: production build into `dist/`
 
-`public/engine/` is generated and not committed.
+`public/engine/` holds the built engine files and is committed, so Vercel can serve them. Rebuild with the scripts above and commit the updated files after any C++ change. See `DEPLOYMENT.md`.
