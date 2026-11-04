@@ -1,11 +1,20 @@
 // Minimal checks for the kernel. Run with `npm test`.
 #include <cstdio>
+#include <cmath>
 #include <cstdlib>
 
 #include "orbiter_kernel.hpp"
 #include "planet_config.hpp"
 
 static int failures = 0;
+
+// The drill (0.9 units/tick) can only catch slower worlds. Kryos (index 3) moves about 0.74 units/tick,
+// so start the drill a little behind it on the same orbit.
+static void LaunchDrillAtKryos(orbiter::OrbiterSimulationEngine& e) {
+    double th = orbiter_config::PLANETS[3].angle - 0.15;
+    double r = orbiter_config::PLANETS[3].orbit_radius;
+    e.LaunchSuperweapon(orbiter::WeaponClass::PLANET_CRACKER_DRILL, r * std::cos(th), r * std::sin(th), 3);
+}
 #define CHECK(cond, msg) do { if (!(cond)) { std::printf("FAIL: %s\n", msg); ++failures; } else { std::printf("ok:   %s\n", msg); } } while (0)
 
 int main() {
@@ -23,7 +32,7 @@ int main() {
         OrbiterSimulationEngine e;
         e.LaunchSuperweapon(WeaponClass::THERMONUCLEAR_ICBM, 110.0, 0.0, 1);
         for (int i = 0; i < 20000 && e.GetState().planet_status[1] == WorldStatus::ACTIVE_PRISTINE; ++i) e.UpdateTick();
-        CHECK(e.GetState().planet_status[1] == WorldStatus::GLASSED_IRRADIATED, "ICBM glasses Verdant Hub");
+        CHECK(e.GetState().planet_status[1] == WorldStatus::GLASSED_IRRADIATED, "ICBM glasses Aeros");
         CHECK(e.GetState().planet_population[1] < PLANETS[1].population, "glassing reduces population");
     }
     {
@@ -88,18 +97,19 @@ int main() {
     {
         // A cracked world stops orbiting and keeps its last position.
         OrbiterSimulationEngine e;
-        e.LaunchSuperweapon(WeaponClass::PLANET_CRACKER_DRILL, 110.0, 0.0, 0);
-        for (int i = 0; i < 40000 && e.GetState().planet_status[0] == WorldStatus::ACTIVE_PRISTINE; ++i) e.UpdateTick();
-        double x = e.GetState().planet_x[0], y = e.GetState().planet_y[0];
+        LaunchDrillAtKryos(e);
+        for (int i = 0; i < 40000 && e.GetState().planet_status[3] == WorldStatus::ACTIVE_PRISTINE; ++i) e.UpdateTick();
+        for (int i = 0; i < 40000 && e.GetState().planet_status[3] != WorldStatus::FRACTURED_DEBRIS; ++i) e.UpdateTick();
+        double x = e.GetState().planet_x[3], y = e.GetState().planet_y[3];
         for (int i = 0; i < 1000; ++i) e.UpdateTick();
-        CHECK(e.GetState().planet_status[0] == WorldStatus::FRACTURED_DEBRIS, "drill fractures its target");
-        CHECK(e.GetState().planet_x[0] == x && e.GetState().planet_y[0] == y, "fractured world stays put");
+        CHECK(e.GetState().planet_status[3] == WorldStatus::FRACTURED_DEBRIS, "drill fractures its target");
+        CHECK(e.GetState().planet_x[3] == x && e.GetState().planet_y[3] == y, "fractured world stays put");
     }
     {
         // Debris expires after its lifetime.
         OrbiterSimulationEngine e;
-        e.LaunchSuperweapon(WeaponClass::PLANET_CRACKER_DRILL, 110.0, 0.0, 0);
-        for (int i = 0; i < 40000 && e.GetState().planet_status[0] == WorldStatus::ACTIVE_PRISTINE; ++i) e.UpdateTick();
+        LaunchDrillAtKryos(e);
+        for (int i = 0; i < 40000 && e.GetState().planet_status[3] != WorldStatus::FRACTURED_DEBRIS; ++i) e.UpdateTick();
         CHECK(e.GetState().asteroid_count == 32, "drill spawns a debris ring");
         for (uint32_t i = 0; i < DEBRIS_LIFETIME_TICKS + 1; ++i) e.UpdateTick();
         CHECK(e.GetState().asteroid_count == 0, "debris expires after its lifetime");
@@ -120,14 +130,14 @@ int main() {
     {
         // Drill enters the cracking stage inside the threshold, then shatters the world.
         OrbiterSimulationEngine e;
-        e.LaunchSuperweapon(WeaponClass::PLANET_CRACKER_DRILL, 400.0, 0.0, 0);
+        LaunchDrillAtKryos(e);
         bool sawCracking = false;
-        for (int i = 0; i < 40000 && e.GetState().planet_status[0] != WorldStatus::FRACTURED_DEBRIS; ++i) {
+        for (int i = 0; i < 40000 && e.GetState().planet_status[3] != WorldStatus::FRACTURED_DEBRIS; ++i) {
             e.UpdateTick();
-            if (e.GetState().planet_status[0] == WorldStatus::CRACKING_STAGE1) sawCracking = true;
+            if (e.GetState().planet_status[3] == WorldStatus::CRACKING_STAGE1) sawCracking = true;
         }
         CHECK(sawCracking, "drill enters cracking stage before impact");
-        CHECK(e.GetState().planet_status[0] == WorldStatus::FRACTURED_DEBRIS, "cracked world then fractures");
+        CHECK(e.GetState().planet_status[3] == WorldStatus::FRACTURED_DEBRIS, "cracked world then fractures");
     }
 
     std::printf("%s (%d failures)\n", failures ? "FAILED" : "PASSED", failures);

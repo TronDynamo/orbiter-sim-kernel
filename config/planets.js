@@ -4,13 +4,16 @@
 //  - orbit: distance from the star (world units)      - speed: radians per tick
 //  - r: body radius (hit area for weapons)            - population / yield: economy values
 
-export const STAR = { name: 'Central Star', radius: 45, mass: 10000 };
+export const STAR = { name: 'Dying Star', radius: 44, mass: 10000 };  // radius matches the game's sun
 
+// Same four worlds, in the same order, as orbiter-alliance src/game/galaxy.js.
+// speed = (radians per second from the game) / 60, so it is radians per tick.
+// population / yield are PLACEHOLDERS: the game has no economy values for these worlds yet.
 export const PLANETS = [
-  { key: 'aureus',  id: 101, name: 'Aureus Prime',  orbit: 110, angle: 0.0, speed: 0.00035, r: 14, population: 12500000, yield: 25 },
-  { key: 'verdant', id: 102, name: 'Verdant Hub',   orbit: 190, angle: 1.2, speed: 0.00021, r: 18, population: 45000000, yield: 18 },
-  { key: 'ferrum',  id: 103, name: 'Ferrum Ridge',  orbit: 270, angle: 3.1, speed: 0.00014, r: 16, population: 8200000,  yield: 12 },
-  { key: 'kryos',   id: 104, name: 'Kryos Vault',   orbit: 360, angle: 4.8, speed: 0.00008, r: 22, population: 2100000,  yield: 8 },
+  { key: 'thalassa', id: 101, name: 'Thalassa', orbit: 170, angle: 0.0, speed: 0.314 / 60,  r: 10, population: 12500000, yield: 25 },
+  { key: 'aeros',    id: 102, name: 'Aeros',    orbit: 255, angle: 2.0, speed: 0.196 / 60,  r: 11, population: 45000000, yield: 18 },
+  { key: 'ferrum',   id: 103, name: 'Ferrum',   orbit: 335, angle: 3.5, speed: 0.14 / 60,   r: 10, population: 8200000,  yield: 12 },
+  { key: 'kryos',    id: 104, name: 'Kryos',    orbit: 420, angle: 1.0, speed: 0.105 / 60,  r: 12, population: 2100000,  yield: 8 },
 ];
 
 // Simulation rate. The browser loop runs one tick per frame at 60 FPS.
@@ -60,5 +63,5 @@ export const STAR_SPRITES = { SUPERNOVA: 'fx_supernova_ring.png', COLLAPSED: 'su
 export const DEBRIS = { lifetimeTicks: 20000 };
 
 export const CONDUITS = [
-  { source: 'aureus', target: 'verdant', maxLength: 320, throughput: 100 },
+  { source: 'thalassa', target: 'aeros', maxLength: 320, throughput: 100 },
 ];

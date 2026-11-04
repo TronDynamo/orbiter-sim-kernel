@@ -13,11 +13,11 @@ test('wasm kernel: launch, tick and read planet status through views', { skip: !
   k._orbiter_reset();
   assert.equal(k._orbiter_planet_count(), 4);
 
-  k._orbiter_launch(0, 110, 0, 1); // ICBM at Verdant Hub (index 1)
+  k._orbiter_launch(0, 110, 0, 1); // ICBM at Aeros (index 1)
   for (let i = 0; i < 20000 && k.HEAPU8[k._orbiter_planet_status() + 1] === 0; ++i) k._orbiter_tick(1);
 
   const statusPtr = k._orbiter_planet_status();
-  assert.equal(k.HEAPU8[statusPtr + 1], 1, 'Verdant Hub is glassed (status 1)');
+  assert.equal(k.HEAPU8[statusPtr + 1], 1, 'Aeros is glassed (status 1)');
 
   const xPtr = k._orbiter_planet_x() / 8;
   const xs = k.HEAPF64.subarray(xPtr, xPtr + 4);
