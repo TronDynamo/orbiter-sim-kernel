@@ -4,9 +4,11 @@ import {useEffect, useRef, useState} from "react";
 import {OrbitScene} from "../orbit/scene.js";
 import {BODY_STRIDE} from "../orbit/engine.js";
 import {GAME_GALAXY, PLANET_IDS, ARK_POS} from "./galaxy.js";
-import {loadOrbiterKernel, TICKS_PER_SECOND, WEAPON, CONDUIT_ERR, CONDUIT_RULES} from "./kernel/orbiterKernel.js";
+import {loadOrbiterKernel, TICKS_PER_SECOND, WEAPON, WORLD, CONDUIT_ERR, CONDUIT_RULES} from "./kernel/orbiterKernel.js";
+import {ARMORY, drawCage, drawMagma, drawIrradiated, drawBlackHole, drawSupernova} from "./armory.js";
+import {STAR_COLLAPSE, VORTEX, DRILL_CRACK_DISTANCE} from "../../config/planets.js";
 import {IntroScreen} from "./IntroScreen.jsx";
-import {RULES, newState, snapTethers, network, tick, tryTether, checkTether, cut, tetherAt, tensionOf, tensionColor, build, hitBody, distToTether, orderShip, shortfall} from "./rules.js";
+import {RULES, newState, snapTethers, network, tick, tryTether, checkTether, cut, tetherAt, tensionOf, tensionColor, build, hitBody, distToTether, orderShip, shortfall, fireWeapon} from "./rules.js";
 import {SHIPS, SHIP_ORDER, COST_LABEL, drawShip, fleetPower} from "./ships.js";
 
 const START_MSG = "Drag from one world to another to build a conduit. Conduits snap beyond " + CONDUIT_RULES.maxLength + " units.";
@@ -33,7 +35,7 @@ const planetIndex = (id) => GAME_GALAXY.planets.findIndex((p) => p.id === id);
 function GameSession({kernel}) {
   const canvasRef = useRef(null), overlayRef = useRef(null);
   const st = useRef(newState());
-  const u = useRef({drag: null, mode: null, msg: START_MSG, msgWin: false, paused: false, speed: 1, tick: 0, shipyard: false});
+  const u = useRef({drag: null, mode: null, msg: START_MSG, msgWin: false, paused: false, speed: 1, tick: 0, shipyard: false, armory: false, arm: null, hover: null, pointer: null});
   const [ui, setUi] = useState({...u.current});
   const refresh = () => setUi({...u.current});
 
@@ -141,11 +143,30 @@ function GameSession({kernel}) {
         refresh();
         return;
       }
+      if (s0.arm) {
+        const W = ARMORY.find((a) => a.key === s0.arm);
+        const id = hitBody(st.current, P, p);
+        const valid = id && (W.target === "core" ? id === "core" : isPlanet(id));
+        if (!valid) { say(`Click ${W.target === "core" ? "Sol Core" : "a world"} to target ${W.name}. Esc cancels.`); refresh(); return; }
+        const r = fireWeapon(st.current, W.type);
+        if (!r.ok) { s0.arm = null; say(r.msg); refresh(); return; }
+        const f = P.ferrum;
+        kernel.launch(W.type, f.x, f.y, W.target === "core" ? -1 : planetIndex(id));
+        s0.arm = null;
+        say(`${W.name} launched at ${W.target === "core" ? "Sol Core" : planetName(id)}.`, true);
+        refresh();
+        return;
+      }
       const id = hitBody(st.current, P, p);
       if (id) s0.drag = {from: id, cur: p};
       ov.setPointerCapture(e.pointerId);
     };
-    const onMove = (e) => { if (s0.drag) s0.drag.cur = toWorld(e); };
+    const onMove = (e) => {
+      if (s0.drag) s0.drag.cur = toWorld(e);
+      const r = ov.getBoundingClientRect();
+      s0.pointer = {x: e.clientX - r.left, y: e.clientY - r.top};
+      if (s0.arm) { const P = positions(); s0.hover = P ? hitBody(st.current, P, toWorld(e)) : null; }
+    };
     const onUp = () => {
       const P = positions();
       if (s0.drag && P) {
@@ -231,6 +252,12 @@ function GameSession({kernel}) {
         for (let m = 0; m < kernel.missileCount; m++) {
           if (!kernel.missiles.active[m]) continue;
           const q = toS({x: kernel.missiles.x[m], y: kernel.missiles.y[m]});
+          const ti = kernel.missiles.target[m], tp = ti >= 0 ? P[GAME_GALAXY.planets[ti].id] : P.core;
+          if (tp) {
+            const tq = toS(tp);
+            ctx.setLineDash([4, 6]); ctx.strokeStyle = "rgba(255,90,90,0.5)"; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(tq.x, tq.y); ctx.stroke(); ctx.setLineDash([]);
+          }
           ctx.fillStyle = kernel.missiles.type[m] === WEAPON.STARKILLER ? "#ff3b3b" : "#ffb35a";
           ctx.beginPath(); ctx.arc(q.x, q.y, 3 + scene.base, 0, Math.PI * 2); ctx.fill();
         }
@@ -238,6 +265,58 @@ function GameSession({kernel}) {
         for (let a = 0; a < kernel.asteroidCount; a++) {
           const q = toS({x: kernel.asteroids.x[a], y: kernel.asteroids.y[a]});
           ctx.fillRect(q.x, q.y, 2, 2);
+        }
+      }
+
+      // Armory: cataclysm states read from the kernel, plus targeting feedback
+      if (kernel) {
+        const t = now / 1000;
+        const pxAt = (p, wr) => Math.abs(toS({x: p.x + wr, y: p.y}).x - toS(p).x);
+        // World-Cracker: a drill within reach of its target lays magma fissures across it
+        for (let m = 0; m < kernel.missileCount; m++) {
+          if (!kernel.missiles.active[m] || kernel.missiles.type[m] !== WEAPON.CRACKER_DRILL) continue;
+          const ti = kernel.missiles.target[m];
+          if (ti < 0) continue;
+          const tp = P[GAME_GALAXY.planets[ti].id];
+          if (tp && Math.hypot(tp.x - kernel.missiles.x[m], tp.y - kernel.missiles.y[m]) <= DRILL_CRACK_DISTANCE) {
+            const q = toS(tp); drawMagma(ctx, q.x, q.y, pxAt(tp, 11), t);
+          }
+        }
+        // world states
+        GAME_GALAXY.planets.forEach((p, i) => {
+          const tp = P[p.id]; if (!tp) return;
+          const status = kernel.planets.status[i], q = toS(tp), R = pxAt(tp, 11);
+          if (status === WORLD.GLASSED) drawIrradiated(ctx, q.x, q.y, R, t);
+          else if (status === WORLD.FRACTURED) {
+            ctx.setLineDash([2, 4]); ctx.strokeStyle = "rgba(160,160,170,0.6)"; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.arc(q.x, q.y, R * 2.2, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+          } else if (status === WORLD.BLACK_HOLE) {
+            drawBlackHole(ctx, q.x, q.y, R, t, pxAt(tp, VORTEX.radius), kernel.planets.vortexTicks[i]);
+          }
+        });
+        // star states: supernova blast ring, then the collapsed black hole
+        const sun = toS({x: 0, y: 0});
+        if (kernel.starCollapsed) drawBlackHole(ctx, sun.x, sun.y, pxAt({x: 0, y: 0}, STAR_COLLAPSE.collapsedRadius), t);
+        else if (kernel.starSupernova && kernel.starBlastTicks > 0) {
+          const progress = 1 - kernel.starBlastTicks / STAR_COLLAPSE.ringTicks;
+          drawSupernova(ctx, sun.x, sun.y, pxAt({x: 0, y: 0}, kernel.starRadius), pxAt({x: 0, y: 0}, 160), progress);
+        }
+      }
+      // targeting: red cage on a valid target under the pointer, and a reticle that follows the pointer
+      if (s0.arm) {
+        const W = ARMORY.find((a) => a.key === s0.arm);
+        const hv = s0.hover, valid = !!hv && (W.target === "core" ? hv === "core" : isPlanet(hv));
+        if (valid && P[hv]) {
+          const tp = P[hv], q = toS(tp);
+          drawCage(ctx, q.x, q.y, Math.abs(toS({x: tp.x + (hv === "core" ? kernel.starRadius : 11), y: tp.y}).x - q.x));
+        }
+        if (s0.pointer) {
+          const {x, y} = s0.pointer;
+          ctx.strokeStyle = valid ? "#ef4444" : "rgba(239,68,68,0.6)"; ctx.lineWidth = 1.5; ctx.shadowColor = "#ef4444"; ctx.shadowBlur = valid ? 8 : 0;
+          ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2);
+          ctx.moveTo(x - 14, y); ctx.lineTo(x - 5, y); ctx.moveTo(x + 5, y); ctx.lineTo(x + 14, y);
+          ctx.moveTo(x, y - 14); ctx.lineTo(x, y - 5); ctx.moveTo(x, y + 5); ctx.lineTo(x, y + 14); ctx.stroke();
+          ctx.shadowBlur = 0;
         }
       }
 
@@ -306,6 +385,7 @@ function GameSession({kernel}) {
     const onKey = (e) => {
       if (e.code === "Space") { e.preventDefault(); togglePause(); }
       if (e.key === "1" || e.key === "2" || e.key === "4") setSpeedKey(Number(e.key));
+      if (e.key === "Escape" && s0.arm) { s0.arm = null; say("Targeting cancelled."); refresh(); }
     };
     window.addEventListener("keydown", onKey);
     window.__relic = {scene, u: s0, st, say, refresh, get kernel() { return kernel; }, resetKernel: () => { kernel.reset(); kBase = null; gainSeen.fill(0); creditSeen = 0; snapSeen.clear(); }};
@@ -328,7 +408,24 @@ function GameSession({kernel}) {
     sc.speed = u.current.paused ? 0 : u.current.speed;
     refresh();
   }
-  function toggleShipyard() { u.current.shipyard = !u.current.shipyard; refresh(); }
+  function toggleShipyard() { u.current.shipyard = !u.current.shipyard; u.current.armory = false; refresh(); }
+  function toggleArmory() { u.current.armory = !u.current.armory; u.current.shipyard = false; refresh(); }
+  // Why a strategic weapon cannot be armed right now, or null.
+  function weaponBlock(s, W) {
+    if (s.spent[W.type]) return `${W.name} is spent for this match.`;
+    const r = Math.ceil(s.reload[W.type] ?? 0);
+    if (r > 0) return `${W.name} reloads in ${r}s.`;
+    const short = shortfall(s, W.cost);
+    return short ? `${W.name} needs ${short}.` : null;
+  }
+  function armWeapon(key) {
+    const W = ARMORY.find((a) => a.key === key);
+    const why = weaponBlock(st.current, W);
+    if (why) { u.current.msg = why; refresh(); return; }
+    u.current.arm = key; u.current.mode = null;
+    u.current.msg = `Targeting ${W.name}: click ${W.target === "core" ? "Sol Core" : "a world"}. Esc cancels.`;
+    refresh();
+  }
   function buildHull(type) { const r = orderShip(st.current, type); u.current.msg = r.msg; refresh(); }
   function setSpeed(v) {
     u.current.speed = v; u.current.paused = false;
@@ -337,6 +434,7 @@ function GameSession({kernel}) {
   }
   function setMode(m) {
     u.current.mode = u.current.mode === m ? null : m;
+    u.current.arm = null;
     const txt = {relay: "Click the map to place a relay satellite.", repair: "Click anywhere to confirm the hull patch.", cut: "Click a tether to decouple it safely."};
     u.current.msg = u.current.mode ? txt[u.current.mode] : "Cancelled.";
     refresh();
@@ -351,7 +449,7 @@ function GameSession({kernel}) {
     window.__relic?.resetKernel?.();
     st.current = newState();
     st.current.lastTick = Math.floor(sc?.sim?.c?.[5] ?? 0);
-    Object.assign(u.current, {drag: null, mode: null, msg: START_MSG, msgWin: false});
+    Object.assign(u.current, {drag: null, mode: null, arm: null, hover: null, msg: START_MSG, msgWin: false});
     if (sc) sc.speed = u.current.paused ? 0 : u.current.speed;
     refresh();
   }
@@ -363,7 +461,7 @@ function GameSession({kernel}) {
   return (
     <div className="app">
       <canvas ref={canvasRef} className="stage" />
-      <canvas ref={overlayRef} className="stage" style={{pointerEvents: "auto", cursor: u.current.mode ? "crosshair" : "default"}} />
+      <canvas ref={overlayRef} className="stage" style={{pointerEvents: "auto", cursor: u.current.arm ? "none" : u.current.mode ? "crosshair" : "default"}} />
 
       <div className="brand glass">
         <div className="brand-kicker mono">ORBITER: STELLAR CONQUEST · MISSION TELEMETRY</div>
@@ -397,7 +495,30 @@ function GameSession({kernel}) {
         <button className={"pill zelo" + (u.current.mode === "repair" ? " on" : "")} onClick={() => setMode("repair")}>🛡️ Patch hull · 10🔩</button>
         <button className={"pill zelo" + (u.current.mode === "cut" ? " on" : "")} onClick={() => setMode("cut")}>✂️ Decouple tether</button>
         <button className={"pill zelo" + (u.current.shipyard ? " on" : "")} onClick={toggleShipyard}>🚀 Shipyard</button>
+        <button className={"pill zelo" + (u.current.armory ? " on" : "")} onClick={toggleArmory}>☢️ Armory</button>
       </footer>
+
+      {u.current.armory ? (
+        <aside className="glass" style={{position: "absolute", right: 16, top: 84, width: 320, padding: 14, zIndex: 8, borderRadius: 12}}>
+          <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6}}>
+            <b>Strategic Weapons</b>
+            <button className="pill zelo" onClick={toggleArmory}>Close</button>
+          </div>
+          {ARMORY.map((W) => {
+            const why = weaponBlock(s, W), reload = Math.ceil(s.reload[W.type] ?? 0);
+            return (
+              <div key={W.key} style={{borderTop: "1px solid rgba(255,255,255,0.08)", padding: "8px 0"}}>
+                <div style={{display: "flex", justifyContent: "space-between"}}><b>{W.name}</b><span>{W.reloadSeconds ? `${W.reloadSeconds}s reload` : "one per match"}</span></div>
+                <div style={{fontSize: 12, opacity: 0.8, margin: "2px 0 4px"}}>{W.blurb}</div>
+                <div style={{fontSize: 12, marginBottom: 6}}>{Object.entries(W.cost).map(([k, v]) => `${v} ${COST_LABEL[k]}`).join(" · ")}{reload > 0 ? ` · reloading ${reload}s` : ""}</div>
+                <button className="pill zelo" disabled={!!why} title={why ?? `Arm ${W.name}`} onClick={() => armWeapon(W.key)}
+                  style={{opacity: why ? 0.45 : 1, cursor: why ? "not-allowed" : "pointer"}}>{u.current.arm === W.key ? "Armed: pick target" : "Arm"}</button>
+              </div>
+            );
+          })}
+          <div style={{fontSize: 12, opacity: 0.85, marginTop: 6}}>Strikes launch from Ferrum. Esc cancels targeting.</div>
+        </aside>
+      ) : null}
 
       {u.current.shipyard ? (
         <aside className="glass" style={{position: "absolute", right: 16, top: 84, width: 300, padding: 14, zIndex: 8, borderRadius: 12}}>

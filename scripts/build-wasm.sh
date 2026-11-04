@@ -18,6 +18,7 @@ EXPORTS=(
   orbiter_conduit_add orbiter_conduit_remove orbiter_conduit_occluded
   orbiter_conduit_source orbiter_conduit_target orbiter_conduit_max_length
   orbiter_planet_gain_total orbiter_planet_flow orbiter_credit_total
+  orbiter_missile_target orbiter_star_blast_ticks
   orbiter_missile_x orbiter_missile_y orbiter_missile_active orbiter_missile_type
   orbiter_asteroid_x orbiter_asteroid_y
 )

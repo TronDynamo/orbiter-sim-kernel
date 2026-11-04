@@ -62,6 +62,8 @@ export class OrbiterKernel {
       y: f64(m._orbiter_missile_y(), MAX.missiles),
       active: u8(m._orbiter_missile_active(), MAX.missiles),
       type: u8(m._orbiter_missile_type(), MAX.missiles),
+      // Planet index each missile homes on; -1 means the central star.
+      target: new Int32Array(m.HEAPU8.buffer, m._orbiter_missile_target(), MAX.missiles),
     };
     this.asteroids = {
       x: f64(m._orbiter_asteroid_x(), MAX.asteroids),
@@ -94,4 +96,6 @@ export class OrbiterKernel {
   get starRadius() { return this.m._orbiter_star_radius(); }
   get starCollapsed() { return this.m._orbiter_star_collapsed() === 1; }
   get starSupernova() { return this.m._orbiter_star_supernova() === 1; }
+  // Ticks left in the supernova blast ring (0 when there is none).
+  get starBlastTicks() { return this.m._orbiter_star_blast_ticks(); }
 }

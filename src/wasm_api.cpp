@@ -50,6 +50,8 @@ const double* orbiter_missile_y() { return g_engine.GetState().missile_y; }
 const uint8_t* orbiter_missile_active() {
     return reinterpret_cast<const uint8_t*>(g_engine.GetState().missile_active);
 }
+const int32_t* orbiter_missile_target() { return g_engine.GetState().missile_target_planet; }
+uint32_t orbiter_star_blast_ticks() { return g_engine.GetState().star_blast_ticks_left; }
 const uint8_t* orbiter_missile_type() {
     return reinterpret_cast<const uint8_t*>(g_engine.GetState().missile_type);
 }

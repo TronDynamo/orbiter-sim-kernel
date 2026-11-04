@@ -2,6 +2,7 @@
 // plane the engine draws, so the rules and the picture always agree.
 import {NAMES, ARK_POS} from './galaxy.js';
 import {SHIPS, COST_LABEL} from './ships.js';
+import {WEAPONS as WEAPON_DEFS} from '../../config/planets.js';
 
 export const RULES = {
   START: {hull: 100, fuel: 120, propellant: 60, alloys: 60, cryo: 20},
@@ -39,6 +40,8 @@ export const newState = () => ({
   queue: [],     // hulls under construction: {id, type, left}
   fleet: [],     // launched hulls: {id, type, phase}
   shipN: 0,
+  reload: {},    // seconds until each weapon can fire again, by kernel WeaponClass index
+  spent: {},     // one-shot weapons already fired (Star-Killer)
   relays: [],    // {id, x, y, hp}
   relayN: 0,
   won: null,
@@ -175,6 +178,8 @@ export function tick(state, P) {
   if (net.has('aeros')) state.propellant += 2 * (1 + 0.15 * rad);
   // Alloys, coolant, biomass and compute are siphoned through conduits by the kernel (see GameApp).
   if (net.has('core')) state.data += 1;
+  // Armory reloads count down one game second each.
+  for (const k of Object.keys(state.reload)) state.reload[k] = Math.max(0, state.reload[k] - 1);
   // Shipyard: each queued hull counts down one game second; finished hulls join the fleet.
   state.queue = state.queue.filter((q) => {
     q.left -= 1;
@@ -212,6 +217,20 @@ export function shortfall(state, cost) {
   const parts = Object.entries(cost).filter(([k, v]) => state[k] < v)
     .map(([k, v]) => `${Math.ceil(v - state[k])} more ${COST_LABEL[k] ?? k}`);
   return parts.length ? parts.join(', ') : null;
+}
+
+// Fires a strategic weapon: deducts the cost, starts the reload. typeIdx is the kernel WeaponClass.
+export function fireWeapon(state, typeIdx) {
+  const def = WEAPON_DEFS[typeIdx];
+  if (!def) return {ok: false, msg: 'Unknown weapon.'};
+  if (state.spent[typeIdx]) return {ok: false, msg: `${def.name} is already spent for this match.`};
+  if ((state.reload[typeIdx] ?? 0) > 0) return {ok: false, msg: `${def.name} reloads in ${Math.ceil(state.reload[typeIdx])}s.`};
+  const short = shortfall(state, def.cost);
+  if (short) return {ok: false, msg: `${def.name} needs ${short}.`};
+  for (const [k, v] of Object.entries(def.cost)) state[k] -= v;
+  if (def.reloadSeconds == null) state.spent[typeIdx] = true;
+  else state.reload[typeIdx] = def.reloadSeconds;
+  return {ok: true, msg: `${def.name} launched.`};
 }
 
 // Orders a hull: deducts the cost now and queues the build. Returns {ok, msg}.
