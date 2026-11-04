@@ -1,5 +1,5 @@
 // Colony Governor: a planet's population, happiness, yield and infrastructure. Opens when a world is clicked.
-import {INFRA, infraOf, happinessOf} from "./colony.js";
+import {INFRA, infraOf, happinessOf, costOf} from "./colony.js";
 import {shortfall} from "./rules.js";
 import {COST_LABEL} from "./ships.js";
 
@@ -29,7 +29,7 @@ export function GovernorPanel({s, kernel, planet, idx, base, outputLabel, onBuil
       <div style={{borderTop: "1px solid rgba(255,255,255,0.08)", marginTop: 10, paddingTop: 8}}>
         <b style={{fontSize: 13}}>Infrastructure</b>
         {INFRA.map((d) => {
-          const has = built.includes(d.key), why = has ? null : shortfall(s, d.cost);
+          const has = built.includes(d.key), cost = costOf(s, d), why = has ? null : shortfall(s, cost);
           return (
             <div key={d.key} style={{padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.05)"}}>
               <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8}}>
@@ -39,7 +39,7 @@ export function GovernorPanel({s, kernel, planet, idx, base, outputLabel, onBuil
                     style={{opacity: why ? 0.45 : 1, cursor: why ? "not-allowed" : "pointer"}}>Build</button>
                 )}
               </div>
-              <div style={{fontSize: 12, opacity: 0.8}}>{d.blurb} · {Object.entries(d.cost).map(([k, v]) => `${v} ${COST_LABEL[k] ?? k}`).join(" · ")}</div>
+              <div style={{fontSize: 12, opacity: 0.8}}>{d.blurb} · {Object.entries(cost).map(([k, v]) => `${v} ${COST_LABEL[k] ?? k}`).join(" · ")}</div>
             </div>
           );
         })}

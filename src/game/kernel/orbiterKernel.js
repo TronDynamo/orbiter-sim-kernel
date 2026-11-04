@@ -85,6 +85,8 @@ export class OrbiterKernel {
   addConduit(source, target) { return this.m._orbiter_conduit_add(source, target); }
   // Removes a conduit by index. Returns 0, or -1 if there is none.
   removeConduit(index) { return this.m._orbiter_conduit_remove(index); }
+  // Tech tuning: raises or lowers one conduit's snap limit (the physics is unchanged).
+  setConduitMaxLength(index, value) { this.m._orbiter_conduit_set_max_length(index, value); }
 
   get tickCount() { return this.m._orbiter_tick_count(); }
   // Credits earned since reset (connected worlds plus conduit fees).

@@ -68,6 +68,9 @@ const uint8_t* orbiter_conduit_occluded() {
 const uint32_t* orbiter_conduit_source() { return g_engine.GetState().conduit_source; }
 const uint32_t* orbiter_conduit_target() { return g_engine.GetState().conduit_target; }
 const double* orbiter_conduit_max_length() { return g_engine.GetState().conduit_max_length; }
+// Tuning hook for tech perks: sets one conduit's snap limit. Snapping physics is unchanged; this only
+// lets researched elasticity raise the length a conduit can stretch before it snaps.
+void orbiter_conduit_set_max_length(uint32_t c, double v) { g_engine.SetConduitMaxLength(c, v); }
 
 const double* orbiter_asteroid_x() { return g_engine.GetState().asteroid_x; }
 const double* orbiter_asteroid_y() { return g_engine.GetState().asteroid_y; }

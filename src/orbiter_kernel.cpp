@@ -370,6 +370,10 @@ int32_t OrbiterSimulationEngine::AddConduit(uint32_t s, uint32_t t) {
     return static_cast<int32_t>(c);
 }
 
+void OrbiterSimulationEngine::SetConduitMaxLength(uint32_t index, double max_length) {
+    if (index < MAX_CONDUITS) state.conduit_max_length[index] = max_length;
+}
+
 int32_t OrbiterSimulationEngine::RemoveConduit(uint32_t index) {
     if (index >= state.conduit_count) return -1;
     size_t last = state.conduit_count - 1;

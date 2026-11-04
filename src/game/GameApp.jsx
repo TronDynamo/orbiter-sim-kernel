@@ -11,7 +11,13 @@ import {IntroScreen} from "./IntroScreen.jsx";
 import {CommsTerminal} from "./CommsTerminal.jsx";
 import {applyChoice, openComms} from "./comms.js";
 import {GovernorPanel} from "./GovernorPanel.jsx";
-import {INFRA, infraOf, buildInfra, absorbStrike} from "./colony.js";
+import {INFRA, infraOf, buildInfra, absorbStrike, costOf} from "./colony.js";
+import {TECHS, researchTech, perks} from "./tech.js";
+import {SESSION_SECONDS, runSession} from "./senate.js";
+import {checkVictory, VICTORIES} from "./victory.js";
+import {TechWeb} from "./TechWeb.jsx";
+import {SenateChamber} from "./SenateChamber.jsx";
+import {VictoryModal} from "./VictoryModal.jsx";
 import {RULES, newState, snapTethers, network, tick, tryTether, checkTether, cut, tetherAt, tensionOf, tensionColor, build, hitBody, distToTether, orderShip, shortfall, fireWeapon} from "./rules.js";
 import {SHIPS, SHIP_ORDER, COST_LABEL, drawShip, fleetPower} from "./ships.js";
 
@@ -39,7 +45,7 @@ const planetIndex = (id) => GAME_GALAXY.planets.findIndex((p) => p.id === id);
 function GameSession({kernel}) {
   const canvasRef = useRef(null), overlayRef = useRef(null);
   const st = useRef(newState());
-  const u = useRef({drag: null, mode: null, msg: START_MSG, msgWin: false, paused: false, speed: 1, tick: 0, shipyard: false, armory: false, comms: false, governor: null, arm: null, hover: null, pointer: null});
+  const u = useRef({drag: null, mode: null, msg: START_MSG, msgWin: false, paused: false, speed: 1, tick: 0, shipyard: false, armory: false, comms: false, governor: null, tech: false, senate: false, arm: null, hover: null, pointer: null});
   const [ui, setUi] = useState({...u.current});
   const refresh = () => setUi({...u.current});
 
@@ -372,17 +378,33 @@ function GameSession({kernel}) {
           if (d > 0) { s.credits += d; creditSeen = total; }
         }
         // Siphoning: the kernel adds each world's output to its running total every tick; credit the difference.
+        // High-Tensile Beams: each conduit's snap limit follows the researched perk
+        if (kernel) {
+          const want = CONDUIT_RULES.maxLength + perks(s).conduitBonus;
+          for (let c = 0; c < kernel.conduitCount; c++) if (kernel.conduits.maxLength[c] !== want) kernel.setConduitMaxLength(c, want);
+        }
         // Colony structures pay their rate per second while their world is connected to a conduit
         if (kernel) {
           const dt = kernel.tickCount - buildTick;
           buildTick = kernel.tickCount;
-          if (dt > 0) for (const p of GAME_GALAXY.planets) {
-            if (kernel.planets.flow[planetIndex(p.id)] <= 0) continue;
-            for (const key of infraOf(s, p.id)) {
-              const d = INFRA.find((x) => x.key === key);
-              if (d.resource) s[d.resource] += d.rate * dt / TICKS_PER_SECOND;
+          const pz = perks(s), fpMult = s.senate?.effects?.freeportMult ?? 1;
+          if (dt > 0) GAME_GALAXY.planets.forEach((p) => {
+            const idx = planetIndex(p.id);
+            if (kernel.planets.flow[idx] > 0) {
+              for (const key of infraOf(s, p.id)) {
+                const d = INFRA.find((x) => x.key === key);
+                if (d.resource) s[d.resource] += d.rate * dt / TICKS_PER_SECOND * (key === "freeport" ? fpMult : 1);
+              }
+            } else if (pz.occlusionShare > 0) {
+              // Phase Plating: a world shadowed by the sun still earns part of its output
+              let shadowed = false;
+              for (let c = 0; c < kernel.conduitCount; c++) {
+                if ((kernel.conduits.source[c] === idx || kernel.conduits.target[c] === idx) && kernel.conduits.occluded[c]) shadowed = true;
+              }
+              const out = PLANET_OUTPUT.find((o) => o.planet === p.id);
+              if (shadowed) s[out.resource] += PLANET_DEFS.find((d) => d.key === p.id).yield * pz.occlusionShare * dt / TICKS_PER_SECOND;
             }
-          }
+          });
         }
         if (kernel) PLANET_OUTPUT.forEach((o, i) => {
           const idx = planetIndex(o.planet), total = kernel.planets.gainTotal[idx], d = total - gainSeen[i];
@@ -397,7 +419,16 @@ function GameSession({kernel}) {
         }
         while (Math.floor(gameT) > s.lastTick && !s.won && !s.lost) {
           s.lastTick += 1;
+          s.elapsed += 1;
+          if (s.elapsed >= s.senate.next) convene();
           for (const ev of tick(s, P)) say(ev.msg, !!ev.win);
+        }
+        if (kernel && !s.victory) {
+          const planets = GAME_GALAXY.planets.map((p, i) => ({id: p.id, status: kernel.planets.status[i]}));
+          const conduits = [];
+          for (let c = 0; c < kernel.conduitCount; c++) conduits.push({source: kernel.conduits.source[c], target: kernel.conduits.target[c], snapped: !!kernel.conduits.snapped[c]});
+          const v = checkVictory(s, planets, conduits);
+          if (v) { s.victory = {key: v, ...VICTORIES[v]}; s.victoryAck = false; say(`Victory: ${VICTORIES[v].title}.`, true); refresh(); }
         }
         if (s.won || s.lost) scene.speed = 0;
         drawOverlay(P, now);
@@ -438,6 +469,19 @@ function GameSession({kernel}) {
   }
   function toggleShipyard() { u.current.shipyard = !u.current.shipyard; u.current.armory = false; refresh(); }
   function toggleArmory() { u.current.armory = !u.current.armory; u.current.shipyard = false; refresh(); }
+  function toggleTech() { u.current.tech = !u.current.tech; u.current.shipyard = false; u.current.armory = false; refresh(); }
+  function researchNow(key) { const r = researchTech(st.current, key); u.current.msg = r.msg; refresh(); }
+  function convene() {
+    const s = st.current, sess = runSession(s, s.senate.count);
+    s.senate.count += 1;
+    s.senate.current = sess;
+    s.senate.next = s.elapsed + SESSION_SECONDS;
+    s.senate.dismissed = false;
+    u.current.msg = `Senate session: ${sess.resolution.title} ${sess.passed ? "passed" : "failed"}.`; u.current.msgWin = sess.passed;
+  }
+  function openSenate() { st.current.senate.dismissed = true; u.current.senate = true; refresh(); }
+  function closeSenate() { u.current.senate = false; refresh(); }
+  function keepPlaying() { st.current.victoryAck = true; refresh(); }
   function toggleComms() {
     u.current.comms = !u.current.comms;
     if (u.current.comms) openComms(st.current, st.current.comms.selected); // first visit shows the leader's opener
@@ -449,6 +493,7 @@ function GameSession({kernel}) {
   function commsChoose(key) { const r = applyChoice(st.current, st.current.comms.selected, key); u.current.msg = r.msg; refresh(); }
   // Why a strategic weapon cannot be armed right now, or null.
   function weaponBlock(s, W) {
+    if (W.type === 2 && s.senate?.effects?.starkillerBanned) return "Banned by the Senate this session.";
     if (s.spent[W.type]) return `${W.name} is spent for this match.`;
     const r = Math.ceil(s.reload[W.type] ?? 0);
     if (r > 0) return `${W.name} reloads in ${r}s.`;
@@ -505,10 +550,10 @@ function GameSession({kernel}) {
         <div className="row"><span>💳 Credits</span><b>{Math.floor(s.credits)}</b></div>
         <div className="row"><span>🌱 Biomass</span><b>{Math.floor(s.biomass)}</b></div>
         <div className="row"><span>🔩 Alloys</span><b>{Math.floor(s.alloys)}</b></div>
-        <div className="row"><span>🧠 Compute</span><b>{Math.floor(s.compute)}</b></div>
+        <div className="row"><span>🧠 Compute <button className="pill zelo" style={{padding: "0 6px", marginLeft: 4}} title="Orbital Tech Web" onClick={toggleTech}>🧪</button></span><b>{Math.floor(s.compute)}</b></div>
         <div className="row"><span>❄️ Coolant</span><b>{Math.floor(s.cryo)}</b></div>
         <div className="row"><span>🚀 Fleet</span><b>{s.fleet.length}</b></div>
-        <div className="row"><span>⚡ Fleet power</span><b>{fleetPower(s.fleet)}</b></div>
+        <div className="row"><span>⚡ Fleet power</span><b>{Math.round(fleetPower(s.fleet) * perks(s).fleetMult * 10) / 10}</b></div>
         <div className="row"><span>🛡️ Hull</span><b>{Math.max(0, Math.round(s.hull))}%</b></div>
         <div className="row"><span>⛽ Fuel</span><b>{Math.floor(s.fuel)}</b></div>
         <div className="row"><span>🔥 Propellant</span><b>{Math.floor(s.propellant)}</b></div>
@@ -534,6 +579,7 @@ function GameSession({kernel}) {
         <button className={"pill zelo" + (u.current.shipyard ? " on" : "")} onClick={toggleShipyard}>🚀 Shipyard</button>
         <button className={"pill zelo" + (u.current.armory ? " on" : "")} onClick={toggleArmory}>☢️ Armory</button>
         <button className={"pill zelo" + (u.current.comms ? " on" : "")} onClick={toggleComms}>📡 Comms</button>
+        <button className={"pill zelo" + (s.senate.dismissed ? "" : " flash-alert")} onClick={openSenate}>🏛️ Senate</button>
       </footer>
 
       {u.current.governor ? (() => {
@@ -542,6 +588,10 @@ function GameSession({kernel}) {
         return <GovernorPanel s={s} kernel={kernel} planet={GAME_GALAXY.planets[idx]} idx={idx} base={def.yield}
           outputLabel={out.resource} onBuild={govBuild} onClose={closeGovernor} />;
       })() : null}
+
+      {u.current.tech ? <TechWeb s={s} onResearch={researchNow} onClose={toggleTech} /> : null}
+      {u.current.senate && s.senate.current ? <SenateChamber s={s} onClose={closeSenate} /> : null}
+      {s.victory && !s.victoryAck ? <VictoryModal s={s} onKeep={keepPlaying} onRestart={restart} /> : null}
 
       {u.current.comms ? <CommsTerminal s={s} onOpen={commsOpen} onChoose={commsChoose} onClose={toggleComms} /> : null}
 

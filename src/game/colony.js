@@ -19,15 +19,22 @@ export function happinessOf(state, planetId, struck) {
   return Math.max(0, Math.min(100, h));
 }
 
+// Cost after Senate effects: a Defense Subsidy halves the Planetary Barrier Shield.
+export function costOf(state, d) {
+  const mult = d.key === "barrier" ? (state.senate?.effects?.barrierMult ?? 1) : 1;
+  return Object.fromEntries(Object.entries(d.cost).map(([k, v]) => [k, Math.round(v * mult)]));
+}
+
 // Builds one of each per world. Returns {ok, msg}.
 export function buildInfra(state, planetId, key) {
   const d = INFRA.find((x) => x.key === key);
   if (!d) return {ok: false, msg: "Unknown structure."};
   const list = infraOf(state, planetId);
   if (list.includes(key)) return {ok: false, msg: `${d.name} already stands here.`};
-  const short = shortfall(state, d.cost);
+  const cost = costOf(state, d);
+  const short = shortfall(state, cost);
   if (short) return {ok: false, msg: `${d.name} needs ${short}.`};
-  for (const [k, v] of Object.entries(d.cost)) state[k] -= v;
+  for (const [k, v] of Object.entries(cost)) state[k] -= v;
   state.infra[planetId] = [...list, key];
   return {ok: true, msg: `${d.name} completed.`};
 }

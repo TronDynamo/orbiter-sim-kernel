@@ -45,6 +45,11 @@ export const newState = () => ({
   infra: {},     // Colony Governor: planet id -> built structure keys
   opinion: {},   // diplomacy: per-faction opinion, -100..100
   comms: {selected: 'leon_11', log: []},
+  tech: {},                 // researched tech keys
+  senate: {next: 300, count: 0, current: null, effects: {}, dismissed: true},
+  elapsed: 0,               // game seconds since the session started
+  victory: null,            // {key, title, blurb} once a victory condition is met
+  victoryAck: false,        // the player chose to keep playing
   relays: [],    // {id, x, y, hp}
   relayN: 0,
   won: null,
@@ -226,13 +231,14 @@ export function shortfall(state, cost) {
 export function fireWeapon(state, typeIdx) {
   const def = WEAPON_DEFS[typeIdx];
   if (!def) return {ok: false, msg: 'Unknown weapon.'};
+  if (typeIdx === 2 && state.senate?.effects?.starkillerBanned) return {ok: false, msg: 'The Senate has banned the Star-Killer Needle this session.'};
   if (state.spent[typeIdx]) return {ok: false, msg: `${def.name} is already spent for this match.`};
   if ((state.reload[typeIdx] ?? 0) > 0) return {ok: false, msg: `${def.name} reloads in ${Math.ceil(state.reload[typeIdx])}s.`};
   const short = shortfall(state, def.cost);
   if (short) return {ok: false, msg: `${def.name} needs ${short}.`};
   for (const [k, v] of Object.entries(def.cost)) state[k] -= v;
   if (def.reloadSeconds == null) state.spent[typeIdx] = true;
-  else state.reload[typeIdx] = def.reloadSeconds;
+  else state.reload[typeIdx] = Math.round(def.reloadSeconds * (state.tech?.spinal ? 0.75 : 1));
   return {ok: true, msg: `${def.name} launched.`};
 }
 

@@ -20,6 +20,8 @@
 .bloc-filter { display: flex; flex-wrap: wrap; gap: 4px; }
 .bloc-chip { font-size: 10px; padding: 3px 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.15); background: transparent; color: inherit; cursor: pointer; }
 .bloc-chip.on { background: rgba(255,255,255,0.12); }
+@keyframes flashAlert { 0%, 100% { box-shadow: 0 0 0 rgba(251,191,36,0); } 50% { box-shadow: 0 0 14px rgba(251,191,36,0.95); } }
+.flash-alert { animation: flashAlert 0.9s infinite; border-color: #fbbf24; }
 .comms-pick.on { background: rgba(255,255,255,0.1); }
 .comms-pick small { opacity: 0.7; font-size: 11px; }
 .comms-main { display: flex; flex-direction: column; min-height: 0; padding: 12px; gap: 10px; }

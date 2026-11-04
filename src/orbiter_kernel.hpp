@@ -133,6 +133,8 @@ public:
     int32_t AddConduit(uint32_t source, uint32_t target);
     // Removes a conduit by moving the last one into its slot. Returns 0, or -1 if there is no such conduit.
     int32_t RemoveConduit(uint32_t index);
+    // Tech tuning: sets one conduit's snap limit. Snapping physics is unchanged.
+    void SetConduitMaxLength(uint32_t index, double max_length);
     void UpdateStar();
     void RunBenchmark(uint64_t total_ticks);
 
