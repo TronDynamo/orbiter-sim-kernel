@@ -423,12 +423,24 @@ function GameSession({kernel}) {
           if (s.elapsed >= s.senate.next) convene();
           for (const ev of tick(s, P)) say(ev.msg, !!ev.win);
         }
+        // credits earned this match: only increases count, so spending does not reduce it
+        if (s.creditsSeen == null) s.creditsSeen = s.credits;
+        if (s.credits > s.creditsSeen) s.earned += s.credits - s.creditsSeen;
+        s.creditsSeen = s.credits;
         if (kernel && !s.victory) {
           const planets = GAME_GALAXY.planets.map((p, i) => ({id: p.id, status: kernel.planets.status[i]}));
           const conduits = [];
           for (let c = 0; c < kernel.conduitCount; c++) conduits.push({source: kernel.conduits.source[c], target: kernel.conduits.target[c], snapped: !!kernel.conduits.snapped[c]});
           const v = checkVictory(s, planets, conduits);
-          if (v) { s.victory = {key: v, ...VICTORIES[v]}; s.victoryAck = false; say(`Victory: ${VICTORIES[v].title}.`, true); refresh(); }
+          if (v) {
+            const summary = {
+              seconds: s.elapsed, credits: Math.floor(s.earned),
+              intact: planets.filter((p) => p.status === 0).length, total: planets.length,
+              fleetPower: Math.round(fleetPower(s.fleet) * perks(s).fleetMult * 10) / 10,
+            };
+            s.victory = {key: v, ...VICTORIES[v], summary};
+            s.victoryAck = false; say(`Victory: ${VICTORIES[v].title}.`, true); refresh();
+          }
         }
         if (s.won || s.lost) scene.speed = 0;
         drawOverlay(P, now);
@@ -477,7 +489,11 @@ function GameSession({kernel}) {
     s.senate.current = sess;
     s.senate.next = s.elapsed + SESSION_SECONDS;
     s.senate.dismissed = false;
-    u.current.msg = `Senate session: ${sess.resolution.title} ${sess.passed ? "passed" : "failed"}.`; u.current.msgWin = sess.passed;
+    // a floating banner so the outcome shows even with the chamber closed
+    u.current.senateToast = {text: `Senate ${sess.passed ? "passed" : "rejected"}: ${sess.resolution.title}`, passed: sess.passed, id: s.senate.count};
+    clearTimeout(u.current.toastTimer);
+    u.current.toastTimer = setTimeout(() => { u.current.senateToast = null; refresh(); }, 6000);
+    refresh();
   }
   function openSenate() { st.current.senate.dismissed = true; u.current.senate = true; refresh(); }
   function closeSenate() { u.current.senate = false; refresh(); }
@@ -592,6 +608,11 @@ function GameSession({kernel}) {
       {u.current.tech ? <TechWeb s={s} onResearch={researchNow} onClose={toggleTech} /> : null}
       {u.current.senate && s.senate.current ? <SenateChamber s={s} onClose={closeSenate} /> : null}
       {s.victory && !s.victoryAck ? <VictoryModal s={s} onKeep={keepPlaying} onRestart={restart} /> : null}
+      {u.current.senateToast ? (
+        <div key={u.current.senateToast.id} className={"senate-toast glass" + (u.current.senateToast.passed ? " passed" : " failed")}>
+          🏛️ {u.current.senateToast.text}
+        </div>
+      ) : null}
 
       {u.current.comms ? <CommsTerminal s={s} onOpen={commsOpen} onChoose={commsChoose} onClose={toggleComms} /> : null}
 

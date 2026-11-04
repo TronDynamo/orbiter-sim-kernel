@@ -50,6 +50,8 @@ export const newState = () => ({
   elapsed: 0,               // game seconds since the session started
   victory: null,            // {key, title, blurb} once a victory condition is met
   victoryAck: false,        // the player chose to keep playing
+  earned: 0,                // credits gained this match (spending does not reduce it)
+  creditsSeen: null,        // last credit balance the earned counter has read
   relays: [],    // {id, x, y, hp}
   relayN: 0,
   won: null,
