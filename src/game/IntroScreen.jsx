@@ -178,8 +178,8 @@ export function IntroScreen({kernelStatus, onLaunch}) {
           </div>
           <div className="intro-list">
             {FACTIONS.map((f) => (
-              <div className="intro-faction" key={f.name}>
-                <div><strong style={{color: f.color, display: "block"}}>{f.name} (#{f.number})</strong><small>{f.sub}</small></div>
+              <div className="intro-faction" key={f.id}>
+                <div><strong style={{color: f.color, display: "block"}}>{f.name} (#{f.number})</strong><small>{f.sub}</small><small style={{display: "block", opacity: 0.85}}>{f.trait}</small></div>
                 <span className="intro-badge-faction" style={{color: f.color}}>{f.bloc}</span>
               </div>
             ))}

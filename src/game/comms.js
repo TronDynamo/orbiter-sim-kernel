@@ -11,7 +11,7 @@ export const CHOICES = [
 ];
 
 export const clampOpinion = (v) => Math.max(OPINION_MIN, Math.min(OPINION_MAX, v));
-export const opinionOf = (state, id) => state.opinion[id] ?? 0;
+export const opinionOf = (state, id) => state.opinion[id] ?? factionById(id)?.defaultRep ?? 0;
 
 // Applies a reply to the selected leader. Returns {ok, msg}.
 export function applyChoice(state, factionId, key) {
@@ -30,7 +30,7 @@ export function applyChoice(state, factionId, key) {
 }
 
 export function newComms() {
-  return {selected: "aurelius", log: []};
+  return {selected: "leon_11", log: []};
 }
 export function openComms(state, factionId) {
   const f = factionById(factionId);

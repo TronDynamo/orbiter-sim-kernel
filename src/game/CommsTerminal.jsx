@@ -1,6 +1,6 @@
 // Diplomatic Holo-Comm: roster, leader portrait with CRT scanlines, opinion meter, tactical replies, and the message log.
-import {useEffect, useRef} from "react";
-import {FACTIONS, factionById} from "./factions.js";
+import {useEffect, useRef, useState} from "react";
+import {FACTIONS, BLOC_LIST, factionById} from "./factions.js";
 import {CHOICES, opinionOf} from "./comms.js";
 import {shortfall} from "./rules.js";
 import {COST_LABEL} from "./ships.js";
@@ -8,6 +8,8 @@ import "./comms.css";
 
 export function CommsTerminal({s, onOpen, onChoose, onClose}) {
   const f = factionById(s.comms.selected);
+  const [bloc, setBloc] = useState(f.blocId);
+  const roster = FACTIONS.filter((x) => bloc === "ALL" || x.blocId === bloc);
   const op = opinionOf(s, f.id);
   const log = s.comms.log.filter((m) => m.faction === f.id);
   const logRef = useRef(null);
@@ -16,12 +18,17 @@ export function CommsTerminal({s, onOpen, onChoose, onClose}) {
   return (
     <aside className="comms glass open" role="dialog" aria-label="Diplomatic Holo-Comm">
       <div className="comms-head">
-        <b className="mono">DIPLOMATIC HOLO-COMM · SENATE CHANNEL</b>
+        <b className="mono">DIPLOMATIC HOLO-COMM · SENATE CHANNEL · {FACTIONS.length} LEADERS</b>
         <button className="pill zelo" onClick={onClose}>Close</button>
       </div>
       <div className="comms-body">
         <div className="comms-roster">
-          {FACTIONS.map((x) => (
+          <div className="bloc-filter">
+            {[{id: "ALL", name: "All blocs"}, ...BLOC_LIST.map((b) => ({id: b.id, name: b.name.replace(/^The /, "")}))].map((b) => (
+              <button key={b.id} className={"bloc-chip" + (bloc === b.id ? " on" : "")} onClick={() => setBloc(b.id)}>{b.name}</button>
+            ))}
+          </div>
+          {roster.map((x) => (
             <button key={x.id} className={"comms-pick" + (x.id === f.id ? " on" : "")} onClick={() => onOpen(x.id)} style={{borderColor: x.color}}>
               <span style={{color: x.color}}>#{x.number} {x.name}</span>
               <small>{x.bloc}</small>
@@ -31,13 +38,14 @@ export function CommsTerminal({s, onOpen, onChoose, onClose}) {
         <div className="comms-main">
           <div className="comms-leader">
             <div className="comms-portrait" style={{borderColor: f.color, color: f.color}}>
-              <span>#{f.number}</span>
+              <span>{f.monogram}</span>
               <div className="scanlines" />
             </div>
             <div>
               <div className="comms-name" style={{color: f.color}}>{f.name}</div>
               <div className="comms-sub">{f.sub}</div>
               <div className="comms-sub">Senate bloc: {f.bloc}</div>
+              <div className="comms-sub"><b>{f.trait.split(":")[0]}</b> · {f.trait.split(":").slice(1).join(":").trim()}</div>
             </div>
           </div>
           <div className="comms-meter">

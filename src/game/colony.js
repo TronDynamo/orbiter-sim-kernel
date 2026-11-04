@@ -1,13 +1,12 @@
-// Colony Governor: planetary infrastructure. Building effects come from the design brief.
-// Costs, happiness and the shield's strike rule are PLACEHOLDER values until the balance table lands.
+// Colony Governor: planetary infrastructure. Costs, happiness and the shield's strike rule are approved.
 import {shortfall} from "./rules.js";
 
 export const INFRA = [
-  {key: "dome", name: "Biosphere Dome", resource: "biomass", rate: 10, cost: {credits: 400, alloys: 150}, blurb: "+10 Biomass/s while connected."},
-  {key: "foundry", name: "Deep-Core Foundry", resource: "alloys", rate: 12, cost: {credits: 300, alloys: 200}, blurb: "+12 Alloys/s while connected."},
-  {key: "labs", name: "Quantum Labs", resource: "compute", rate: 10, cost: {credits: 800, alloys: 300}, blurb: "+10 Compute/s while connected."},
-  {key: "freeport", name: "Commercial Free-Port", resource: "credits", rate: 25, cost: {credits: 500, alloys: 250}, blurb: "+25 Credits/s while connected."},
-  {key: "barrier", name: "Planetary Barrier Shield", resource: null, rate: 0, cost: {credits: 1200, alloys: 800}, blurb: "Stops the next strike aimed at this world."},
+  {key: "dome", name: "Biosphere Dome", resource: "biomass", rate: 10, cost: {credits: 80, alloys: 40}, blurb: "+10 Biomass/s while connected."},
+  {key: "foundry", name: "Deep-Core Foundry", resource: "alloys", rate: 12, cost: {credits: 150, alloys: 60}, blurb: "+12 Alloys/s while connected."},
+  {key: "labs", name: "Quantum Labs", resource: "compute", rate: 10, cost: {credits: 120, cryo: 50}, blurb: "+10 Compute/s while connected."},
+  {key: "freeport", name: "Commercial Free-Port", resource: "credits", rate: 25, cost: {credits: 200, alloys: 70}, blurb: "+25 Credits/s while connected."},
+  {key: "barrier", name: "Planetary Barrier Shield", resource: null, rate: 0, cost: {credits: 300, alloys: 150, compute: 40}, blurb: "Absorbs the next strike aimed at this world; rebuild to restore."},
 ];
 
 const BASE_HAPPINESS = 50, PER_BUILDING = 5, STRUCK_PENALTY = 25;
