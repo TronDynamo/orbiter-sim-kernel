@@ -181,6 +181,35 @@ int main() {
         CHECK(g.RemoveConduit(5) == -1, "removing a missing conduit is refused");
     }
 
+    {
+        // Siphoning: a live conduit delivers a world's output each tick; nothing flows through a shadowed one.
+        OrbiterSimulationEngine idle;
+        for (int i = 0; i < 600; ++i) idle.UpdateTick();
+        CHECK(idle.GetState().planet_gain_total[0] == 0.0, "no conduit, no siphoned output");
+
+        OrbiterSimulationEngine e;
+        const auto& s = e.GetState();
+        e.AddConduit(0, 1);
+        double before = s.planet_gain_total[0];
+        e.UpdateTick();
+        double perTick = s.planet_gain_total[0] - before;
+        double base = s.planet_yield_rate[0] / 60.0;
+        CHECK(std::abs(perTick - base) < 1e-9 || std::abs(perTick - 3.0 * base) < 1e-9,
+              "a live conduit delivers one tick of output (tripled under surge)");
+
+        bool sawShadow = false, shadowFlow = false;
+        for (int i = 0; i < 80000 && !sawShadow; ++i) {
+            double g0 = s.planet_gain_total[0];
+            e.UpdateTick();
+            if (s.conduit_occluded[0]) {
+                sawShadow = true;
+                if (s.planet_gain_total[0] != g0) shadowFlow = true;
+            }
+        }
+        CHECK(sawShadow, "the star shadows the conduit at some point");
+        CHECK(!shadowFlow, "no output is delivered while the conduit is in shadow");
+    }
+
     std::printf("%s (%d failures)\n", failures ? "FAILED" : "PASSED", failures);
     return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }

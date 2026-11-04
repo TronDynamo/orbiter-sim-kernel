@@ -26,6 +26,8 @@ void OrbiterSimulationEngine::InitFromConfig() {
         state.planet_radius[i] = p.radius;
         state.planet_population[i] = p.population;
         state.planet_yield_rate[i] = p.yield_rate;
+        state.planet_gain_total[i] = 0.0;
+        state.planet_flow[i] = 0;
         state.planet_status[i] = WorldStatus::ACTIVE_PRISTINE;
         state.planet_vortex_ticks_left[i] = 0;
     }
@@ -88,6 +90,21 @@ void OrbiterSimulationEngine::UpdateTick() {
         } else {
             double surge_mult = state.conduit_harmonic_surge[c] ? 3.0 : 1.0;
             state.conduit_throughput[c] = (state.planet_yield_rate[s_idx] + state.planet_yield_rate[t_idx]) * surge_mult;
+        }
+    }
+
+    // 2b. Siphon: a world's output flows while at least one of its conduits is intact and out of the
+    // star's shadow. Harmonic surge on that conduit triples it. Each world is counted once per tick.
+    for (size_t p = 0; p < state.planet_count; ++p) state.planet_flow[p] = 0;
+    for (size_t c = 0; c < state.conduit_count; ++c) {
+        if (state.conduit_snapped[c] || state.conduit_occluded[c]) continue;
+        uint8_t mult = state.conduit_harmonic_surge[c] ? 3 : 1;
+        const uint32_t ends[2] = {state.conduit_source[c], state.conduit_target[c]};
+        for (uint32_t p : ends) state.planet_flow[p] = std::max(state.planet_flow[p], mult);
+    }
+    for (size_t p = 0; p < state.planet_count; ++p) {
+        if (state.planet_flow[p]) {
+            state.planet_gain_total[p] += state.planet_flow[p] * state.planet_yield_rate[p] / orbiter_config::TICKS_PER_SECOND;
         }
     }
 

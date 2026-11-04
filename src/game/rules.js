@@ -32,6 +32,9 @@ export const newState = () => ({
   year: 1,
   lastTick: 0,
   tethers: [],   // {a, b}
+  biomass: 0,    // siphoned from Thalassa through conduits
+  compute: 0,    // siphoned from Kryos through conduits
+  credits: 0,    // no source yet
   relays: [],    // {id, x, y, hp}
   relayN: 0,
   won: null,
@@ -166,8 +169,7 @@ export function tick(state, P) {
   const rad = state.radiation;
   if (net.has('thalassa')) state.fuel += 3 * (1 + 0.15 * rad);
   if (net.has('aeros')) state.propellant += 2 * (1 + 0.15 * rad);
-  if (net.has('ferrum')) state.alloys += 2;
-  if (net.has('kryos')) state.cryo += Math.max(0.3, 1 - 0.05 * rad);
+  // Alloys, coolant, biomass and compute are siphoned through conduits by the kernel (see GameApp).
   if (net.has('core')) state.data += 1;
   for (const id of ['thalassa', 'aeros']) if (net.has(id)) state.hull -= 0.03 * rad;
   state.fuel -= RULES.LIFE_FUEL + state.tethers.length * RULES.TETHER_FUEL;

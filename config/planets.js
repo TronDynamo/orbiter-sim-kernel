@@ -10,9 +10,9 @@ export const STAR = { name: 'Dying Star', radius: 44, mass: 10000 };  // radius 
 // speed = (radians per second from the game) / 60, so it is radians per tick.
 // population / yield are PLACEHOLDERS: the game has no economy values for these worlds yet.
 export const PLANETS = [
-  { key: 'thalassa', id: 101, name: 'Thalassa', orbit: 170, angle: 0.0, speed: 0.314 / 60,  r: 10, population: 12500000, yield: 25 },
-  { key: 'aeros',    id: 102, name: 'Aeros',    orbit: 255, angle: 2.0, speed: 0.196 / 60,  r: 11, population: 45000000, yield: 18 },
-  { key: 'ferrum',   id: 103, name: 'Ferrum',   orbit: 335, angle: 3.5, speed: 0.14 / 60,   r: 10, population: 8200000,  yield: 12 },
+  { key: 'thalassa', id: 101, name: 'Thalassa', orbit: 170, angle: 0.0, speed: 0.314 / 60,  r: 10, population: 12500000, yield: 15 },
+  { key: 'aeros',    id: 102, name: 'Aeros',    orbit: 255, angle: 2.0, speed: 0.196 / 60,  r: 11, population: 45000000, yield: 12 },
+  { key: 'ferrum',   id: 103, name: 'Ferrum',   orbit: 335, angle: 3.5, speed: 0.14 / 60,   r: 10, population: 8200000,  yield: 10 },
   { key: 'kryos',    id: 104, name: 'Kryos',    orbit: 420, angle: 1.0, speed: 0.105 / 60,  r: 12, population: 2100000,  yield: 8 },
 ];
 

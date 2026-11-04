@@ -17,6 +17,13 @@ const CONDUIT_MSG = {
   [CONDUIT_ERR.FULL]: "The network has no free conduit slots.",
 };
 const isPlanet = (id) => GAME_GALAXY.planets.some((p) => p.id === id);
+// Which stockpile each world's siphoned output feeds (game data; the kernel only produces the flow).
+const PLANET_OUTPUT = [
+  {planet: "thalassa", resource: "biomass"},
+  {planet: "aeros", resource: "cryo"},   // Coolant
+  {planet: "ferrum", resource: "alloys"},
+  {planet: "kryos", resource: "compute"},
+];
 const planetName = (id) => GAME_GALAXY.planets.find((p) => p.id === id)?.name ?? id;
 const planetIndex = (id) => GAME_GALAXY.planets.findIndex((p) => p.id === id);
 
@@ -100,9 +107,15 @@ function GameSession({kernel}) {
     // Live feedback while dragging between worlds: red when the line would be too long.
     const previewConduit = (P, from, to) => {
       const A = P[from], B = P[to];
-      return Math.hypot(B.x - A.x, B.y - A.y) > CONDUIT_RULES.maxLength ? "too far" : null;
+      if (Math.hypot(B.x - A.x, B.y - A.y) > CONDUIT_RULES.maxLength) return "too far";
+      // the dying star blocks the line when the segment passes through its disc
+      const dx = B.x - A.x, dy = B.y - A.y, L2 = dx * dx + dy * dy;
+      const t = L2 ? Math.max(0, Math.min(1, -(A.x * dx + A.y * dy) / L2)) : 0;
+      const px = A.x + dx * t, py = A.y + dy * t, R = kernel.starRadius;
+      return px * px + py * py <= R * R ? "shadow" : null;
     };
     const snapSeen = new Set();
+    const gainSeen = PLANET_OUTPUT.map(() => 0); // kernel totals already credited to the stockpile
 
     const onDown = (e) => {
       const P = positions(); if (!P) return;
@@ -187,8 +200,19 @@ function GameSession({kernel}) {
           : isPlanet(t) && isPlanet(s0.drag.from) ? previewConduit(P, s0.drag.from, t)
           : checkTether(s, s0.drag.from, t, P);
         const a = toS(P[s0.drag.from]), b = toS(s0.drag.cur);
-        ctx.setLineDash([6, 6]); ctx.lineWidth = 2; ctx.strokeStyle = err ? "#ef4444" : "#10B981";
-        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); ctx.setLineDash([]);
+        if (err === "shadow") {
+          // dimmed line plus a red crosshair on the star, so the eclipse shows before release
+          ctx.setLineDash([6, 6]); ctx.lineWidth = 2; ctx.strokeStyle = "rgba(239,68,68,0.35)";
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); ctx.setLineDash([]);
+          const sun = toS({x: 0, y: 0}), r = 14;
+          ctx.strokeStyle = "#ef4444"; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.arc(sun.x, sun.y, r, 0, Math.PI * 2);
+          ctx.moveTo(sun.x - r - 6, sun.y); ctx.lineTo(sun.x + r + 6, sun.y);
+          ctx.moveTo(sun.x, sun.y - r - 6); ctx.lineTo(sun.x, sun.y + r + 6); ctx.stroke();
+        } else {
+          ctx.setLineDash([6, 6]); ctx.lineWidth = 2; ctx.strokeStyle = err ? "#ef4444" : "#10B981";
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); ctx.setLineDash([]);
+        }
       }
 
       // whiplash flashes
@@ -235,6 +259,11 @@ function GameSession({kernel}) {
         const s = st.current, gameT = sim.c[5];
         if (lastGame < 0) { lastGame = Math.floor(gameT); s.lastTick = lastGame; }
         for (const msg of snapTethers(s, P, now)) say(msg);
+        // Siphoning: the kernel adds each world's output to its running total every tick; credit the difference.
+        if (kernel) PLANET_OUTPUT.forEach((o, i) => {
+          const idx = planetIndex(o.planet), total = kernel.planets.gainTotal[idx], d = total - gainSeen[i];
+          if (d > 0) { s[o.resource] += d; gainSeen[i] = total; }
+        });
         if (kernel) for (let c = 0; c < kernel.conduitCount; c++) {
           if (kernel.conduits.snapped[c] && !snapSeen.has(c)) {
             snapSeen.add(c);
@@ -261,7 +290,7 @@ function GameSession({kernel}) {
       if (e.key === "1" || e.key === "2" || e.key === "4") setSpeedKey(Number(e.key));
     };
     window.addEventListener("keydown", onKey);
-    window.__relic = {scene, u: s0, st, say, refresh, get kernel() { return kernel; }, resetKernel: () => { kernel.reset(); kBase = null; }};
+    window.__relic = {scene, u: s0, st, say, refresh, get kernel() { return kernel; }, resetKernel: () => { kernel.reset(); kBase = null; gainSeen.fill(0); snapSeen.clear(); }};
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", sizeOverlay);
@@ -318,11 +347,14 @@ function GameSession({kernel}) {
 
       <div className="brand glass">
         <div className="brand-kicker mono">ORBITER: STELLAR CONQUEST · MISSION TELEMETRY</div>
+        <div className="row"><span>💳 Credits</span><b>{Math.floor(s.credits)}</b></div>
+        <div className="row"><span>🌱 Biomass</span><b>{Math.floor(s.biomass)}</b></div>
+        <div className="row"><span>🔩 Alloys</span><b>{Math.floor(s.alloys)}</b></div>
+        <div className="row"><span>🧠 Compute</span><b>{Math.floor(s.compute)}</b></div>
+        <div className="row"><span>❄️ Coolant</span><b>{Math.floor(s.cryo)}</b></div>
         <div className="row"><span>🛡️ Hull</span><b>{Math.max(0, Math.round(s.hull))}%</b></div>
         <div className="row"><span>⛽ Fuel</span><b>{Math.floor(s.fuel)}</b></div>
         <div className="row"><span>🔥 Propellant</span><b>{Math.floor(s.propellant)}</b></div>
-        <div className="row"><span>🔩 Alloys</span><b>{Math.floor(s.alloys)}</b></div>
-        <div className="row"><span>❄️ Cryo</span><b>{Math.floor(s.cryo)}</b></div>
         <div className="row"><span>🌀 Singularity data</span><b>{Math.floor(s.data)} / {RULES.DATA_GOAL}</b></div>
         <div className="row"><span>☢️ Radiation</span><b>{radiationLabel}</b></div>
         <div className="row"><span>Year</span><b>{yr}</b></div>
@@ -336,7 +368,7 @@ function GameSession({kernel}) {
         <button className="pill glass zelo" onClick={restart}>Restart</button>
       </div>
 
-      {u.current.msg ? <div className={"toast glass" + (u.current.msgWin ? " win" : "")} style={{top: 84}}>{u.current.msg}</div> : null}
+      {u.current.msg ? <div className={"toast glass" + (u.current.msgWin ? " win" : "")} style={{top: 60, pointerEvents: "none", maxWidth: 300, textAlign: "center", whiteSpace: "normal"}}>{u.current.msg}</div> : null}
 
       <footer className="dock glass" style={{flexWrap: "wrap", gap: 6, justifyContent: "center"}}>
         <button className={"pill zelo" + (u.current.mode === "relay" ? " on" : "")} onClick={() => setMode("relay")}>📡 Relay satellite · 15🔩 5❄️</button>

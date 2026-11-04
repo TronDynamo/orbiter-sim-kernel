@@ -38,6 +38,8 @@ export class OrbiterKernel {
     const u8 = (ptr, n) => new Uint8Array(m.HEAPU8.buffer, ptr, n);
     const u32 = (ptr, n) => new Uint32Array(m.HEAPU8.buffer, ptr, n);
     this.planets = {
+      gainTotal: f64(m._orbiter_planet_gain_total(), MAX.planets),
+      flow: u8(m._orbiter_planet_flow(), MAX.planets),
       x: f64(m._orbiter_planet_x(), MAX.planets),
       y: f64(m._orbiter_planet_y(), MAX.planets),
       orbitRadius: f64(m._orbiter_planet_orbit_radius(), MAX.planets),
