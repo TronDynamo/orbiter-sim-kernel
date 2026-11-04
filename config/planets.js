@@ -13,6 +13,9 @@ export const PLANETS = [
   { key: 'kryos',   id: 104, name: 'Kryos Vault',   orbit: 360, angle: 4.8, speed: 0.00008, r: 22, population: 2100000,  yield: 8 },
 ];
 
+// Debris from a destroyed world expires after this many ticks.
+export const DEBRIS = { lifetimeTicks: 20000 };
+
 export const CONDUITS = [
   { source: 'aureus', target: 'verdant', maxLength: 320, throughput: 100 },
 ];

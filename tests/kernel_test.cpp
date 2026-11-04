@@ -32,6 +32,45 @@ int main() {
         CHECK(e.tick() == 100, "tick counter advances");
     }
 
+    {
+        // Missile slots are reused once a shot has resolved.
+        OrbiterSimulationEngine e;
+        for (size_t n = 0; n < MAX_MISSILES + 10; ++n) {
+            e.LaunchSuperweapon(WeaponClass::THERMONUCLEAR_ICBM, 110.0, 0.0, 1);
+            for (int i = 0; i < 20000 && e.GetState().missile_active[e.GetState().missile_count - 1]; ++i) e.UpdateTick();
+        }
+        CHECK(e.GetState().missile_count <= MAX_MISSILES, "missile slots are reused");
+    }
+    {
+        // A second Star-Killer does not expand the star again.
+        OrbiterSimulationEngine e;
+        e.LaunchSuperweapon(WeaponClass::STARKILLER_NEEDLE, 0.0, 300.0, -1);
+        for (int i = 0; i < 20000 && !e.GetState().star_supernova_triggered; ++i) e.UpdateTick();
+        double r1 = e.GetState().star_radius;
+        e.LaunchSuperweapon(WeaponClass::STARKILLER_NEEDLE, 0.0, 300.0, -1);
+        for (int i = 0; i < 20000 && e.GetState().missile_active[e.GetState().missile_count - 1]; ++i) e.UpdateTick();
+        CHECK(e.GetState().star_radius == r1, "second Star-Killer does not re-expand the star");
+    }
+    {
+        // A cracked world stops orbiting and keeps its last position.
+        OrbiterSimulationEngine e;
+        e.LaunchSuperweapon(WeaponClass::PLANET_CRACKER_DRILL, 110.0, 0.0, 0);
+        for (int i = 0; i < 40000 && e.GetState().planet_status[0] == WorldStatus::ACTIVE_PRISTINE; ++i) e.UpdateTick();
+        double x = e.GetState().planet_x[0], y = e.GetState().planet_y[0];
+        for (int i = 0; i < 1000; ++i) e.UpdateTick();
+        CHECK(e.GetState().planet_status[0] == WorldStatus::FRACTURED_DEBRIS, "drill fractures its target");
+        CHECK(e.GetState().planet_x[0] == x && e.GetState().planet_y[0] == y, "fractured world stays put");
+    }
+    {
+        // Debris expires after its lifetime.
+        OrbiterSimulationEngine e;
+        e.LaunchSuperweapon(WeaponClass::PLANET_CRACKER_DRILL, 110.0, 0.0, 0);
+        for (int i = 0; i < 40000 && e.GetState().planet_status[0] == WorldStatus::ACTIVE_PRISTINE; ++i) e.UpdateTick();
+        CHECK(e.GetState().asteroid_count == 32, "drill spawns a debris ring");
+        for (uint32_t i = 0; i < DEBRIS_LIFETIME_TICKS + 1; ++i) e.UpdateTick();
+        CHECK(e.GetState().asteroid_count == 0, "debris expires after its lifetime");
+    }
+
     std::printf("%s (%d failures)\n", failures ? "FAILED" : "PASSED", failures);
     return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }

@@ -7,6 +7,7 @@ namespace orbiter_config {
 
 constexpr double STAR_RADIUS = 45.0;
 constexpr double STAR_MASS = 10000.0;
+constexpr uint32_t DEBRIS_LIFETIME_TICKS = 20000.0;
 
 struct PlanetDef {
     uint32_t id;

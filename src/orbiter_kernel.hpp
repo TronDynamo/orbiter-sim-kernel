@@ -81,6 +81,7 @@ struct StellarSystemState {
     double asteroid_y[MAX_ASTEROIDS];
     double asteroid_vx[MAX_ASTEROIDS];
     double asteroid_vy[MAX_ASTEROIDS];
+    uint32_t asteroid_ttl[MAX_ASTEROIDS]; // ticks left before the debris expires
 };
 
 // True if the segment (x1,y1)-(x2,y2) passes within radius r of (cx,cy).

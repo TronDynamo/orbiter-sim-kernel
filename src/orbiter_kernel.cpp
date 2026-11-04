@@ -47,7 +47,8 @@ void OrbiterSimulationEngine::UpdateTick() {
 
     // 1. Orbital propagation
     for (size_t i = 0; i < state.planet_count; ++i) {
-        if (state.planet_status[i] == WorldStatus::BLACK_HOLE_COLLAPSED) continue;
+        if (state.planet_status[i] == WorldStatus::BLACK_HOLE_COLLAPSED ||
+            state.planet_status[i] == WorldStatus::FRACTURED_DEBRIS) continue;
         state.planet_angle[i] += state.planet_speed[i];
         if (state.planet_angle[i] >= TWO_PI) state.planet_angle[i] -= TWO_PI;
         state.planet_x[i] = state.star_x + state.planet_orbit_radius[i] * std::cos(state.planet_angle[i]);
@@ -112,9 +113,15 @@ void OrbiterSimulationEngine::CheckSyzygyAlignments() {
 }
 
 void OrbiterSimulationEngine::LaunchSuperweapon(WeaponClass type, double origin_x, double origin_y, int32_t target_planet_idx) {
-    if (state.missile_count >= MAX_MISSILES) return;
-
-    size_t idx = state.missile_count++;
+    // Reuse the first free slot; grow the array only when none is free.
+    size_t idx = MAX_MISSILES;
+    for (size_t m = 0; m < state.missile_count; ++m) {
+        if (!state.missile_active[m]) { idx = m; break; }
+    }
+    if (idx == MAX_MISSILES) {
+        if (state.missile_count >= MAX_MISSILES) return;
+        idx = state.missile_count++;
+    }
     state.missile_type[idx] = type;
     state.missile_x[idx] = origin_x;
     state.missile_y[idx] = origin_y;
@@ -161,7 +168,10 @@ void OrbiterSimulationEngine::ExecuteImpact(size_t missile_idx, int32_t planet_i
     WeaponClass wep = state.missile_type[missile_idx];
 
     if (planet_idx >= 0 && planet_idx < static_cast<int32_t>(state.planet_count)) {
+        WorldStatus status = state.planet_status[planet_idx];
+        if (status == WorldStatus::FRACTURED_DEBRIS || status == WorldStatus::BLACK_HOLE_COLLAPSED) return;
         if (wep == WeaponClass::THERMONUCLEAR_ICBM) {
+            if (status != WorldStatus::ACTIVE_PRISTINE) return;
             state.planet_status[planet_idx] = WorldStatus::GLASSED_IRRADIATED;
             state.planet_population[planet_idx] *= 0.15;
             state.planet_yield_rate[planet_idx] *= 0.25;
@@ -177,7 +187,7 @@ void OrbiterSimulationEngine::ExecuteImpact(size_t missile_idx, int32_t planet_i
             }
             SpawnDebrisRing(state.planet_x[planet_idx], state.planet_y[planet_idx], 32);
         }
-    } else if (wep == WeaponClass::STARKILLER_NEEDLE) {
+    } else if (wep == WeaponClass::STARKILLER_NEEDLE && !state.star_supernova_triggered) {
         state.star_supernova_triggered = true;
         state.star_destabilized = true;
         state.star_radius *= 2.5;
@@ -194,13 +204,27 @@ void OrbiterSimulationEngine::SpawnDebrisRing(double cx, double cy, size_t count
         state.asteroid_y[a] = cy + std::sin(angle) * 15.0;
         state.asteroid_vx[a] = std::cos(angle) * speed;
         state.asteroid_vy[a] = std::sin(angle) * speed;
+        state.asteroid_ttl[a] = orbiter_config::DEBRIS_LIFETIME_TICKS;
     }
 }
 
 void OrbiterSimulationEngine::UpdateDebris() {
-    for (size_t i = 0; i < state.asteroid_count; ++i) {
+    size_t i = 0;
+    while (i < state.asteroid_count) {
         state.asteroid_x[i] += state.asteroid_vx[i];
         state.asteroid_y[i] += state.asteroid_vy[i];
+        if (state.asteroid_ttl[i] > 0) --state.asteroid_ttl[i];
+        if (state.asteroid_ttl[i] == 0) {
+            // Expired: move the last live piece into this slot and shrink.
+            size_t last = --state.asteroid_count;
+            state.asteroid_x[i] = state.asteroid_x[last];
+            state.asteroid_y[i] = state.asteroid_y[last];
+            state.asteroid_vx[i] = state.asteroid_vx[last];
+            state.asteroid_vy[i] = state.asteroid_vy[last];
+            state.asteroid_ttl[i] = state.asteroid_ttl[last];
+            continue;
+        }
+        ++i;
     }
 }
 

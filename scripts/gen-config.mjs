@@ -1,7 +1,7 @@
 // Generates src/planet_config.hpp from config/planets.js. Do not edit the header by hand.
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { STAR, PLANETS, CONDUITS } from '../config/planets.js';
+import { STAR, PLANETS, CONDUITS, DEBRIS } from '../config/planets.js';
 
 const lit = (n) => (Number.isInteger(n) ? `${n}.0` : String(n));
 const indexOf = (key) => {
@@ -26,6 +26,7 @@ namespace orbiter_config {
 
 constexpr double STAR_RADIUS = ${lit(STAR.radius)};
 constexpr double STAR_MASS = ${lit(STAR.mass)};
+constexpr uint32_t DEBRIS_LIFETIME_TICKS = ${lit(DEBRIS.lifetimeTicks)};
 
 struct PlanetDef {
     uint32_t id;
