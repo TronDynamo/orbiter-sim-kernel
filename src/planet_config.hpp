@@ -11,11 +11,11 @@ constexpr uint32_t DEBRIS_LIFETIME_TICKS = 20000.0;
 constexpr double DRILL_CRACK_DISTANCE = 45.0;
 constexpr uint32_t TICKS_PER_SECOND = 60.0;
 constexpr uint32_t SUPERNOVA_RING_TICKS = 120.0;
-constexpr double STAR_COLLAPSED_RADIUS = 8.0;
-constexpr double STAR_PULL_PER_TICK = 0.002;
+constexpr double STAR_COLLAPSED_RADIUS = 12.0;
+constexpr double STAR_PULL_PER_TICK = 0.08;
 constexpr uint32_t VORTEX_DURATION_TICKS = 300.0;
-constexpr double VORTEX_RADIUS = 60.0;
-constexpr double VORTEX_PULL_PER_TICK = 0.5;
+constexpr double VORTEX_RADIUS = 75.0;
+constexpr double VORTEX_PULL_PER_TICK = 1.2;
 
 struct PlanetDef {
     uint32_t id;

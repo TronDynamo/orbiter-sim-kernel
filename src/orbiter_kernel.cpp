@@ -259,8 +259,9 @@ void OrbiterSimulationEngine::UpdateDebris() {
             double dy = state.planet_y[p] - state.asteroid_y[i];
             double d = std::sqrt(dx * dx + dy * dy);
             if (d > 0.0 && d <= orbiter_config::VORTEX_RADIUS) {
-                state.asteroid_x[i] += dx / d * orbiter_config::VORTEX_PULL_PER_TICK;
-                state.asteroid_y[i] += dy / d * orbiter_config::VORTEX_PULL_PER_TICK;
+                double step = std::min(d, orbiter_config::VORTEX_PULL_PER_TICK);
+                state.asteroid_x[i] += dx / d * step;
+                state.asteroid_y[i] += dy / d * step;
             }
         }
         if (state.star_collapsed) {
@@ -268,8 +269,9 @@ void OrbiterSimulationEngine::UpdateDebris() {
             double dy = state.star_y - state.asteroid_y[i];
             double d = std::sqrt(dx * dx + dy * dy);
             if (d > 0.0) {
-                state.asteroid_x[i] += dx / d * orbiter_config::STAR_PULL_PER_TICK;
-                state.asteroid_y[i] += dy / d * orbiter_config::STAR_PULL_PER_TICK;
+                double step = std::min(d, orbiter_config::STAR_PULL_PER_TICK);
+                state.asteroid_x[i] += dx / d * step;
+                state.asteroid_y[i] += dy / d * step;
             }
         }
         state.asteroid_x[i] += state.asteroid_vx[i];

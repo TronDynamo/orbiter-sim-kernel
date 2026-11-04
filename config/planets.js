@@ -17,18 +17,18 @@ export const PLANETS = [
 export const TICKS_PER_SECOND = 60;
 
 // Star-Killer: stage 1 is the supernova blast ring, stage 2 is the black-hole collapse.
-// PLACEHOLDER values marked below are not in the balance table yet.
+// Values are locked in the balance table.
 export const STAR_COLLAPSE = {
   ringTicks: 120,        // 2 s blast ring before the core collapses
-  collapsedRadius: 8,    // PLACEHOLDER: black-hole event radius
-  pullPerTick: 0.002,    // PLACEHOLDER: how far outer planets drift in each tick
+  collapsedRadius: 12,   // black-hole event radius (locked)
+  pullPerTick: 0.08,     // inward pull per tick, planets and debris (locked: 4.8 units/s)
 };
 
 // Singularity Torpedo vortex left on the target world.
 export const VORTEX = {
   durationTicks: 300,    // 5 s
-  radius: 60,            // PLACEHOLDER: pull range around the world
-  pullPerTick: 0.5,      // PLACEHOLDER: debris pull per tick
+  radius: 75,            // pull range around the world (locked)
+  pullPerTick: 1.2,      // debris pull per tick (locked)
 };
 
 // Weapons, in WeaponClass order. speed: world units per tick.
