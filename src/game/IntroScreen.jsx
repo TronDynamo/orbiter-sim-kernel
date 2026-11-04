@@ -2,15 +2,9 @@
 // sequence, faction roster. "Initialize Sector" starts the warp and then calls onLaunch().
 import {useEffect, useRef, useState} from "react";
 import "./intro.css";
+import {FACTIONS} from "./factions.js";
 
-const FACTIONS = [
-  {name: "High King Aurelius Leon (#11)", sub: "The Solar Imperium • Crown of Sol", bloc: "Hawk Bloc", color: "#fbbf24"},
-  {name: "Empath-Matriarch Aurelia (#02)", sub: "The Medusan Chorus • Hydro-Harmonics", bloc: "Preservation", color: "#38bdf8"},
-  {name: "Arch-Entity Kael-Voss (#04)", sub: "The Void Born • Singularity Sight", bloc: "Singularity", color: "#c084fc"},
-  {name: "Captain Ren (#16)", sub: "Vulpine Free-Traders • Bounty Runner", bloc: "Cartel", color: "#34d399"},
-  {name: "Unit 734-Apex (#18)", sub: "The Machine Conclave • Calculated Precision", bloc: "Synthetic", color: "#f87171"},
-  {name: 'Captain James "Rook" Vance (#19)', sub: "Terran Scrap-Fleets • Scrap-Welder", bloc: "Frontier", color: "#e2e8f0"},
-];
+
 
 // Decorative orbits for the title backdrop (not the game simulation).
 const BACKDROP_PLANETS = [
@@ -185,7 +179,7 @@ export function IntroScreen({kernelStatus, onLaunch}) {
           <div className="intro-list">
             {FACTIONS.map((f) => (
               <div className="intro-faction" key={f.name}>
-                <div><strong style={{color: f.color, display: "block"}}>{f.name}</strong><small>{f.sub}</small></div>
+                <div><strong style={{color: f.color, display: "block"}}>{f.name} (#{f.number})</strong><small>{f.sub}</small></div>
                 <span className="intro-badge-faction" style={{color: f.color}}>{f.bloc}</span>
               </div>
             ))}

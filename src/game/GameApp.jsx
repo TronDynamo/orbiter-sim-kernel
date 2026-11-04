@@ -8,6 +8,8 @@ import {loadOrbiterKernel, TICKS_PER_SECOND, WEAPON, WORLD, CONDUIT_ERR, CONDUIT
 import {ARMORY, drawCage, drawMagma, drawIrradiated, drawBlackHole, drawSupernova} from "./armory.js";
 import {STAR_COLLAPSE, VORTEX, DRILL_CRACK_DISTANCE} from "../../config/planets.js";
 import {IntroScreen} from "./IntroScreen.jsx";
+import {CommsTerminal} from "./CommsTerminal.jsx";
+import {applyChoice, openComms} from "./comms.js";
 import {RULES, newState, snapTethers, network, tick, tryTether, checkTether, cut, tetherAt, tensionOf, tensionColor, build, hitBody, distToTether, orderShip, shortfall, fireWeapon} from "./rules.js";
 import {SHIPS, SHIP_ORDER, COST_LABEL, drawShip, fleetPower} from "./ships.js";
 
@@ -35,7 +37,7 @@ const planetIndex = (id) => GAME_GALAXY.planets.findIndex((p) => p.id === id);
 function GameSession({kernel}) {
   const canvasRef = useRef(null), overlayRef = useRef(null);
   const st = useRef(newState());
-  const u = useRef({drag: null, mode: null, msg: START_MSG, msgWin: false, paused: false, speed: 1, tick: 0, shipyard: false, armory: false, arm: null, hover: null, pointer: null});
+  const u = useRef({drag: null, mode: null, msg: START_MSG, msgWin: false, paused: false, speed: 1, tick: 0, shipyard: false, armory: false, comms: false, arm: null, hover: null, pointer: null});
   const [ui, setUi] = useState({...u.current});
   const refresh = () => setUi({...u.current});
 
@@ -410,6 +412,13 @@ function GameSession({kernel}) {
   }
   function toggleShipyard() { u.current.shipyard = !u.current.shipyard; u.current.armory = false; refresh(); }
   function toggleArmory() { u.current.armory = !u.current.armory; u.current.shipyard = false; refresh(); }
+  function toggleComms() {
+    u.current.comms = !u.current.comms;
+    if (u.current.comms) openComms(st.current, st.current.comms.selected); // first visit shows the leader's opener
+    refresh();
+  }
+  function commsOpen(id) { openComms(st.current, id); refresh(); }
+  function commsChoose(key) { const r = applyChoice(st.current, st.current.comms.selected, key); u.current.msg = r.msg; refresh(); }
   // Why a strategic weapon cannot be armed right now, or null.
   function weaponBlock(s, W) {
     if (s.spent[W.type]) return `${W.name} is spent for this match.`;
@@ -496,7 +505,10 @@ function GameSession({kernel}) {
         <button className={"pill zelo" + (u.current.mode === "cut" ? " on" : "")} onClick={() => setMode("cut")}>✂️ Decouple tether</button>
         <button className={"pill zelo" + (u.current.shipyard ? " on" : "")} onClick={toggleShipyard}>🚀 Shipyard</button>
         <button className={"pill zelo" + (u.current.armory ? " on" : "")} onClick={toggleArmory}>☢️ Armory</button>
+        <button className={"pill zelo" + (u.current.comms ? " on" : "")} onClick={toggleComms}>📡 Comms</button>
       </footer>
+
+      {u.current.comms ? <CommsTerminal s={s} onOpen={commsOpen} onChoose={commsChoose} onClose={toggleComms} /> : null}
 
       {u.current.armory ? (
         <aside className="glass" style={{position: "absolute", right: 16, top: 84, width: 320, padding: 14, zIndex: 8, borderRadius: 12}}>
