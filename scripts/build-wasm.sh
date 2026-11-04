@@ -15,6 +15,8 @@ EXPORTS=(
   orbiter_planet_x orbiter_planet_y orbiter_planet_orbit_radius orbiter_planet_population
   orbiter_planet_status orbiter_planet_vortex_ticks
   orbiter_conduit_throughput orbiter_conduit_length orbiter_conduit_snapped orbiter_conduit_surge
+  orbiter_conduit_add orbiter_conduit_remove orbiter_conduit_occluded
+  orbiter_conduit_source orbiter_conduit_target orbiter_conduit_max_length
   orbiter_missile_x orbiter_missile_y orbiter_missile_active orbiter_missile_type
   orbiter_asteroid_x orbiter_asteroid_y
 )

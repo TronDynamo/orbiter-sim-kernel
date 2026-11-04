@@ -1,7 +1,7 @@
 // Generates src/planet_config.hpp from config/planets.js. Do not edit the header by hand.
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { STAR, PLANETS, CONDUITS, DEBRIS, WEAPONS, DRILL_CRACK_DISTANCE, TICKS_PER_SECOND, STAR_COLLAPSE, VORTEX } from '../config/planets.js';
+import { STAR, PLANETS, CONDUITS, CONDUIT_RULES, DEBRIS, WEAPONS, DRILL_CRACK_DISTANCE, TICKS_PER_SECOND, STAR_COLLAPSE, VORTEX } from '../config/planets.js';
 
 const lit = (n) => (Number.isInteger(n) ? `${n}.0` : String(n));
 const indexOf = (key) => {
@@ -60,6 +60,8 @@ struct ConduitDef {
 
 constexpr size_t PLANET_COUNT = ${PLANETS.length};
 constexpr size_t CONDUIT_COUNT = ${CONDUITS.length};
+constexpr double CONDUIT_MAX_LENGTH = ${lit(CONDUIT_RULES.maxLength)};
+constexpr double CONDUIT_AMBER_LENGTH = ${lit(CONDUIT_RULES.amberLength)};
 constexpr size_t WEAPON_COUNT = ${WEAPONS.length};
 
 inline constexpr PlanetDef PLANETS[PLANET_COUNT] = {
@@ -70,7 +72,7 @@ inline constexpr WeaponDef WEAPONS[WEAPON_COUNT] = {
 ${weaponRows}
 };
 
-inline constexpr ConduitDef CONDUITS[CONDUIT_COUNT] = {
+inline constexpr ConduitDef CONDUITS[CONDUIT_COUNT > 0 ? CONDUIT_COUNT : 1] = {
 ${conduitRows}
 };
 

@@ -140,6 +140,47 @@ int main() {
         CHECK(e.GetState().planet_status[3] == WorldStatus::FRACTURED_DEBRIS, "cracked world then fractures");
     }
 
+    {
+        // Player conduits: refused links, length tracking, sun occlusion and snapping.
+        OrbiterSimulationEngine e;
+        const auto& s = e.GetState();
+        CHECK(e.AddConduit(0, 0) == CONDUIT_ERR_BAD_PLANET, "conduit to itself is refused");
+        CHECK(e.AddConduit(0, 9) == CONDUIT_ERR_BAD_PLANET, "conduit to an unknown planet is refused");
+        CHECK(e.AddConduit(0, 1) == 0, "Thalassa to Aeros is accepted at the start");
+        CHECK(e.AddConduit(1, 0) == CONDUIT_ERR_DUPLICATE, "the same pair in reverse is refused");
+        CHECK(s.conduit_count == 1, "one conduit exists after the refusals");
+
+        bool sawOccluded = false, sawOccludedWithFlow = false;
+        for (int i = 0; i < 80000 && !s.conduit_snapped[0]; ++i) {
+            e.UpdateTick();
+            if (s.conduit_occluded[0]) {
+                sawOccluded = true;
+                if (s.conduit_throughput[0] != 0.0) sawOccludedWithFlow = true;
+            }
+        }
+        CHECK(sawOccluded, "the dying star occludes Thalassa to Aeros at some point");
+        CHECK(!sawOccludedWithFlow, "an occluded conduit carries no throughput");
+        CHECK(!s.conduit_snapped[0], "Thalassa to Aeros never snaps (its longest run stays under the cap)");
+
+        OrbiterSimulationEngine f;
+        const auto& t = f.GetState();
+        CHECK(f.AddConduit(0, 3) == 0, "Thalassa to Kryos is accepted at the start");
+        for (int i = 0; i < 80000 && !t.conduit_snapped[0]; ++i) f.UpdateTick();
+        CHECK(t.conduit_snapped[0], "a conduit stretched past the cap snaps");
+        CHECK(t.conduit_throughput[0] == 0.0, "a snapped conduit carries no throughput");
+        CHECK(t.conduit_current_length[0] > CONDUIT_MAX_LENGTH, "the snapped conduit was longer than the cap");
+
+        OrbiterSimulationEngine g;
+        const auto& u = g.GetState();
+        g.AddConduit(0, 1);
+        g.AddConduit(0, 3);
+        CHECK(u.conduit_count == 2, "two conduits exist before removal");
+        CHECK(g.RemoveConduit(0) == 0, "removing the first conduit succeeds");
+        CHECK(u.conduit_count == 1, "removal shrinks the list");
+        CHECK(u.conduit_source[0] == 0 && u.conduit_target[0] == 3, "the last conduit moves into the freed slot");
+        CHECK(g.RemoveConduit(5) == -1, "removing a missing conduit is refused");
+    }
+
     std::printf("%s (%d failures)\n", failures ? "FAILED" : "PASSED", failures);
     return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }

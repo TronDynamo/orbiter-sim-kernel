@@ -305,4 +305,55 @@ void OrbiterSimulationEngine::RunBenchmark(uint64_t total_ticks) {
     std::cout << ">>> Throughput: " << static_cast<uint64_t>(ticks_per_sec) << " ticks/second.\n";
 }
 
+
+int32_t OrbiterSimulationEngine::AddConduit(uint32_t s, uint32_t t) {
+    if (s >= state.planet_count || t >= state.planet_count || s == t) return CONDUIT_ERR_BAD_PLANET;
+    const uint32_t ends[2] = {s, t};
+    for (uint32_t p : ends) {
+        if (state.planet_status[p] == WorldStatus::BLACK_HOLE_COLLAPSED ||
+            state.planet_status[p] == WorldStatus::FRACTURED_DEBRIS) return CONDUIT_ERR_BAD_PLANET;
+    }
+    for (size_t c = 0; c < state.conduit_count; ++c) {
+        if ((state.conduit_source[c] == s && state.conduit_target[c] == t) ||
+            (state.conduit_source[c] == t && state.conduit_target[c] == s)) return CONDUIT_ERR_DUPLICATE;
+    }
+    if (state.conduit_count >= MAX_CONDUITS) return CONDUIT_ERR_FULL;
+
+    double x1 = state.planet_x[s], y1 = state.planet_y[s];
+    double x2 = state.planet_x[t], y2 = state.planet_y[t];
+    double dist = std::sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
+    if (dist > orbiter_config::CONDUIT_MAX_LENGTH) return CONDUIT_ERR_TOO_LONG;
+    if (CheckCircleSegmentIntersection(x1, y1, x2, y2, state.star_x, state.star_y, state.star_radius)) {
+        return CONDUIT_ERR_OCCLUDED;
+    }
+
+    size_t c = state.conduit_count++;
+    state.conduit_source[c] = s;
+    state.conduit_target[c] = t;
+    state.conduit_max_length[c] = orbiter_config::CONDUIT_MAX_LENGTH;
+    state.conduit_current_length[c] = dist;
+    state.conduit_occluded[c] = false;
+    state.conduit_snapped[c] = false;
+    state.conduit_harmonic_surge[c] = false;
+    state.conduit_throughput[c] = state.planet_yield_rate[s] + state.planet_yield_rate[t];
+    return static_cast<int32_t>(c);
+}
+
+int32_t OrbiterSimulationEngine::RemoveConduit(uint32_t index) {
+    if (index >= state.conduit_count) return -1;
+    size_t last = state.conduit_count - 1;
+    if (index != last) {
+        state.conduit_source[index] = state.conduit_source[last];
+        state.conduit_target[index] = state.conduit_target[last];
+        state.conduit_max_length[index] = state.conduit_max_length[last];
+        state.conduit_current_length[index] = state.conduit_current_length[last];
+        state.conduit_occluded[index] = state.conduit_occluded[last];
+        state.conduit_snapped[index] = state.conduit_snapped[last];
+        state.conduit_throughput[index] = state.conduit_throughput[last];
+        state.conduit_harmonic_surge[index] = state.conduit_harmonic_surge[last];
+    }
+    state.conduit_count = last;
+    return 0;
+}
+
 } // namespace orbiter

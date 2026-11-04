@@ -9,6 +9,10 @@ export const TICKS_PER_SECOND = 60;
 export const WORLD = { PRISTINE: 0, GLASSED: 1, FRACTURED: 2, BLACK_HOLE: 3, CRACKING: 4 };
 // Mirrors WeaponClass in src/orbiter_kernel.hpp.
 export const WEAPON = { ICBM: 0, CRACKER_DRILL: 1, STARKILLER: 2, SINGULARITY_TORPEDO: 3 };
+// Mirrors CONDUIT_ERR_* in src/orbiter_kernel.hpp: results of addConduit that are below zero.
+export const CONDUIT_ERR = { BAD_PLANET: -1, DUPLICATE: -2, TOO_LONG: -3, OCCLUDED: -4, FULL: -5 };
+// Mirrors CONDUIT_RULES in config/planets.js: player conduits snap past maxLength and turn amber from amberLength.
+export const CONDUIT_RULES = { maxLength: 440, amberLength: 340 };
 
 // Vite will not import files from public/ as modules in dev, so the module is fetched and imported
 // through a blob URL. The WebAssembly file is located explicitly, so this works in dev and in builds.
@@ -42,9 +46,13 @@ export class OrbiterKernel {
       vortexTicks: u32(m._orbiter_planet_vortex_ticks(), MAX.planets),
     };
     this.conduits = {
+      source: u32(m._orbiter_conduit_source(), MAX.conduits),
+      target: u32(m._orbiter_conduit_target(), MAX.conduits),
       throughput: f64(m._orbiter_conduit_throughput(), MAX.conduits),
       length: f64(m._orbiter_conduit_length(), MAX.conduits),
+      maxLength: f64(m._orbiter_conduit_max_length(), MAX.conduits),
       snapped: u8(m._orbiter_conduit_snapped(), MAX.conduits),
+      occluded: u8(m._orbiter_conduit_occluded(), MAX.conduits),
       surge: u8(m._orbiter_conduit_surge(), MAX.conduits),
     };
     this.missiles = {
@@ -69,6 +77,10 @@ export class OrbiterKernel {
     return n;
   }
   launch(type, x, y, targetPlanet = -1) { this.m._orbiter_launch(type, x, y, targetPlanet); }
+  // Builds a conduit between two planets (indices). Returns the conduit index, or a CONDUIT_ERR code.
+  addConduit(source, target) { return this.m._orbiter_conduit_add(source, target); }
+  // Removes a conduit by index. Returns 0, or -1 if there is none.
+  removeConduit(index) { return this.m._orbiter_conduit_remove(index); }
 
   get tickCount() { return this.m._orbiter_tick_count(); }
   get planetCount() { return this.m._orbiter_planet_count(); }

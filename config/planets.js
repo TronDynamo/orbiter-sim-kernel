@@ -62,6 +62,7 @@ export const STAR_SPRITES = { SUPERNOVA: 'fx_supernova_ring.png', COLLAPSED: 'su
 // Debris from a destroyed world expires after this many ticks.
 export const DEBRIS = { lifetimeTicks: 20000 };
 
-export const CONDUITS = [
-  { source: 'thalassa', target: 'aeros', maxLength: 320, throughput: 100 },
-];
+// Conduits are built by the player at runtime, so none exist at the start of a session.
+export const CONDUITS = [];
+// Player conduits snap beyond maxLength and are drawn amber from amberLength.
+export const CONDUIT_RULES = { maxLength: 440, amberLength: 340 };

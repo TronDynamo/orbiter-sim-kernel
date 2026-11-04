@@ -4,11 +4,21 @@ import {useEffect, useRef, useState} from "react";
 import {OrbitScene} from "../orbit/scene.js";
 import {BODY_STRIDE} from "../orbit/engine.js";
 import {GAME_GALAXY, PLANET_IDS, ARK_POS} from "./galaxy.js";
-import {loadOrbiterKernel, TICKS_PER_SECOND, WEAPON} from "./kernel/orbiterKernel.js";
+import {loadOrbiterKernel, TICKS_PER_SECOND, WEAPON, CONDUIT_ERR, CONDUIT_RULES} from "./kernel/orbiterKernel.js";
 import {IntroScreen} from "./IntroScreen.jsx";
-import {RULES, newState, snapTethers, network, tick, tryTether, checkTether, cut, tetherAt, tensionOf, tensionColor, build, hitBody} from "./rules.js";
+import {RULES, newState, snapTethers, network, tick, tryTether, checkTether, cut, tetherAt, tensionOf, tensionColor, build, hitBody, distToTether} from "./rules.js";
 
-const START_MSG = "Connect the Ark to Thalassa or Ferrum, then wait for a transfer window before linking distant worlds.";
+const START_MSG = "Drag from one world to another to build a conduit. Conduits snap beyond " + CONDUIT_RULES.maxLength + " units.";
+const CONDUIT_MSG = {
+  [CONDUIT_ERR.BAD_PLANET]: "That world can't take a conduit.",
+  [CONDUIT_ERR.DUPLICATE]: "Those worlds are already linked.",
+  [CONDUIT_ERR.TOO_LONG]: "Too far apart: conduits snap beyond " + CONDUIT_RULES.maxLength + " units.",
+  [CONDUIT_ERR.OCCLUDED]: "The dying star blocks that line.",
+  [CONDUIT_ERR.FULL]: "The network has no free conduit slots.",
+};
+const isPlanet = (id) => GAME_GALAXY.planets.some((p) => p.id === id);
+const planetName = (id) => GAME_GALAXY.planets.find((p) => p.id === id)?.name ?? id;
+const planetIndex = (id) => GAME_GALAXY.planets.findIndex((p) => p.id === id);
 
 // The live session. The kernel is loaded once by GameApp and passed in; each session starts it from zero.
 function GameSession({kernel}) {
@@ -20,6 +30,7 @@ function GameSession({kernel}) {
 
   useEffect(() => {
     const scene = new OrbitScene(canvasRef.current, {}, {galaxies: {game: GAME_GALAXY}, galaxyId: "game"});
+    scene.zoomBy(0.8); // frame all four orbits clear of the telemetry panel and the dock
     const ov = overlayRef.current, ctx = ov.getContext("2d");
     const s0 = u.current;
     let raf = 0, lastUi = 0, lastGame = -1;
@@ -62,6 +73,37 @@ function GameSession({kernel}) {
       return P;
     };
 
+    // Builds a player conduit between two planets through the kernel. Costs alloys like a tether.
+    const buildConduit = (from, to) => {
+      const cost = RULES.COST.tether.alloys;
+      if (st.current.alloys < cost) { say(`Need ${cost} alloys for a conduit.`); return; }
+      const code = kernel.addConduit(planetIndex(from), planetIndex(to));
+      if (code >= 0) {
+        st.current.alloys -= cost;
+        snapSeen.clear();
+        say(`Conduit built: ${planetName(from)} to ${planetName(to)}.`);
+      } else {
+        say(CONDUIT_MSG[code] ?? "The conduit could not be built.");
+      }
+    };
+    // Index of the player conduit under a world point, or -1.
+    const conduitAt = (P, pt) => {
+      let best = -1, bd = 10;
+      for (let c = 0; c < kernel.conduitCount; c++) {
+        const A = P[GAME_GALAXY.planets[kernel.conduits.source[c]].id], B = P[GAME_GALAXY.planets[kernel.conduits.target[c]].id];
+        if (!A || !B) continue;
+        const d = distToTether(pt, A, B);
+        if (d < bd) { bd = d; best = c; }
+      }
+      return best;
+    };
+    // Live feedback while dragging between worlds: red when the line would be too long.
+    const previewConduit = (P, from, to) => {
+      const A = P[from], B = P[to];
+      return Math.hypot(B.x - A.x, B.y - A.y) > CONDUIT_RULES.maxLength ? "too far" : null;
+    };
+    const snapSeen = new Set();
+
     const onDown = (e) => {
       const P = positions(); if (!P) return;
       const p = toWorld(e);
@@ -74,7 +116,12 @@ function GameSession({kernel}) {
       }
       if (s0.mode === "cut") {
         const i = tetherAt(st.current, P, p);
-        if (i < 0) say("Click right on a tether to decouple it."); else { const r = cut(st.current, i); say(r.msg); }
+        if (i >= 0) { const r = cut(st.current, i); say(r.msg); }
+        else {
+          const c = conduitAt(P, p);
+          if (c < 0) say("Click right on a tether to decouple it.");
+          else { kernel.removeConduit(c); snapSeen.clear(); say("Conduit decoupled."); }
+        }
         refresh();
         return;
       }
@@ -88,8 +135,8 @@ function GameSession({kernel}) {
       if (s0.drag && P) {
         const target = hitBody(st.current, P, s0.drag.cur);
         if (target && target !== s0.drag.from) {
-          const r = tryTether(st.current, s0.drag.from, target, P);
-          say(r.msg);
+          if (isPlanet(s0.drag.from) && isPlanet(target)) buildConduit(s0.drag.from, target);
+          else { const r = tryTether(st.current, s0.drag.from, target, P); say(r.msg); }
         }
       }
       s0.drag = null;
@@ -117,10 +164,28 @@ function GameSession({kernel}) {
         ctx.fillText(`${Math.round(ratio * 100)}%`, m.x, m.y - 6);
       }
 
+      // player conduits, read from the kernel: amber when stretched, red when snapped, dimmed in the star's shadow
+      if (kernel) {
+        for (let c = 0; c < kernel.conduitCount; c++) {
+          const A = P[GAME_GALAXY.planets[kernel.conduits.source[c]].id], B = P[GAME_GALAXY.planets[kernel.conduits.target[c]].id];
+          if (!A || !B) continue;
+          const a = toS(A), b = toS(B), len = kernel.conduits.length[c];
+          const snapped = !!kernel.conduits.snapped[c], occluded = !!kernel.conduits.occluded[c];
+          const col = snapped ? "#EF4444" : occluded ? "rgba(148,163,184,0.35)" : len > CONDUIT_RULES.amberLength ? "#F5C542" : "#10B981";
+          ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.setLineDash(snapped ? [4, 6] : []);
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); ctx.setLineDash([]);
+          const m = {x: (a.x + b.x) / 2, y: (a.y + b.y) / 2};
+          ctx.font = "11px system-ui"; ctx.fillStyle = col; ctx.textAlign = "center";
+          ctx.fillText(snapped ? "snapped" : occluded ? "in shadow" : `${Math.round(kernel.conduits.throughput[c])} flow · ${Math.round(len)}u`, m.x, m.y - 6);
+        }
+      }
+
       // drag preview: green when the transfer window is open, red when not
       if (s0.drag && P[s0.drag.from]) {
         const t = hitBody(s, P, s0.drag.cur);
-        const err = t && t !== s0.drag.from ? checkTether(s, s0.drag.from, t, P) : "no target";
+        const err = !t || t === s0.drag.from ? "no target"
+          : isPlanet(t) && isPlanet(s0.drag.from) ? previewConduit(P, s0.drag.from, t)
+          : checkTether(s, s0.drag.from, t, P);
         const a = toS(P[s0.drag.from]), b = toS(s0.drag.cur);
         ctx.setLineDash([6, 6]); ctx.lineWidth = 2; ctx.strokeStyle = err ? "#ef4444" : "#10B981";
         ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); ctx.setLineDash([]);
@@ -170,6 +235,13 @@ function GameSession({kernel}) {
         const s = st.current, gameT = sim.c[5];
         if (lastGame < 0) { lastGame = Math.floor(gameT); s.lastTick = lastGame; }
         for (const msg of snapTethers(s, P, now)) say(msg);
+        if (kernel) for (let c = 0; c < kernel.conduitCount; c++) {
+          if (kernel.conduits.snapped[c] && !snapSeen.has(c)) {
+            snapSeen.add(c);
+            const from = GAME_GALAXY.planets[kernel.conduits.source[c]].id, to = GAME_GALAXY.planets[kernel.conduits.target[c]].id;
+            say(`Conduit snapped: ${planetName(from)} to ${planetName(to)}.`);
+          }
+        }
         while (Math.floor(gameT) > s.lastTick && !s.won && !s.lost) {
           s.lastTick += 1;
           for (const ev of tick(s, P)) say(ev.msg, !!ev.win);

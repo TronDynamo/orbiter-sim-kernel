@@ -39,7 +39,9 @@ struct ConduitDef {
 };
 
 constexpr size_t PLANET_COUNT = 4;
-constexpr size_t CONDUIT_COUNT = 1;
+constexpr size_t CONDUIT_COUNT = 0;
+constexpr double CONDUIT_MAX_LENGTH = 440.0;
+constexpr double CONDUIT_AMBER_LENGTH = 340.0;
 constexpr size_t WEAPON_COUNT = 4;
 
 inline constexpr PlanetDef PLANETS[PLANET_COUNT] = {
@@ -56,8 +58,8 @@ inline constexpr WeaponDef WEAPONS[WEAPON_COUNT] = {
     { 2.5 }, // Resonance Singularity Torpedo
 };
 
-inline constexpr ConduitDef CONDUITS[CONDUIT_COUNT] = {
-    { 0u, 1u, 320.0, 100.0 },
+inline constexpr ConduitDef CONDUITS[CONDUIT_COUNT > 0 ? CONDUIT_COUNT : 1] = {
+
 };
 
 } // namespace orbiter_config

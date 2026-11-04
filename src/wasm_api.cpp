@@ -54,6 +54,15 @@ const uint8_t* orbiter_missile_type() {
     return reinterpret_cast<const uint8_t*>(g_engine.GetState().missile_type);
 }
 
+int32_t orbiter_conduit_add(uint32_t source, uint32_t target) { return g_engine.AddConduit(source, target); }
+int32_t orbiter_conduit_remove(uint32_t index) { return g_engine.RemoveConduit(index); }
+const uint8_t* orbiter_conduit_occluded() {
+    return reinterpret_cast<const uint8_t*>(g_engine.GetState().conduit_occluded);
+}
+const uint32_t* orbiter_conduit_source() { return g_engine.GetState().conduit_source; }
+const uint32_t* orbiter_conduit_target() { return g_engine.GetState().conduit_target; }
+const double* orbiter_conduit_max_length() { return g_engine.GetState().conduit_max_length; }
+
 const double* orbiter_asteroid_x() { return g_engine.GetState().asteroid_x; }
 const double* orbiter_asteroid_y() { return g_engine.GetState().asteroid_y; }
 

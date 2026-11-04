@@ -106,6 +106,13 @@ inline bool CheckCircleSegmentIntersection(double x1, double y1, double x2, doub
     return dist_sq <= r * r;
 }
 
+// Results of AddConduit that are below zero.
+constexpr int32_t CONDUIT_ERR_BAD_PLANET = -1;  // self link, unknown planet, or a destroyed world
+constexpr int32_t CONDUIT_ERR_DUPLICATE = -2;   // the pair is already linked
+constexpr int32_t CONDUIT_ERR_TOO_LONG = -3;    // would snap at once
+constexpr int32_t CONDUIT_ERR_OCCLUDED = -4;    // the dying star is in the way
+constexpr int32_t CONDUIT_ERR_FULL = -5;
+
 class OrbiterSimulationEngine {
 public:
     OrbiterSimulationEngine();
@@ -118,6 +125,11 @@ public:
     void ExecuteImpact(size_t missile_idx, int32_t planet_idx);
     void SpawnDebrisRing(double cx, double cy, size_t count);
     void UpdateDebris();
+
+    // Player conduits. Returns the new conduit's index, or a CONDUIT_ERR_* code below zero.
+    int32_t AddConduit(uint32_t source, uint32_t target);
+    // Removes a conduit by moving the last one into its slot. Returns 0, or -1 if there is no such conduit.
+    int32_t RemoveConduit(uint32_t index);
     void UpdateStar();
     void RunBenchmark(uint64_t total_ticks);
 

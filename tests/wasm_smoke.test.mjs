@@ -26,3 +26,19 @@ test('wasm kernel: launch, tick and read planet status through views', { skip: !
 
   assert.ok(k._orbiter_tick_count() > 0, 'ticks were simulated');
 });
+
+test('wasm kernel: player conduits are added, read through views and removed', { skip: !hasBuild && 'run build:wasm first' }, async () => {
+  const { default: createOrbiterKernel } = await import(modPath.href);
+  const k = await createOrbiterKernel();
+  k._orbiter_reset();
+  assert.equal(k._orbiter_conduit_count(), 0, 'no conduits at the start');
+  assert.equal(k._orbiter_conduit_add(0, 0), -1, 'self link is refused');
+  assert.equal(k._orbiter_conduit_add(0, 1), 0, 'Thalassa to Aeros is added');
+  assert.equal(k._orbiter_conduit_count(), 1);
+  k._orbiter_tick(60);
+  const lenPtr = k._orbiter_conduit_length() / 8;
+  const len = k.HEAPF64[lenPtr];
+  assert.ok(len > 0 && len < 440, 'length is read through the view');
+  assert.equal(k._orbiter_conduit_remove(0), 0, 'conduit is removed');
+  assert.equal(k._orbiter_conduit_count(), 0);
+});
