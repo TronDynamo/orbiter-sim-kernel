@@ -7,7 +7,7 @@
   "scripts": {
     "gen": "node scripts/gen-config.mjs",
     "build": "npm run gen && mkdir -p build && g++ -std=c++17 -O2 -Wall -Wextra -Isrc src/orbiter_kernel.cpp src/main.cpp -o build/orbiter_kernel",
-    "test": "npm run build && g++ -std=c++17 -O2 -Wall -Wextra -Isrc src/orbiter_kernel.cpp tests/kernel_test.cpp -o build/kernel_test && ./build/kernel_test",
+    "test": "node --test tests/world_states.test.mjs && npm run build && g++ -std=c++17 -O2 -Wall -Wextra -Isrc src/orbiter_kernel.cpp tests/kernel_test.cpp -o build/kernel_test && ./build/kernel_test",
     "run": "npm run build && ./build/orbiter_kernel"
   }
 }

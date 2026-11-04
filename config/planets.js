@@ -22,6 +22,16 @@ export const WEAPONS = [
   { key: 'singularity_torpedo', name: 'Resonance Singularity Torpedo',     speed: 1.2 },   // PLACEHOLDER
 ];
 
+// Sprite for each world state (presentation only; the kernel reports the state name).
+// Keys must match WorldStatus in src/orbiter_kernel.hpp. Checked by tests/world_states.test.mjs.
+export const WORLD_SPRITES = {
+  ACTIVE_PRISTINE: null,                             // intact planet: its normal sprite
+  GLASSED_IRRADIATED: 'planet_nuked_wasteland.png',
+  FRACTURED_DEBRIS: 'planet_shattered_debris.png',
+  BLACK_HOLE_COLLAPSED: 'planet_blackhole_vortex.png',
+};
+export const DEBRIS_SPRITE = 'planet_dust_ring.png';  // ring left where a fractured world was
+
 // Debris from a destroyed world expires after this many ticks.
 export const DEBRIS = { lifetimeTicks: 20000 };
 
