@@ -51,7 +51,7 @@ inline constexpr PlanetDef PLANETS[PLANET_COUNT] = {
 
 inline constexpr WeaponDef WEAPONS[WEAPON_COUNT] = {
     { 1.8 }, // Titan-Buster Thermonuclear Warhead
-    { 0.9 }, // Planetary Core-Drill
+    { 1.8 }, // Planetary Core-Drill
     { 18.0 }, // Stellar Inversion Needle
     { 2.5 }, // Resonance Singularity Torpedo
 };

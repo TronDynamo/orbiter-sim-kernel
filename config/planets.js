@@ -39,7 +39,7 @@ export const VORTEX = {
 // cost / reload / effect are game-layer values; the kernel reads only speed.
 export const WEAPONS = [
   { key: 'thermonuclear_icbm', name: 'Titan-Buster Thermonuclear Warhead', speed: 1.8,  cost: { credits: 2500,  alloys: 1200 }, reloadSeconds: 45,  effect: 'Glasses surface; -85% pop, -75% yield' },
-  { key: 'planet_cracker',     name: 'Planetary Core-Drill',               speed: 0.9,  cost: { credits: 8000,  alloys: 4500 }, reloadSeconds: 120, effect: 'Cracks within 45 units, then shatters world into an asteroid belt; -100% pop' },
+  { key: 'planet_cracker',     name: 'Planetary Core-Drill',               speed: 1.8,  cost: { credits: 8000,  alloys: 4500 }, reloadSeconds: 120, effect: 'Cracks within 45 units, then shatters world into an asteroid belt; -100% pop' },
   { key: 'starkiller',         name: 'Stellar Inversion Needle',           speed: 18.0, cost: { credits: 25000, alloys: 15000 }, reloadSeconds: null, effect: 'Supernova shockwave; severs all conduits; one per match' },
   { key: 'singularity_torpedo', name: 'Resonance Singularity Torpedo',     speed: 2.5,  cost: { credits: 5000,  alloys: 3000 }, reloadSeconds: 90, effect: 'Kills 100% pop; gravity vortex pulls debris for 5 s' },
 ];
