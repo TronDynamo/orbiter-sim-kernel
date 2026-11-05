@@ -51,8 +51,9 @@ export function IntroScreen({kernelStatus, onStart, onLoad}) {
 
     const render = () => {
       const warpingNow = warpRef.current;
-      ctx.fillStyle = warpingNow ? "rgba(3,7,18,0.3)" : "#030712";
-      ctx.fillRect(0, 0, w, h);
+      // the loop video sits behind the canvas: clear each frame so it shows through; the warp keeps its dim trails
+      if (warpingNow) { ctx.fillStyle = "rgba(3,7,18,0.3)"; ctx.fillRect(0, 0, w, h); }
+      else ctx.clearRect(0, 0, w, h);
       const cx = w / 2, cy = h / 2;
       for (const s of stars) {
         s.pz = s.z;
@@ -115,6 +116,8 @@ export function IntroScreen({kernelStatus, onStart, onLoad}) {
 
   return (
     <div className="intro-root">
+      <video className="intro-video" src="/assets/backgrounds/start-menu.mp4" autoPlay muted loop playsInline preload="auto" aria-hidden="true" />
+      <div className="intro-video-shade" />
       <canvas ref={canvasRef} className="intro-canvas" />
       <div className="intro-crt" />
 

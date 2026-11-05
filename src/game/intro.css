@@ -1,6 +1,9 @@
 /* Title screen, ported from the cinematic intro. Every rule is scoped under .intro-root. */
 .intro-root { position: fixed; inset: 0; z-index: 50; background: #030712; color: #f8fafc; overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; user-select: none; }
+.intro-root .intro-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; pointer-events: none; }
+.intro-root .intro-video-shade { position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background: radial-gradient(ellipse at center, rgba(3,7,18,0.35) 0%, rgba(3,7,18,0.75) 100%); }
 .intro-root .intro-canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; display: block; }
 .intro-root .intro-crt { pointer-events: none; position: absolute; inset: 0; z-index: 5;
   background: linear-gradient(rgba(18,16,16,0) 50%, rgba(0,0,0,0.4) 50%), radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.85) 100%);
