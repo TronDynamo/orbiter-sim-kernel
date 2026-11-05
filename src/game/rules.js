@@ -42,6 +42,10 @@ export const newState = () => ({
   depots: [],    // deployed fuel depots: {id, planet|null, ang|x, y}
   depotN: 0,
   surveyed: {thalassa: false, aeros: false, kryos: false, ferrum: true},  // worlds scanned by a Survey Probe
+  planetIds: ['thalassa', 'aeros', 'ferrum', 'kryos'], // the current system's worlds (see currentSystem.js)
+  planetNames: null,  // set on a jump; null means the starter names in galaxy.js
+  planetRes: null,    // resource per world on a jump; null means the starter map in fleet.js
+  homePlanet: 'ferrum',
   jumpGate: {built: false, beacon: null, currentSector: null, warp: {active: false, phase: 'idle', progress: 0, destination: null}},
   shipN: 0,
   reload: {},    // seconds until each weapon can fire again, by kernel WeaponClass index
@@ -64,7 +68,7 @@ export const newState = () => ({
   flashes: [],   // whiplash effects for the renderer: {x, y, t}
 });
 
-const nm = (id) => NAMES[id] || id;
+const nm = (state, id) => state.planetNames?.[id] || NAMES[id] || id;
 
 export function distFromCore(a, b) {
   const dx = b.x - a.x, dy = b.y - a.y, L2 = dx * dx + dy * dy;
@@ -102,9 +106,9 @@ export function snapTethers(state, P, now = 0) {
         if (Math.hypot(r.x - mid.x, r.y - mid.y) < RULES.WHIPLASH_R) r.hp -= RULES.WHIPLASH_RELAY;
       }
       state.flashes.push({x: mid.x, y: mid.y, t: now});
-      events.push(`Tether snapped: ${nm(t.a)} to ${nm(t.b)}. Whiplash hit the hull.`);
+      events.push(`Tether snapped: ${nm(state, t.a)} to ${nm(state, t.b)}. Whiplash hit the hull.`);
     } else {
-      events.push(`Tether ${nm(t.a)} to ${nm(t.b)} dipped into the event horizon and was lost.`);
+      events.push(`Tether ${nm(state, t.a)} to ${nm(state, t.b)} dipped into the event horizon and was lost.`);
     }
     return false;
   });
@@ -117,7 +121,7 @@ export function snapTethers(state, P, now = 0) {
   state.tethers = state.tethers.filter((t) => [t.a, t.b].every((id) => id === 'core' || id === 'ark' || PLANET_OR_RELAY(state, id)));
   return events;
 }
-const PLANET_OR_RELAY = (state, id) => ['thalassa', 'aeros', 'ferrum', 'kryos'].includes(id) || state.relays.some((r) => r.id === id);
+const PLANET_OR_RELAY = (state, id) => (state.planetIds ?? ['thalassa', 'aeros', 'ferrum', 'kryos']).includes(id) || state.relays.some((r) => r.id === id);
 
 // Nodes reachable from the Ark through intact tethers.
 export function network(state) {
@@ -155,7 +159,7 @@ export function tryTether(state, a, b, P) {
   if (err) return {ok: false, msg: err};
   state.alloys -= RULES.COST.tether.alloys;
   state.tethers.push({a, b});
-  return {ok: true, msg: `Tether established: ${nm(a)} to ${nm(b)}.`};
+  return {ok: true, msg: `Tether established: ${nm(state, a)} to ${nm(state, b)}.`};
 }
 
 // Deliberate decoupling vents gas and loses no hull.
@@ -164,7 +168,7 @@ export function cut(state, index) {
   if (!t) return {ok: false, msg: 'No tether there.'};
   state.tethers.splice(index, 1);
   state.propellant = Math.max(0, state.propellant - 3);
-  return {ok: true, msg: `Decoupled ${nm(t.a)} from ${nm(t.b)}. Vented 3 propellant.`};
+  return {ok: true, msg: `Decoupled ${nm(state, t.a)} from ${nm(state, t.b)}. Vented 3 propellant.`};
 }
 
 // Point-to-segment distance, for clicking a tether.
@@ -198,8 +202,8 @@ export function tick(state, P) {
   state.queue = state.queue.filter((q) => {
     q.left -= 1;
     if (q.left > 0) return true;
-    state.fleet.push({id: q.id, type: q.type, mode: 'orbit', planet: 'ferrum', ang: state.fleet.length * 2.4, heading: 0, thrust: 0, hp: SHIPS[q.type].hull});
-    events.push({msg: `${SHIPS[q.type].name} launched. It holds orbit around Ferrum.`});
+    state.fleet.push({id: q.id, type: q.type, mode: 'orbit', planet: state.homePlanet ?? 'ferrum', ang: state.fleet.length * 2.4, heading: 0, thrust: 0, hp: SHIPS[q.type].hull});
+    events.push({msg: `${SHIPS[q.type].name} launched. It holds orbit around ${nm(state, state.homePlanet ?? 'ferrum')}.`});
     return false;
   });
   for (const id of ['thalassa', 'aeros']) if (net.has(id)) state.hull -= 0.03 * rad;

@@ -7,7 +7,9 @@
 // Planet ids are strings. Starter worlds keep their names ('thalassa', ...).
 // Generated worlds use their sector ids ('SECTOR-082-PULSAR-P1', ...), which
 // are stable across reloads because the generator is seeded.
-import {GAME_GALAXY} from "./galaxy.js";
+import {GAME_GALAXY, NAMES} from "./galaxy.js";
+import {sectorFromCode} from "./sectorGenerator.js";
+import {STAR_TYPE} from "./kernel/orbiterKernel.js";
 
 export const MIN_SYSTEM_PLANETS = 3;
 export const MAX_SYSTEM_PLANETS = 6;
@@ -19,8 +21,75 @@ const cyclic = (arr, i) => arr[i % arr.length];
 
 // The boot system: the dying star and its four starter worlds.
 export function bootSystem() {
-  return GAME_GALAXY;
+  return {...GAME_GALAXY, home: "ferrum"};
 }
+
+// Starter worlds keep their established resource; generated worlds cycle through the four.
+export const STARTER_RESOURCE = {thalassa: "biomass", aeros: "cryo", kryos: "compute", ferrum: "alloys"};
+const RESOURCE_CYCLE = ["biomass", "cryo", "alloys", "compute"];
+
+export function resourceFor(system, index) {
+  const p = system.planets[index];
+  if (!p) return null;
+  return STARTER_RESOURCE[p.id] ?? RESOURCE_CYCLE[index % RESOURCE_CYCLE.length];
+}
+
+// Kernel star type and core radius per anchor. Radii match the design sheet; void is 0 (no central star).
+const STAR_BY_ANCHOR = {
+  sol: [STAR_TYPE.SOL, 44], black_hole: [STAR_TYPE.BLACK_HOLE, 22], pulsar: [STAR_TYPE.PULSAR, 12],
+  blue_hypergiant: [STAR_TYPE.BLUE_HYPERGIANT, 75], void: [STAR_TYPE.VOID, 0],
+  red_giant: [STAR_TYPE.RED_GIANT, 95], white_dwarf: [STAR_TYPE.WHITE_DWARF, 18],
+};
+
+// The payload for kernel.loadSystem(...). Angles and speeds are per tick (game speed / 60).
+// Yield is pending: the kernel pays it out only once a Survey Probe charts the world.
+export function kernelSystemFromSector(sector, system = systemFromSector(sector)) {
+  const [starType, starRadius] = STAR_BY_ANCHOR[sector.anchorType] ?? STAR_BY_ANCHOR.sol;
+  return {
+    starType,
+    starRadius,
+    planets: system.planets.map((p, i) => {
+      const mult = sector.planets[i].multiplier;
+      return {
+        orbitRadius: p.orbit,
+        angle: p.phase,
+        speed: p.speed / 60,
+        radius: p.r,
+        population: Math.round(60 + 40 * mult),
+        yieldRate: mult,
+      };
+    }),
+  };
+}
+
+// The game-side state a system needs: planet ids and names, resource per world, the home world, and
+// survey flags (all uncharted on arrival). Written onto the game state on every jump.
+export function systemState(system) {
+  const ids = planetIds(system);
+  const names = {...NAMES};
+  const planetRes = {};
+  const surveyed = {};
+  system.planets.forEach((p, i) => {
+    names[p.id] = p.name;
+    planetRes[p.id] = resourceFor(system, i);
+    surveyed[p.id] = false;
+  });
+  return {planetIds: ids, planetNames: names, planetRes, surveyed, homePlanet: system.home ?? ids[0]};
+}
+
+// Sends ships that were in orbit or flight around the old system's worlds back to the new home world.
+export function rehomeFleet(fleet, system) {
+  const ids = new Set(planetIds(system));
+  const home = system.home ?? system.planets[0].id;
+  for (const f of fleet) {
+    if (!f.planet || ids.has(f.planet) && f.mode === "orbit") continue;
+    f.mode = "orbit"; f.planet = home; f.ang = 0; f.from = null; f.to = null; f.p = 0; f.thrust = 0; f.res = null;
+  }
+}
+
+// Starchart destinations: the three base sectors come from openStarchart; this is the fourth, reachable only from here.
+export const EXTRA_DESTINATIONS = ["SECTOR-909-BLACKHOLE"];
+export function extraDestinations() { return EXTRA_DESTINATIONS.map((code) => sectorFromCode(code)); }
 
 // Builds a galaxy-shaped system from a generated sector. The result has the
 // same shape as GAME_GALAXY, so scene.js and the map renderer accept it as is.

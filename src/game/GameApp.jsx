@@ -3,7 +3,8 @@
 import {useEffect, useRef, useState} from "react";
 import {OrbitScene} from "../orbit/scene.js";
 import {BODY_STRIDE} from "../orbit/engine.js";
-import {GAME_GALAXY, PLANET_IDS, ARK_POS} from "./galaxy.js";
+import {ARK_POS} from "./galaxy.js";
+import {bootSystem, systemFromSector, kernelSystemFromSector, systemState, rehomeFleet, resourceFor, extraDestinations} from "./currentSystem.js";
 import {loadOrbiterKernel, TICKS_PER_SECOND, WEAPON, WORLD, CONDUIT_ERR, CONDUIT_RULES} from "./kernel/orbiterKernel.js";
 import {ARMORY, drawCage, drawMagma, drawIrradiated, drawBlackHole, drawSupernova} from "./armory.js";
 import {STAR_COLLAPSE, VORTEX, DRILL_CRACK_DISTANCE, PLANETS as PLANET_DEFS} from "../../config/planets.js";
@@ -42,23 +43,28 @@ const CONDUIT_MSG = {
   [CONDUIT_ERR.OCCLUDED]: "The dying star blocks that line.",
   [CONDUIT_ERR.FULL]: "The network has no free conduit slots.",
 };
-const isPlanet = (id) => GAME_GALAXY.planets.some((p) => p.id === id);
 // Which stockpile each world's siphoned output feeds (game data; the kernel only produces the flow).
 // Conduit tone by tension: cyan below 70% of the snap limit, amber to 90%, a pulsing red beyond that.
 const tensionTone = (r, now) => r >= 0.9 ? `rgba(239,68,68,${(0.55 + 0.45 * Math.sin(now / 120)).toFixed(3)})` : r >= 0.7 ? "#f59e0b" : "#38bdf8";
-const PLANET_OUTPUT = [
-  {planet: "thalassa", resource: "biomass"},
-  {planet: "aeros", resource: "cryo"},   // Coolant
-  {planet: "ferrum", resource: "alloys"},
-  {planet: "kryos", resource: "compute"},
-];
-const planetName = (id) => GAME_GALAXY.planets.find((p) => p.id === id)?.name ?? id;
-const planetIndex = (id) => GAME_GALAXY.planets.findIndex((p) => p.id === id);
+// Placeholder yield for generated worlds until their economy is designed (starter worlds read config/planets.js).
+const DEFAULT_YIELD = 6;
 
 // The live session. The kernel is loaded once by GameApp and passed in; each session starts it from zero.
 // session: {key, seed, difficulty, save}. A save (a record from saveManager) restores the sector instead of starting it.
 function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
   const canvasRef = useRef(null), overlayRef = useRef(null), appRef = useRef(null);
+  // The star system the game is playing in: the boot system, or the sector a jump brought us to (see currentSystem.js).
+  const sysRef = useRef(null);
+  if (sysRef.current === null) {
+    const saved = session.save?.state?.jumpGate?.currentSector;
+    sysRef.current = saved ? systemFromSector(saved) : bootSystem();
+  }
+  const isPlanet = (id) => sysRef.current.planets.some((p) => p.id === id);
+  const planetName = (id) => sysRef.current.planets.find((p) => p.id === id)?.name ?? id;
+  const planetIndex = (id) => sysRef.current.planets.findIndex((p) => p.id === id);
+  // Which stockpile each world's siphoned output feeds, resolved for the current system.
+  const outputsOf = () => sysRef.current.planets.map((p, i) => ({planet: p.id, resource: resourceFor(sysRef.current, i), index: i}));
+  const yieldOf = (id) => PLANET_DEFS.find((d) => d.key === id)?.yield ?? DEFAULT_YIELD;
   const st = useRef(newState());
   const u = useRef({drag: null, mode: null, msg: START_MSG, msgWin: false, paused: false, speed: 1, tick: 0, shipyard: false, armory: false, comms: false, governor: null, tech: false, senate: false, arm: null, hover: null, pointer: null, menu: false, confirm: null, autosaveAt: -1e9, fps: 0, selected: null, briefing: !!session.tutorial, depotPlace: false});
   const [ui, setUi] = useState({...u.current});
@@ -66,7 +72,8 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
   const difficulty = DIFFICULTIES[session.difficulty] ?? DIFFICULTIES.commander;
 
   useEffect(() => {
-    const scene = new OrbitScene(canvasRef.current, {}, {galaxies: {game: GAME_GALAXY}, galaxyId: "game"});
+    const startSys = sysRef.current;
+    const scene = new OrbitScene(canvasRef.current, {}, {galaxies: {[startSys.id]: startSys}, galaxyId: startSys.id});
     scene.zoomBy(0.8); // frame all four orbits clear of the telemetry panel and the dock
     const ov = overlayRef.current, ctx = ov.getContext("2d");
     const s0 = u.current;
@@ -93,7 +100,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       if (n > 0) kernel.tick(n);
       return true;
     };
-    scene.positionSource = () => (syncKernel() ? GAME_GALAXY.planets.map((_, i) => ({x: kernel.planets.x[i], y: kernel.planets.y[i]})) : null);
+    scene.positionSource = () => (syncKernel() ? sysRef.current.planets.map((_, i) => ({x: kernel.planets.x[i], y: kernel.planets.y[i]})) : null);
 
     const sizeOverlay = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -114,7 +121,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       const sim = scene.sim;
       if (!sim) return null;
       const P = {core: {x: 0, y: 0}, ark: ARK_POS};
-      GAME_GALAXY.planets.forEach((p, i) => { const o = i * BODY_STRIDE; P[p.id] = {x: sim.b[o + 10], y: sim.b[o + 11]}; });
+      sysRef.current.planets.forEach((p, i) => { const o = i * BODY_STRIDE; P[p.id] = {x: sim.b[o + 10], y: sim.b[o + 11]}; });
       for (const r of st.current.relays) P[r.id] = {x: r.x, y: r.y};
       for (const d of st.current.depots ?? []) P[d.id] = depotPos(d, P);
       return P;
@@ -137,7 +144,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
     const conduitAt = (P, pt) => {
       let best = -1, bd = 10;
       for (let c = 0; c < kernel.conduitCount; c++) {
-        const A = P[GAME_GALAXY.planets[kernel.conduits.source[c]].id], B = P[GAME_GALAXY.planets[kernel.conduits.target[c]].id];
+        const A = P[sysRef.current.planets[kernel.conduits.source[c]].id], B = P[sysRef.current.planets[kernel.conduits.target[c]].id];
         if (!A || !B) continue;
         const d = distToTether(pt, A, B);
         if (d < bd) { bd = d; best = c; }
@@ -157,7 +164,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
     const snapSeen = new Set();
     // Kernel totals already paid into the stockpiles. A restored save starts from its own totals, so the
     // replayed history is not paid out a second time.
-    const gainSeen = PLANET_OUTPUT.map((o) => kernel.planets.gainTotal[planetIndex(o.planet)]);
+    const gainSeen = outputsOf().map((o) => kernel.planets.gainTotal[o.index]);
     let creditSeen = kernel.creditTotal;         // kernel credit total already credited
     let buildTick = kernel.tickCount;            // kernel tick up to which structure income has been paid
 
@@ -195,7 +202,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           const c = conduitAt(P, p);
           if (c < 0) say("Click right on a tether to decouple it.");
           else {
-            const a = GAME_GALAXY.planets[kernel.conduits.source[c]].id, b = GAME_GALAXY.planets[kernel.conduits.target[c]].id;
+            const a = sysRef.current.planets[kernel.conduits.source[c]].id, b = sysRef.current.planets[kernel.conduits.target[c]].id;
             const ten = P[a] && P[b] ? Math.hypot(P[b].x - P[a].x, P[b].y - P[a].y) / CONDUIT_RULES.maxLength : 0;
             kernel.removeConduit(c); snapSeen.clear();
             if (ten >= 0.85) {
@@ -273,7 +280,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
     };
     const liveConduits = () => {
       const out = [];
-      if (kernel) for (let c = 0; c < kernel.conduitCount; c++) out.push({a: GAME_GALAXY.planets[kernel.conduits.source[c]].id, b: GAME_GALAXY.planets[kernel.conduits.target[c]].id, snapped: !!kernel.conduits.snapped[c]});
+      if (kernel) for (let c = 0; c < kernel.conduitCount; c++) out.push({a: sysRef.current.planets[kernel.conduits.source[c]].id, b: sysRef.current.planets[kernel.conduits.target[c]].id, snapped: !!kernel.conduits.snapped[c]});
       return out;
     };
     const onCtx = (e) => {
@@ -317,7 +324,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       // player conduits, read from the kernel: amber when stretched, red when snapped, dimmed in the star's shadow
       if (kernel) {
         for (let c = 0; c < kernel.conduitCount; c++) {
-          const A = P[GAME_GALAXY.planets[kernel.conduits.source[c]].id], B = P[GAME_GALAXY.planets[kernel.conduits.target[c]].id];
+          const A = P[sysRef.current.planets[kernel.conduits.source[c]].id], B = P[sysRef.current.planets[kernel.conduits.target[c]].id];
           if (!A || !B) continue;
           const a = toS(A), b = toS(B), len = kernel.conduits.length[c];
           const snapped = !!kernel.conduits.snapped[c], occluded = !!kernel.conduits.occluded[c];
@@ -366,7 +373,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         for (let m = 0; m < kernel.missileCount; m++) {
           if (!kernel.missiles.active[m]) continue;
           const q = toS({x: kernel.missiles.x[m], y: kernel.missiles.y[m]});
-          const ti = kernel.missiles.target[m], tp = ti >= 0 ? P[GAME_GALAXY.planets[ti].id] : P.core;
+          const ti = kernel.missiles.target[m], tp = ti >= 0 ? P[sysRef.current.planets[ti].id] : P.core;
           if (tp) {
             const tq = toS(tp);
             ctx.setLineDash([4, 6]); ctx.strokeStyle = "rgba(255,90,90,0.5)"; ctx.lineWidth = 1;
@@ -391,13 +398,13 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           if (!kernel.missiles.active[m] || kernel.missiles.type[m] !== WEAPON.CRACKER_DRILL) continue;
           const ti = kernel.missiles.target[m];
           if (ti < 0) continue;
-          const tp = P[GAME_GALAXY.planets[ti].id];
+          const tp = P[sysRef.current.planets[ti].id];
           if (tp && Math.hypot(tp.x - kernel.missiles.x[m], tp.y - kernel.missiles.y[m]) <= DRILL_CRACK_DISTANCE) {
             const q = toS(tp); drawMagma(ctx, q.x, q.y, pxAt(tp, 11), t);
           }
         }
         // world states
-        GAME_GALAXY.planets.forEach((p, i) => {
+        sysRef.current.planets.forEach((p, i) => {
           const tp = P[p.id]; if (!tp) return;
           const status = kernel.planets.status[i], q = toS(tp), R = pxAt(tp, 11);
           if (status === WORLD.GLASSED) drawIrradiated(ctx, q.x, q.y, R, t);
@@ -491,7 +498,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         ctx.fillText(gate.currentSector.name, c.x, c.y + 96);
       }
       // uncharted worlds: label the ones no probe has scanned yet
-      for (const id of ["thalassa", "aeros", "kryos"]) {
+      for (const id of sysRef.current.planets.map((p) => p.id)) {
         if ((s.surveyed ?? {})[id] || !P[id]) continue;
         const q = toS(P[id]);
         ctx.font = "9px 'JetBrains Mono', monospace"; ctx.fillStyle = "#94a3b8"; ctx.textAlign = "center";
@@ -522,7 +529,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         ctx.font = "10px system-ui"; ctx.fillStyle = r.hp < 15 ? "#ff8a8a" : "#9fb3cc"; ctx.fillText(`${Math.max(0, Math.round(r.hp))}`, q.x, q.y + 14);
       }
       ctx.font = "12px system-ui"; ctx.fillStyle = "#cfd8e6";
-      for (const p of GAME_GALAXY.planets) { const q = toS(P[p.id]); ctx.fillText(p.name, q.x, q.y - 22); }
+      for (const p of sysRef.current.planets) { const q = toS(P[p.id]); ctx.fillText(p.name, q.x, q.y - 22); }
       ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
     };
 
@@ -546,7 +553,19 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
             for (const m of stepFleet(s, P, dt, {conduits: liveConduits(), velocity: vel})) say(m);
             if (s.jumpGate?.warp?.active) {
               advanceWarp(s.jumpGate, Math.max(0, (now - warpT) / 1000));
-              if (!s.jumpGate.warp.active) say(`Arrived in ${s.jumpGate.currentSector.name}. Fleet, research and treasury came with you.`, true);
+              if (!s.jumpGate.warp.active) {
+                const sector = s.jumpGate.currentSector, sys = systemFromSector(sector);
+                if (kernel.loadSystem(kernelSystemFromSector(sector, sys)) >= 0) {
+                  sysRef.current = sys;
+                  scene.galaxies[sys.id] = sys;
+                  scene.setGalaxy(sys.id);
+                  Object.assign(s, systemState(sys));   // worlds uncharted, resources and names for the new system
+                  rehomeFleet(s.fleet, sys);            // ships come along, parked at the new home world
+                  s.tethers = []; s.relays = [];         // the old system's links were lost with its conduits
+                  gainSeen.fill(0);                      // the kernel's payout totals restart for the new worlds
+                  say(`Arrived in ${sector.name}. Fleet, research and treasury came with you.`, true);
+                } else say("The jump failed: the destination could not be loaded.", true);
+              }
             }
             warpT = now;
             if (u.current.deployRelay) {
@@ -573,7 +592,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           const dt = kernel.tickCount - buildTick;
           buildTick = kernel.tickCount;
           const pz = perks(s), fpMult = s.senate?.effects?.freeportMult ?? 1;
-          if (dt > 0) GAME_GALAXY.planets.forEach((p) => {
+          if (dt > 0) sysRef.current.planets.forEach((p) => {
             const idx = planetIndex(p.id);
             if (kernel.planets.flow[idx] > 0) {
               for (const key of infraOf(s, p.id)) {
@@ -586,19 +605,19 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
               for (let c = 0; c < kernel.conduitCount; c++) {
                 if ((kernel.conduits.source[c] === idx || kernel.conduits.target[c] === idx) && kernel.conduits.occluded[c]) shadowed = true;
               }
-              const out = PLANET_OUTPUT.find((o) => o.planet === p.id);
-              if (shadowed) s[out.resource] += PLANET_DEFS.find((d) => d.key === p.id).yield * pz.occlusionShare * dt / TICKS_PER_SECOND;
+              const out = outputsOf().find((o) => o.planet === p.id);
+              if (shadowed) s[out.resource] += yieldOf(p.id) * pz.occlusionShare * dt / TICKS_PER_SECOND;
             }
           });
         }
-        if (kernel) PLANET_OUTPUT.forEach((o, i) => {
+        if (kernel) outputsOf().forEach((o, i) => {
           const idx = planetIndex(o.planet), total = kernel.planets.gainTotal[idx], d = total - gainSeen[i];
           if (d > 0) { s[o.resource] += d * difficulty.income; gainSeen[i] = total; }
         });
         if (kernel) for (let c = 0; c < kernel.conduitCount; c++) {
           if (kernel.conduits.snapped[c] && !snapSeen.has(c)) {
             snapSeen.add(c);
-            const from = GAME_GALAXY.planets[kernel.conduits.source[c]].id, to = GAME_GALAXY.planets[kernel.conduits.target[c]].id;
+            const from = sysRef.current.planets[kernel.conduits.source[c]].id, to = sysRef.current.planets[kernel.conduits.target[c]].id;
             say(`Conduit snapped: ${planetName(from)} to ${planetName(to)}.`);
           }
         }
@@ -613,7 +632,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         if (s.credits > s.creditsSeen) s.earned += s.credits - s.creditsSeen;
         s.creditsSeen = s.credits;
         if (kernel && !s.victory) {
-          const planets = GAME_GALAXY.planets.map((p, i) => ({id: p.id, status: kernel.planets.status[i]}));
+          const planets = sysRef.current.planets.map((p, i) => ({id: p.id, status: kernel.planets.status[i]}));
           const conduits = [];
           for (let c = 0; c < kernel.conduitCount; c++) conduits.push({source: kernel.conduits.source[c], target: kernel.conduits.target[c], snapped: !!kernel.conduits.snapped[c]});
           const v = checkVictory(s, planets, conduits);
@@ -895,7 +914,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       </footer>
 
       {u.current.starchart && st.current.jumpGate?.built ? (() => {
-        const sectors = openStarchart(st.current.jumpGate).sectors;
+        const sectors = [...openStarchart(st.current.jumpGate).sectors, ...extraDestinations()];
         return (
           <div style={{position: "absolute", inset: 0, zIndex: 12, display: "grid", placeItems: "center", background: "rgba(2,6,23,0.6)"}}>
             <div className="glass" style={{width: 560, maxWidth: "92vw", padding: 18, borderRadius: 14}}>
@@ -931,9 +950,9 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         </aside>
       ) : null}
       {u.current.governor ? (() => {
-        const id = u.current.governor, idx = planetIndex(id), def = PLANET_DEFS.find((p) => p.key === id);
-        const out = PLANET_OUTPUT.find((o) => o.planet === id);
-        return <GovernorPanel s={s} kernel={kernel} planet={GAME_GALAXY.planets[idx]} idx={idx} base={def.yield}
+        const id = u.current.governor, idx = planetIndex(id), def = {yield: yieldOf(id)};
+        const out = outputsOf().find((o) => o.planet === id);
+        return <GovernorPanel s={s} kernel={kernel} planet={sysRef.current.planets[idx]} idx={idx} base={def.yield}
           outputLabel={out.resource} onBuild={govBuild} onClose={closeGovernor} />;
       })() : null}
 
