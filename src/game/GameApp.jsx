@@ -231,7 +231,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       if (e.button !== 0) return;
       if (e.pointerType === "touch") {
         touches.set(e.pointerId, {x: e.clientX, y: e.clientY});
-        if (touches.size >= 2) { s0.drag = null; pinch = {d: pinchDist()}; return; }
+        if (touches.size >= 2) { s0.drag = null; s0.pan = null; pinch = {d: pinchDist()}; return; }
       }
       if (u.current.msg === START_MSG) { u.current.msg = ""; u.current.msgWin = false; refresh(); }
       const open = u.current;
@@ -321,7 +321,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       if (picked) { s0.selected = picked.id; scene.setFollow(shipFollow(picked.id)); say(`${SHIPS[picked.type].name} selected. Right-click a world to send it.`); refresh(); return; }
       const id = hitBody(st.current, P, p);
       if (id) s0.drag = {from: id, cur: p, start: p};
-      else if (s0.selected != null) { s0.selected = null; say("Ship deselected."); refresh(); }
+      else s0.pan = {x: e.clientX, y: e.clientY, moved: false}; // empty space: a drag pans the map, a tap deselects
       ov.setPointerCapture(e.pointerId);
     };
     const onMove = (e) => {
@@ -334,6 +334,13 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           return;
         }
       }
+      if (s0.pan) {
+        const dx = e.clientX - s0.pan.x, dy = e.clientY - s0.pan.y;
+        if (!s0.pan.moved && Math.hypot(dx, dy) < 4) return;
+        s0.pan.moved = true; s0.pan.x = e.clientX; s0.pan.y = e.clientY;
+        scene.panBy(dx, dy);
+        return;
+      }
       if (s0.drag) s0.drag.cur = toWorld(e);
       const r = ov.getBoundingClientRect();
       s0.pointer = {x: e.clientX - r.left, y: e.clientY - r.top};
@@ -344,6 +351,11 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         touches.delete(e.pointerId);
         if (touches.size < 2) pinch = null;
         if (touches.size > 0) return;
+      }
+      if (s0.pan) {
+        if (!s0.pan.moved && s0.selected != null) { s0.selected = null; say("Ship deselected."); refresh(); }
+        s0.pan = null;
+        return;
       }
       const P = positions();
       if (s0.drag && P) {
@@ -982,7 +994,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
     refresh();
   }
   function closeSoon(key) { setTimeout(() => { u.current[key] = false; refresh(); }, 400); }
-  function toggleShipyard() { u.current.shipyard = !u.current.shipyard; u.current.armory = false; refresh(); }
+  function toggleShipyard() { if (u.current.msg === START_MSG) u.current.msg = ""; u.current.shipyard = !u.current.shipyard; u.current.armory = false; refresh(); }
   function toggleArmory() { u.current.armory = !u.current.armory; u.current.shipyard = false; refresh(); }
   function toggleTech() { u.current.tech = !u.current.tech; u.current.shipyard = false; u.current.armory = false; refresh(); }
   function researchNow(key) { const r = researchTech(st.current, key); u.current.msg = r.msg; refresh(); }
@@ -1235,7 +1247,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       {u.current.comms ? <CommsTerminal s={s} onOpen={commsOpen} onChoose={commsChoose} onClose={toggleComms} /> : null}
 
       {u.current.armory ? (
-        <aside className="glass" style={{position: "absolute", right: 16, top: 84, width: 320, padding: 14, zIndex: 8, borderRadius: 12}}>
+        <aside className="glass" style={{position: "absolute", right: 16, top: 84, bottom: 96, overflowY: "auto", width: 320, padding: 14, zIndex: 8, borderRadius: 12}}>
           <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6}}>
             <b>Strategic Weapons</b>
             <button className="pill zelo" onClick={toggleArmory}>Close</button>
@@ -1257,7 +1269,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       ) : null}
 
       {u.current.shipyard ? (
-        <aside className="glass" style={{position: "absolute", right: 16, top: 84, width: 300, padding: 14, zIndex: 8, borderRadius: 12}}>
+        <aside className="glass" style={{position: "absolute", right: 16, top: 84, bottom: 96, overflowY: "auto", width: 300, padding: 14, zIndex: 8, borderRadius: 12}}>
           <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6}}>
             <b>Shipyard</b>
             <button className="pill zelo" onClick={toggleShipyard}>Close</button>

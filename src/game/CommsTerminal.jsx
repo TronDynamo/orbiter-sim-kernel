@@ -31,6 +31,7 @@ export function CommsTerminal({s, onOpen, onChoose, onClose}) {
           </div>
           {roster.map((x) => (
             <button key={x.id} className={"comms-pick" + (x.id === f.id ? " on" : "")} onClick={() => onOpen(x.id)} style={{borderColor: x.color}}>
+              <LeaderPortrait id={x.id} size={44} />
               <span style={{color: x.color}}>#{x.number} {x.name}</span>
               <small>{x.bloc}</small>
             </button>

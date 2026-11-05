@@ -195,6 +195,14 @@ export class OrbitScene {
   // Camera follows fn() while zoomed in at or above ZOOM_FOLLOW. Pass null to release.
   setFollow(fn) {
     this.followFn = fn ?? null;
+    this.pan = null; // following a body takes the camera back from a manual pan
+  }
+
+  // Drag the map: move the camera focus by a screen-space delta (px), in world units at the current zoom.
+  panBy(px, py) {
+    const c = this.sim.c, z = c[4] * this.base;
+    if (!this.pan) this.pan = { x: c[2], y: c[3] };
+    this.pan.x -= px / z; this.pan.y -= py / z;
   }
 
   setGalaxy(id) {
@@ -236,6 +244,7 @@ export class OrbitScene {
   // which otherwise pulls the focus toward the selected body or the origin.
   followCamera(dt) {
     const c = this.sim.c;
+    if (this.pan) { c[2] = this.pan.x; c[3] = this.pan.y; return; }
     const p = this.followFn && this.zoomUser >= ZOOM_FOLLOW ? this.followFn() : null;
     if (!p) { this.camF = null; return; }
     if (!this.camF) this.camF = {x: c[2], y: c[3]};
