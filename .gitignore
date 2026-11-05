@@ -1,3 +1,6 @@
 build/
 node_modules/
 dist/
+
+# Headless audit videos: large binaries, keep out of git history
+recordings/
