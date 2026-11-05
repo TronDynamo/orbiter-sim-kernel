@@ -128,3 +128,39 @@ body { font-family: Inter, system-ui, sans-serif; }
 .academy-skip { width: 100%; padding: 10px 14px; background: transparent; color: #94a3b8; border-color: rgba(148, 163, 184, 0.3); }
 .academy-skip:hover { color: #e2e8f0; }
 
+/* Map gestures: a drag on the game canvas must not scroll the page. */
+canvas.stage { touch-action: none; }
+.hud-toast { top: 60px; }
+
+/* Phone portrait: the HUD stacks in fixed bands (resources, controls, telemetry, PIP, drawer, action grid) and never overlaps. */
+@media (max-width: 760px) and (orientation: portrait) {
+  .hud-ribbon { left: 8px; right: 8px; top: 8px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 6px; }
+  .hud-ribbon .hud-chip { padding: 3px 6px; min-width: 0; }
+  .hud-ribbon .hud-chip .hud-val { font-size: 13px; }
+  .hud-controls { top: 124px; bottom: auto; left: 8px; right: 8px; justify-content: center; flex-wrap: wrap; gap: 6px; }
+  .hud-ark { top: 170px; bottom: 150px; left: 8px; width: 46vw; max-width: 200px; max-height: none; overflow-y: auto; padding: 8px; gap: 6px; }
+  .hud-dock { left: 8px; right: 8px; bottom: 8px; transform: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; max-width: none; }
+  .hud-dock-group { display: contents; }
+  .hud-dock .hud-btn { justify-content: center; text-align: center; min-width: 0; padding: 8px 4px; font-size: 10px; letter-spacing: 0.06em; }
+  .hud-pip-frame { top: auto; bottom: 150px; right: 8px; }
+  .hud-pip { width: min(300px, 48vw) !important; height: auto !important; }
+  .hud-engineering { left: 8px; right: 8px; width: auto; bottom: 150px; }
+  .hud-toast { top: 230px !important; bottom: auto !important; left: auto !important; right: 8px !important; transform: none !important; max-width: 180px !important; }
+}
+
+/* Phone landscape (short screens): resources across the top, telemetry on the left, the action row along the bottom. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .hud-ribbon { left: 8px; right: 8px; top: 6px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; padding: 4px 6px; }
+  .hud-ribbon .hud-chip { padding: 2px 6px; min-width: 0; }
+  .hud-ribbon .hud-chip .hud-val { font-size: 13px; }
+  .hud-controls { top: 64px; bottom: auto; left: auto; right: 8px; gap: 6px; }
+  .hud-ark { top: 64px; bottom: 58px; left: 8px; width: 200px; max-height: none; overflow-y: auto; padding: 8px; gap: 5px; }
+  .hud-dock { left: 216px; right: 8px; bottom: 8px; transform: none; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; max-width: none; }
+  .hud-dock-group { display: contents; }
+  .hud-dock .hud-btn { justify-content: center; min-width: 0; padding: 6px 3px; font-size: 9px; }
+  .hud-pip-frame { top: 104px; right: 8px; }
+  .hud-pip { width: 200px !important; height: auto !important; }
+  .hud-engineering { right: 8px; bottom: 58px; width: 240px; }
+  .hud-toast { top: auto !important; bottom: 64px; }
+}
+

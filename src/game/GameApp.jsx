@@ -1079,7 +1079,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         <button className="hud-btn hud-icon" title="Menu (Esc)" aria-label="Menu" onClick={openMenu}><Icon name="gear" size={16} /></button>
       </div>
 
-      {u.current.msg ? <div className={"toast glass" + (u.current.msgWin ? " win" : "")} style={{top: 60, pointerEvents: "none", maxWidth: 300, textAlign: "center", whiteSpace: "normal"}}>{u.current.msg}</div> : null}
+      {u.current.msg ? <div className={"toast glass hud-toast" + (u.current.msgWin ? " win" : "")} style={{pointerEvents: "none", maxWidth: 300, textAlign: "center", whiteSpace: "normal"}}>{u.current.msg}</div> : null}
 
       <footer className="hud-dock" aria-label="Command dock">
         <div className="hud-dock-group">
