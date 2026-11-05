@@ -8,7 +8,7 @@ export function SenateChamber({s, onClose}) {
   const yes = sess.votes.filter((v) => v.yes).length;
   const blocs = Object.keys(SENATE_BLOCS);
   return (
-    <div className="overlay" style={{zIndex: 30}}>
+    <div className="overlay" style={{zIndex: 30}} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="sheet glass" style={{padding: 20, width: "min(760px, calc(100% - 32px))", maxHeight: "90%", overflowY: "auto"}}>
         <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6}}>
           <b style={{letterSpacing: "0.12em"}}>GALACTIC SENATE · SESSION {sess.n + 1}</b>

@@ -164,3 +164,17 @@ canvas.stage { touch-action: none; }
   .hud-toast { top: auto !important; bottom: 64px; }
 }
 
+
+/* Phones: the dev raid button is hidden; the dock shows only player actions. */
+@media (pointer: coarse), (max-width: 760px) { .hud-dev { display: none !important; } }
+
+/* Telemetry: a single tappable line on phone portrait; the full panel stays on larger screens. */
+.hud-ark-badge { display: none; }
+.hud-ark-body { display: contents; }
+@media (max-width: 760px) and (orientation: portrait) {
+  .hud-ark { top: 170px; bottom: auto; max-height: none; overflow: visible; width: auto; max-width: 236px; }
+  .hud-ark-badge { display: block; width: 100%; text-align: left; padding: 6px 8px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: rgba(15, 23, 42, 0.92); color: #e2e8f0; border: 1px solid rgba(148, 163, 184, 0.35); border-radius: 8px; }
+  .hud-ark-body { display: none; }
+  .hud-ark.open .hud-ark-body { display: contents; }
+  .hud-ark.open { max-height: calc(100vh - 330px); overflow-y: auto; }
+}

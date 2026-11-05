@@ -221,6 +221,9 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         touches.set(e.pointerId, {x: e.clientX, y: e.clientY});
         if (touches.size >= 2) { s0.drag = null; pinch = {d: pinchDist()}; return; }
       }
+      if (u.current.msg === START_MSG) { u.current.msg = ""; u.current.msgWin = false; refresh(); }
+      const open = u.current;
+      if (open.shipyard || open.armory || open.comms || open.senate) { open.shipyard = false; open.armory = false; open.comms = false; open.senate = false; refresh(); return; }
       const P = positions(); if (!P) return;
       const p = toWorld(e);
       if (st.current.jumpGate?.built && !s0.mode && !s0.depotPlace && Math.abs(Math.hypot(p.x, p.y) - JUMP_GATE_BEACON_ORBIT_RADIUS) < 14) {
@@ -966,6 +969,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
     flash(f.overclock ? "Thrusters overclocked: 1.5x speed, double burn." : "Thrusters back to nominal burn.");
     refresh();
   }
+  function closeSoon(key) { setTimeout(() => { u.current[key] = false; refresh(); }, 400); }
   function toggleShipyard() { u.current.shipyard = !u.current.shipyard; u.current.armory = false; refresh(); }
   function toggleArmory() { u.current.armory = !u.current.armory; u.current.shipyard = false; refresh(); }
   function toggleTech() { u.current.tech = !u.current.tech; u.current.shipyard = false; u.current.armory = false; refresh(); }
@@ -993,7 +997,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
   function govBuild(key) { const r = buildInfra(st.current, u.current.governor, key); u.current.msg = r.msg; refresh(); }
   function closeGovernor() { u.current.governor = null; refresh(); }
   function commsOpen(id) { openComms(st.current, id); refresh(); }
-  function commsChoose(key) { const r = applyChoice(st.current, st.current.comms.selected, key); u.current.msg = r.msg; refresh(); }
+  function commsChoose(key) { const r = applyChoice(st.current, st.current.comms.selected, key); u.current.msg = r.msg; refresh(); if (r.ok) closeSoon("comms"); }
   // Why a strategic weapon cannot be armed right now, or null.
   function weaponBlock(s, W) {
     if (W.type === 2 && s.senate?.effects?.starkillerBanned) return "Banned by the Senate this session.";
@@ -1007,7 +1011,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
     const W = ARMORY.find((a) => a.key === key);
     const why = weaponBlock(st.current, W);
     if (why) { u.current.msg = why; refresh(); return; }
-    u.current.arm = key; u.current.mode = null;
+    u.current.arm = key; u.current.mode = null; closeSoon("armory");
     u.current.msg = `Targeting ${W.name}: click ${W.target === "core" ? "Sol Core" : "a world"}. Esc cancels.`;
     refresh();
   }
@@ -1028,7 +1032,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
     else flash(`Jump refused: ${String(r.reason).replace(/_/g, " ")}.`);
     refresh();
   }
-  function buildHull(type) { const r = orderShip(st.current, type); u.current.msg = r.msg; refresh(); }
+  function buildHull(type) { const r = orderShip(st.current, type); u.current.msg = r.msg; refresh(); if (r.ok) closeSoon("shipyard"); }
   function setSpeed(v) {
     u.current.speed = v; u.current.paused = false;
     applySpeed();
@@ -1073,7 +1077,9 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         <HudChip c="#a855f7" icon="compute" label="Compute" value={Math.floor(s.compute)} />
       </div>
 
-      <aside className="hud-ark hud-panel" aria-label="Ark telemetry">
+      <aside className={"hud-ark hud-panel" + (u.current.arkOpen ? " open" : "")} aria-label="Ark telemetry">
+        <button className="hud-ark-badge mono" aria-expanded={!!u.current.arkOpen} onClick={() => { u.current.arkOpen = !u.current.arkOpen; refresh(); }}>ARK: {hullPct}% HULL | FUEL: {Math.floor(s.fuel)}</button>
+        <div className="hud-ark-body">
         <div className="hud-kicker mono">ARK ENDEAVOR · TELEMETRY</div>
         <HudMeter label="Hull" pct={hullPct} color={hullColor} value={`${hullPct}%`} warn={hullPct <= 30} />
         <HudMeter label="Propellant" pct={Math.min(100, s.propellant)} color="#38bdf8" value={Math.floor(s.propellant)} />
@@ -1087,6 +1093,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         <div className="hud-fleet mono">
           <span>CYCLE {String(yr).padStart(2, "0")} // TICK {(kernel?.tickCount ?? 0).toLocaleString("en-US")}</span>
           {getSettings().fps ? <span>{u.current.fps} FPS</span> : null}
+        </div>
         </div>
       </aside>
 
@@ -1114,7 +1121,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           <button className={"hud-btn" + (u.current.armory ? " on" : "")} onClick={toggleArmory}><Icon name="armory" size={14} /> Armory</button>
           <button className={"hud-btn" + (u.current.comms ? " on" : "")} onClick={toggleComms}><Icon name="comms" size={14} /> Comms</button>
           <button className={"hud-btn" + (s.senate.dismissed ? "" : " flash-alert")} onClick={openSenate}><Icon name="senate" size={14} /> Senate</button>
-          <button className="hud-btn" title="Dev: spawn one raid now (also the R key). Remove before release." onClick={devRaid}>[+ Raid] Dev</button>
+          <button className="hud-btn hud-dev" title="Dev: spawn one raid now (also the R key). Remove before release." onClick={devRaid}>[+ Raid] Dev</button>
         </div>
       </footer>
 
