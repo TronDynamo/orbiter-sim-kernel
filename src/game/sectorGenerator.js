@@ -32,6 +32,7 @@ const BIOMES = [
   "Ocean World", "Methane Giant", "Rust Industrial", "Frozen Cryo-Sphere",
   "Volcanic", "Desert", "Jungle Biosphere", "Barren Rock", "Toxic",
   "Scorched", "Ice Drift", "Nebula Veil",
+  "Continental", "Sub-Neptune", "Precursor Ruin", "Nitrogen Ice", "Crystal Shard",
 ];
 
 const BASE_SECTORS = [

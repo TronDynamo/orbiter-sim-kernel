@@ -83,3 +83,13 @@ test("generated worlds carry a secondary yield; starter worlds do not", () => {
   for (const p of systemFromSector(sector).planets) assert.ok(p.secondary && p.secondary.yield > 0);
   for (const p of bootSystem().planets) assert.equal(p.secondary, undefined);
 });
+
+test("the five new biomes are generated and every generated biome has a yield class", () => {
+  const seen = new Set();
+  for (let n = 1; n <= 300; n++) {
+    const code = `SECTOR-${String(n).padStart(3, "0")}`;
+    for (const p of sectorFromCode(code).planets) seen.add(p.biome);
+  }
+  for (const b of ["Continental", "Sub-Neptune", "Precursor Ruin", "Nitrogen Ice", "Crystal Shard"]) assert.ok(seen.has(b), `${b} never generated`);
+  for (const b of seen) assert.ok(b in BIOME_CLASS, `${b} has no yield class`);
+});
