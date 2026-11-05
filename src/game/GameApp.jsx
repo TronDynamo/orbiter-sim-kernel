@@ -116,6 +116,8 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
     const startSys = sysRef.current;
     const scene = new OrbitScene(canvasRef.current, {}, {galaxies: {[startSys.id]: startSys}, galaxyId: startSys.id});
     scene.zoomBy(0.8, true); // frame all four orbits clear of the telemetry panel and the dock
+    // Audit hook: only with ?audit=1 in the URL, so the headless playtest can read the camera and the game state.
+    if (new URLSearchParams(window.location.search).has("audit")) window.__orbiterDebug = {scene, st, u: u.current, combat: combatRef.current, refresh};
     const ov = overlayRef.current, ctx = ov.getContext("2d");
     const s0 = u.current;
     let raf = 0, lastUi = 0, lastGame = -1;
