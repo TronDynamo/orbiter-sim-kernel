@@ -97,6 +97,18 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
     sysRef.current = saved ? systemFromSector(saved) : bootSystem();
   }
   const isPlanet = (id) => sysRef.current.planets.some((p) => p.id === id);
+  // Planets move 40-80 units per second at 1x, so a drop that is held still can land just past the
+  // world it was aimed at. Conduits therefore accept the nearest world within this radius.
+  const PLANET_DROP_RADIUS = 60;
+  const nearestPlanet = (P, pt) => {
+    let best = null, bd = PLANET_DROP_RADIUS;
+    for (const id of Object.keys(P)) {
+      if (!isPlanet(id)) continue;
+      const d = Math.hypot(P[id].x - pt.x, P[id].y - pt.y);
+      if (d < bd) { bd = d; best = id; }
+    }
+    return best;
+  };
   const planetName = (id) => sysRef.current.planets.find((p) => p.id === id)?.name ?? id;
   const planetIndex = (id) => sysRef.current.planets.findIndex((p) => p.id === id);
   // Which stockpile each world's siphoned output feeds, resolved for the current system.
@@ -335,7 +347,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       }
       const P = positions();
       if (s0.drag && P) {
-        const target = hitBody(st.current, P, s0.drag.cur);
+        const target = hitBody(st.current, P, s0.drag.cur) ?? (isPlanet(s0.drag.from) ? nearestPlanet(P, s0.drag.cur) : null);
         if (target && target !== s0.drag.from) {
           if (isPlanet(s0.drag.from) && isPlanet(target)) buildConduit(s0.drag.from, target);
           else { const r = tryTether(st.current, s0.drag.from, target, P); say(r.msg); }
@@ -481,7 +493,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
 
       // drag preview: green when the transfer window is open, red when not
       if (s0.drag && P[s0.drag.from]) {
-        const t = hitBody(s, P, s0.drag.cur);
+        const t = hitBody(s, P, s0.drag.cur) ?? (isPlanet(s0.drag.from) ? nearestPlanet(P, s0.drag.cur) : null);
         const err = !t || t === s0.drag.from ? "no target"
           : isPlanet(t) && isPlanet(s0.drag.from) ? previewConduit(P, s0.drag.from, t)
           : checkTether(s, s0.drag.from, t, P);
