@@ -46,7 +46,7 @@ const CONDUIT_MSG = {
 // Which stockpile each world's siphoned output feeds (game data; the kernel only produces the flow).
 // Conduit tone by tension: cyan below 70% of the snap limit, amber to 90%, a pulsing red beyond that.
 const tensionTone = (r, now) => r >= 0.9 ? `rgba(239,68,68,${(0.55 + 0.45 * Math.sin(now / 120)).toFixed(3)})` : r >= 0.7 ? "#f59e0b" : "#38bdf8";
-// Placeholder yield for generated worlds until their economy is designed (starter worlds read config/planets.js).
+// Fallback yield for a world with no biome class (should not occur for generated worlds).
 const DEFAULT_YIELD = 6;
 
 // The live session. The kernel is loaded once by GameApp and passed in; each session starts it from zero.
@@ -64,7 +64,8 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
   const planetIndex = (id) => sysRef.current.planets.findIndex((p) => p.id === id);
   // Which stockpile each world's siphoned output feeds, resolved for the current system.
   const outputsOf = () => sysRef.current.planets.map((p, i) => ({planet: p.id, resource: resourceFor(sysRef.current, i), index: i}));
-  const yieldOf = (id) => PLANET_DEFS.find((d) => d.key === id)?.yield ?? DEFAULT_YIELD;
+  // Starter worlds read config/planets.js; generated worlds carry the yield of their biome class (currentSystem.js).
+  const yieldOf = (id) => PLANET_DEFS.find((d) => d.key === id)?.yield ?? sysRef.current.planets.find((p) => p.id === id)?.yield ?? DEFAULT_YIELD;
   const st = useRef(newState());
   const u = useRef({drag: null, mode: null, msg: START_MSG, msgWin: false, paused: false, speed: 1, tick: 0, shipyard: false, armory: false, comms: false, governor: null, tech: false, senate: false, arm: null, hover: null, pointer: null, menu: false, confirm: null, autosaveAt: -1e9, fps: 0, selected: null, briefing: !!session.tutorial, depotPlace: false});
   const [ui, setUi] = useState({...u.current});

@@ -24,14 +24,34 @@ export function bootSystem() {
   return {...GAME_GALAXY, home: "ferrum"};
 }
 
-// Starter worlds keep their established resource; generated worlds cycle through the four.
+// Starter worlds keep their established resource.
 export const STARTER_RESOURCE = {thalassa: "biomass", aeros: "cryo", kryos: "compute", ferrum: "alloys"};
-const RESOURCE_CYCLE = ["biomass", "cryo", "alloys", "compute"];
+
+// Biome-derived production for generated worlds. The yield is the kernel's harvest rate once the world
+// is surveyed, the same scale as the starter worlds. Only the first resource of each pair is wired.
+export const YIELD_CLASSES = {
+  pelagic: {resource: "biomass", yield: 15, label: "Pelagic Ocean"},
+  methane: {resource: "cryo", yield: 12, label: "Methane Giant"},
+  basalt: {resource: "alloys", yield: 10, label: "Oxidized Iron / Basalt"},
+  cryo: {resource: "compute", yield: 8, label: "Cryo-Glacier"},
+  rare: {resource: "credits", yield: 14, label: "Carbon Diamond / Rare"},
+};
+// Sector biome name -> yield class. Desert, Scorched, Toxic and Jungle are assigned to the nearest class.
+export const BIOME_CLASS = {
+  "Ocean World": "pelagic", "Jungle Biosphere": "pelagic",
+  "Methane Giant": "methane", "Toxic": "methane",
+  "Rust Industrial": "basalt", "Volcanic": "basalt", "Barren Rock": "basalt", "Desert": "basalt", "Scorched": "basalt",
+  "Frozen Cryo-Sphere": "cryo", "Ice Drift": "cryo",
+  "Nebula Veil": "rare",
+};
+export function yieldClassOf(biome) {
+  return YIELD_CLASSES[BIOME_CLASS[biome]] ?? YIELD_CLASSES.basalt;
+}
 
 export function resourceFor(system, index) {
   const p = system.planets[index];
   if (!p) return null;
-  return STARTER_RESOURCE[p.id] ?? RESOURCE_CYCLE[index % RESOURCE_CYCLE.length];
+  return STARTER_RESOURCE[p.id] ?? p.resource;
 }
 
 // Kernel star type and core radius per anchor. Radii match the design sheet; void is 0 (no central star).
@@ -67,7 +87,7 @@ export function kernelSystemFromSector(sector, system = systemFromSector(sector)
         speed: p.speed / 60,
         radius: p.r,
         population: Math.round(60 + 40 * mult),
-        yieldRate: mult,
+        yieldRate: p.yield,
       };
     }),
   };
@@ -119,6 +139,10 @@ export function systemFromSector(sector) {
     speed: 0.35 / Math.sqrt(p.orbitRadius / 100), // inner worlds faster, as in the starter system
     phase: (i * 2.1) % (Math.PI * 2),
     inner: i < 2,
+    biome: p.biome,
+    yield: yieldClassOf(p.biome).yield,
+    resource: yieldClassOf(p.biome).resource,
+    yieldLabel: yieldClassOf(p.biome).label,
   }));
   return {
     id: sector.id,
