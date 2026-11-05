@@ -5,6 +5,7 @@ import {CHOICES, opinionOf} from "./comms.js";
 import {shortfall} from "./rules.js";
 import {COST_LABEL} from "./ships.js";
 import "./comms.css";
+import {LeaderPortrait} from "./LeaderPortrait.jsx";
 
 export function CommsTerminal({s, onOpen, onChoose, onClose}) {
   const f = factionById(s.comms.selected);
@@ -37,10 +38,7 @@ export function CommsTerminal({s, onOpen, onChoose, onClose}) {
         </div>
         <div className="comms-main">
           <div className="comms-leader">
-            <div className="comms-portrait" style={{borderColor: f.color, color: f.color}}>
-              <span>{f.monogram}</span>
-              <div className="scanlines" />
-            </div>
+            <LeaderPortrait id={f.id} size={84} />
             <div>
               <div className="comms-name" style={{color: f.color}}>{f.name}</div>
               <div className="comms-sub">{f.sub}</div>

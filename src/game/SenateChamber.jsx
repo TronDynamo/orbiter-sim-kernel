@@ -1,6 +1,7 @@
 // Galactic Senate Chambers: the current motion, every leader's vote grouped by Senate bloc, and the result.
 import {SENATE_BLOCS} from "./roster_data.js";
 import {LEADERS} from "./roster_data.js";
+import {LeaderPortrait} from "./LeaderPortrait.jsx";
 
 export function SenateChamber({s, onClose}) {
   const sess = s.senate.current;
@@ -22,7 +23,7 @@ export function SenateChamber({s, onClose}) {
               <div style={{fontSize: 12, letterSpacing: "0.08em", color: SENATE_BLOCS[b].color, marginBottom: 4}}>{SENATE_BLOCS[b].name} · {members.filter((m) => m.yes).length} for</div>
               {members.map((m) => (
                 <div key={m.id} style={{display: "flex", gap: 8, alignItems: "center", padding: "3px 0", fontSize: 13}}>
-                  <span style={{width: 26, height: 26, borderRadius: 6, border: `1px solid ${m.color}`, color: m.color, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700}}>{m.monogram}</span>
+                  <LeaderPortrait id={m.id} size={34} />
                   <span style={{flex: 1}}>{m.name}<small style={{display: "block", opacity: 0.7}}>{m.reason}</small></span>
                   <b style={{color: m.yes ? "#34d399" : "#f87171"}}>{m.yes ? "YES" : "NO"}</b>
                 </div>
