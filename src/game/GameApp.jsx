@@ -529,7 +529,8 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         ctx.font = "10px system-ui"; ctx.fillStyle = r.hp < 15 ? "#ff8a8a" : "#9fb3cc"; ctx.fillText(`${Math.max(0, Math.round(r.hp))}`, q.x, q.y + 14);
       }
       ctx.font = "12px system-ui"; ctx.fillStyle = "#cfd8e6";
-      for (const p of sysRef.current.planets) { const q = toS(P[p.id]); ctx.fillText(p.name, q.x, q.y - 22); }
+      // A frame that completes a jump can hold positions for the old worlds; skip any world without one this frame.
+      for (const p of sysRef.current.planets) { if (!P[p.id]) continue; const q = toS(P[p.id]); ctx.fillText(p.name, q.x, q.y - 22); }
       ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
     };
 

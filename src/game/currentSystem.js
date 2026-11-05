@@ -41,6 +41,17 @@ const STAR_BY_ANCHOR = {
   red_giant: [STAR_TYPE.RED_GIANT, 95], white_dwarf: [STAR_TYPE.WHITE_DWARF, 18],
 };
 
+// Sun look per anchor, from the design sheet: each class reads as its own star in the map.
+const SUN_BY_ANCHOR = {
+  sol: {base: [245, 158, 11], patch: [255, 200, 90], glow: "rgba(245,158,11,", radius: 44},
+  black_hole: {base: [60, 20, 90], patch: [124, 58, 237], glow: "rgba(124,58,237,", radius: 22},
+  pulsar: {base: [34, 211, 238], patch: [165, 243, 252], glow: "rgba(34,211,238,", radius: 12},
+  blue_hypergiant: {base: [0, 240, 255], patch: [160, 250, 255], glow: "rgba(0,240,255,", radius: 40},
+  void: {base: [16, 185, 129], patch: [110, 231, 183], glow: "rgba(16,185,129,", radius: 30},
+  red_giant: {base: [239, 68, 68], patch: [252, 165, 165], glow: "rgba(239,68,68,", radius: 50},
+  white_dwarf: {base: [230, 235, 245], patch: [255, 255, 255], glow: "rgba(230,235,245,", radius: 18},
+};
+
 // The payload for kernel.loadSystem(...). Angles and speeds are per tick (game speed / 60).
 // Yield is pending: the kernel pays it out only once a Survey Probe charts the world.
 export function kernelSystemFromSector(sector, system = systemFromSector(sector)) {
@@ -116,8 +127,8 @@ export function systemFromSector(sector) {
     dot: "#7fd3ff",
     subtitle: `${sector.id} • ${sector.starType}`,
     subtitleNote: sector.description ?? "",
-    sun: GAME_GALAXY.sun,
-    nebula: GAME_GALAXY.nebula,
+    sun: SUN_BY_ANCHOR[sector.anchorType] ?? GAME_GALAXY.sun,
+    nebula: SUN_BY_ANCHOR[sector.anchorType]?.base ?? GAME_GALAXY.nebula,
     planets,
   };
 }

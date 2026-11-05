@@ -15,7 +15,7 @@ test("the gate costs 600 credits, 300 alloys, 150 compute and is refused when sh
 test("starchart is closed until the gate is built, then lists the three sectors", () => {
   const g = makeInitialState();
   assert.equal(openStarchart(g).ok, false);
-  g.jumpGateBuilt = true;
+  g.built = true;
   const r = openStarchart(g);
   assert.equal(r.ok, true);
   assert.deepEqual(r.sectors.map((s) => s.id), ["SECTOR-082-PULSAR", "SECTOR-114-VOID", "SECTOR-305-HYPER"]);
@@ -28,7 +28,7 @@ test("a jump runs the slipstream, then sets the new sector without touching flee
   const fleet = [{id: 1, type: "corvette"}];
   const research = ["high-tensile"];
   const treasury = {credits: 10, alloys: 20, compute: 30};
-  const g = makeInitialState({fleet, research, treasury, jumpGateBuilt: true});
+  const g = makeInitialState({fleet, research, treasury, built: true});
   const dest = openStarchart(g).sectors[1];
   assert.equal(initiateJump(g, dest).ok, true);
   assert.equal(initiateJump(g, dest).reason, "warp_in_progress");
@@ -43,7 +43,7 @@ test("a jump runs the slipstream, then sets the new sector without touching flee
 });
 
 test("worlds in a new sector start unsurveyed and only a probe reveals them", () => {
-  const g = makeInitialState({jumpGateBuilt: true});
+  const g = makeInitialState({built: true});
   initiateJump(g, openStarchart(g).sectors[0]);
   advanceWarp(g, WARP_DURATION);
   assert.ok(g.currentSector.planets.every((p) => p.surveyed === false && p.biome !== undefined));

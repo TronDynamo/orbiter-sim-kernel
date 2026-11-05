@@ -175,8 +175,23 @@ export class OrbitScene {
 
   setGalaxy(id) {
     if (id === this.galaxyId && !this.pendingGalaxy) return;
+    this.ensureGalaxy(id);
     this.pendingGalaxy = id;
     this.selected = null;
+  }
+  // Star lighting and sun texture for a galaxy that was added at runtime (a jumped-to sector).
+  // Built-in galaxies already have them; generated ones take their look from their sun colour.
+  ensureGalaxy(gid) {
+    const g = this.galaxies[gid];
+    if (!g) return;
+    if (!STAR[gid]) {
+      const st = starFromBase(g.sun.base);
+      STAR[gid] = {c: st.c, light: st.light};
+    }
+    if (!STAR0[gid]) STAR0[gid] = JSON.parse(JSON.stringify(STAR[gid]));
+    if (SUN_SEED[gid] === undefined) SUN_SEED[gid] = 7;
+    if (!this.textures[gid]) this.textures[gid] = makeSunTexture(g.sun, SUN_SEED[gid]);
+    if (this.sunKey[gid] === undefined) this.sunKey[gid] = null;
   }
   select(id) {
     this.selected = id;
@@ -419,6 +434,7 @@ export class OrbitScene {
   // Re-tint the sun core, corona and star light for each galaxy from its current sun colour.
   refreshSun() {
     for (const gid of Object.keys(this.galaxies)) {
+      this.ensureGalaxy(gid);
       const sun = this.galaxies[gid].sun;
       const key = sunColorOf(gid) || 'default';
       if (this.sunKey[gid] === key) continue;
