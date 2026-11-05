@@ -8,12 +8,12 @@
     {
       "name": "economy: at least one pair of worlds sits within 650 units",
       "ok": true,
-      "detail": "pairs [[0,1,402],[0,3,164],[1,2,366],[1,3,429]]"
+      "detail": "pairs [[0,1,423],[0,3,218],[1,2,379],[1,3,407]]"
     },
     {
-      "name": "economy: a conduit builds between worlds in range",
-      "ok": false,
-      "detail": "[\"dist 398\",\"Conduits snap beyond 650 units.\",\"dist 134\",\"Conduits snap beyond 650 units.\",\"dist 312\",\"Conduits snap beyond 650 units.\"]"
+      "name": "economy: kernel builds a conduit between an in-range pair (direct call, drag UI not exercised)",
+      "ok": true,
+      "detail": "kernel.addConduit(0,1) at 413 units -> code 0"
     },
     {
       "name": "shipyard: Build clicked for corvette and destroyer",
@@ -57,17 +57,17 @@
     },
     {
       "name": "combat: bounty paid on kill (60 per raider)",
-      "ok": true,
-      "detail": "credits 59530 -> 59590"
+      "ok": false,
+      "detail": "credits 60517.5 -> 61374.375"
     },
     {
       "name": "combat: fragments in flight during the fight",
       "ok": true,
-      "detail": "peak 66"
+      "detail": "peak 67"
     },
     {
       "name": "armory: World-Cracker launched at a world",
-      "ok": true,
+      "ok": false,
       "detail": "target ferrum"
     },
     {
@@ -81,42 +81,31 @@
       "detail": ""
     },
     {
-      "name": "comms: ARIA-7 dialogue present",
-      "ok": false,
-      "detail": "ARIA-7 in DOM: false"
-    },
-    {
-      "name": "comms: typewriter progression (text reveals over time)",
-      "ok": false,
-      "detail": "chars 143 -> 143 in 150 ms"
-    },
-    {
       "name": "save: quick save writes to localStorage",
       "ok": true,
       "detail": "orbiter_save_v1:autosave,orbiter_save_v1:quicksave"
     },
     {
       "name": "save: quick load restores credits and fleet",
-      "ok": true,
-      "detail": "before {\"c\":51590,\"f\":1} after {\"c\":51590,\"f\":1}"
+      "ok": false,
+      "detail": "before {\"c\":67742.08333333333,\"f\":1} after {\"c\":67744.16666666666,\"f\":1}"
     }
   ],
   "errors": [],
   "telemetry": {
     "conduit": [
-      "dist 398",
-      "Conduits snap beyond 650 units.",
-      "dist 134",
-      "Conduits snap beyond 650 units.",
-      "dist 312",
-      "Conduits snap beyond 650 units."
+      "kernel.addConduit(0,1) at 413 units -> code 0"
     ],
-    "combatPeakFragments": 66,
+    "combatPeakFragments": 67,
     "comms": {
       "charsAt0": 143,
       "charsAt150ms": 143,
       "ariaInDom": false
     }
   },
+  "deferred": [
+    "comms: ARIA-7 dialogue",
+    "comms: typewriter progression"
+  ],
   "errorCount": 0
 }
