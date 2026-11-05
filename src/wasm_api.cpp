@@ -7,6 +7,7 @@
 
 namespace {
 orbiter::OrbiterSimulationEngine g_engine;
+orbiter::PlanetConfig g_load_buffer[orbiter::MAX_PLANETS];
 }
 
 extern "C" {
@@ -73,6 +74,18 @@ const double* orbiter_conduit_max_length() { return g_engine.GetState().conduit_
 void orbiter_conduit_set_max_length(uint32_t c, double v) { g_engine.SetConduitMaxLength(c, v); }
 
 const double* orbiter_asteroid_x() { return g_engine.GetState().asteroid_x; }
+
+// Rehydration. The game writes each world into this staging buffer (seven doubles per world, see PlanetConfig),
+// then calls orbiter_load_system with its address. The buffer lives in the module, so the pointer never moves.
+double* orbiter_load_buffer() { return reinterpret_cast<double*>(g_load_buffer); }
+int32_t orbiter_load_system(int32_t star_type, double star_radius, uint32_t count, const orbiter::PlanetConfig* planets) {
+    return g_engine.LoadSystem(star_type, star_radius, count, planets) ? 0 : -1;
+}
+int32_t orbiter_survey_planet(uint32_t idx) { return g_engine.SurveyPlanet(idx) ? 0 : -1; }
+const uint8_t* orbiter_planet_charted() {
+    return reinterpret_cast<const uint8_t*>(g_engine.GetState().planet_charted);
+}
+int32_t orbiter_star_type() { return g_engine.GetState().star_type; }
 const double* orbiter_asteroid_y() { return g_engine.GetState().asteroid_y; }
 
 }  // extern "C"

@@ -26,6 +26,8 @@ void OrbiterSimulationEngine::InitFromConfig() {
         state.planet_radius[i] = p.radius;
         state.planet_population[i] = p.population;
         state.planet_yield_rate[i] = p.yield_rate;
+        state.planet_charted[i] = true;   // home worlds are already charted
+        state.planet_pending_yield[i] = p.yield_rate;
         state.planet_gain_total[i] = 0.0;
         state.planet_flow[i] = 0;
         state.planet_status[i] = WorldStatus::ACTIVE_PRISTINE;
@@ -389,6 +391,52 @@ int32_t OrbiterSimulationEngine::RemoveConduit(uint32_t index) {
     }
     state.conduit_count = last;
     return 0;
+}
+
+
+bool OrbiterSimulationEngine::LoadSystem(int32_t star_type, double star_radius, size_t planet_count, const PlanetConfig* planets) {
+    if (planet_count > MAX_PLANETS || (planet_count > 0 && planets == nullptr)) return false;
+    // Tethers, missiles and debris belong to the old system: drop them before the planets change under them.
+    state.conduit_count = 0;
+    state.missile_count = 0;
+    for (size_t m = 0; m < MAX_MISSILES; ++m) state.missile_active[m] = false;
+    state.asteroid_count = 0;
+    // The new star. A void has no star, so nothing can occlude a tether.
+    state.star_type = star_type;
+    state.star_x = 0.0;
+    state.star_y = 0.0;
+    state.star_radius = star_type == STAR_VOID ? 0.0 : star_radius;
+    state.star_destabilized = false;
+    state.star_supernova_triggered = false;
+    state.star_blast_ticks_left = 0;
+    state.star_collapsed = false;
+    state.planet_count = planet_count;
+    for (size_t i = 0; i < planet_count; ++i) {
+        const PlanetConfig& p = planets[i];
+        state.planet_id[i] = static_cast<uint32_t>(p.id);
+        state.planet_orbit_radius[i] = p.orbit_radius;
+        state.planet_angle[i] = p.angle;
+        state.planet_speed[i] = p.speed;
+        state.planet_radius[i] = p.radius;
+        state.planet_population[i] = p.population;
+        state.planet_yield_rate[i] = 0.0;      // uncharted: no harvest until a probe scans the world
+        state.planet_pending_yield[i] = p.yield_rate;
+        state.planet_charted[i] = false;
+        state.planet_gain_total[i] = 0.0;
+        state.planet_flow[i] = 0;
+        state.planet_status[i] = WorldStatus::ACTIVE_PRISTINE;
+        state.planet_vortex_ticks_left[i] = 0;
+        state.planet_x[i] = state.star_x + p.orbit_radius * std::cos(p.angle);
+        state.planet_y[i] = state.star_y + p.orbit_radius * std::sin(p.angle);
+    }
+    return true;
+}
+
+bool OrbiterSimulationEngine::SurveyPlanet(uint32_t idx) {
+    if (idx >= state.planet_count || state.planet_charted[idx]) return false;
+    state.planet_charted[idx] = true;
+    state.planet_yield_rate[idx] = state.planet_pending_yield[idx];
+    return true;
 }
 
 } // namespace orbiter

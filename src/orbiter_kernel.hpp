@@ -39,6 +39,27 @@ enum class WeaponClass : uint8_t {
     SINGULARITY_TORPEDO = 3,
 };
 
+// Star types a generated sector can open with. A void has no star, so it casts no occlusion shadow.
+constexpr int32_t STAR_SOL = 0;
+constexpr int32_t STAR_BLACK_HOLE = 1;
+constexpr int32_t STAR_PULSAR = 2;
+constexpr int32_t STAR_BLUE_HYPERGIANT = 3;
+constexpr int32_t STAR_VOID = 4;
+constexpr int32_t STAR_RED_GIANT = 5;
+constexpr int32_t STAR_WHITE_DWARF = 6;
+
+// One world of a generated system, as the game passes it to LoadSystem. Every field is a double so the WASM
+// bridge can hand over an array of them as a flat Float64Array (seven values per world).
+struct PlanetConfig {
+    double id;             // the game's stable planet index
+    double orbit_radius;
+    double angle;          // radians at tick 0
+    double speed;          // radians per tick
+    double radius;
+    double population;
+    double yield_rate;     // harvest per second once the world is surveyed; 0 until then
+};
+
 struct StellarSystemState {
     double star_x{0.0};
     double star_y{0.0};
@@ -48,6 +69,7 @@ struct StellarSystemState {
     bool star_supernova_triggered{false};
     uint32_t star_blast_ticks_left{0};   // stage 1: supernova ring
     bool star_collapsed{false};          // stage 2: black hole, pulls planets inward
+    int32_t star_type{STAR_SOL};
 
     size_t planet_count{0};
     uint32_t planet_id[MAX_PLANETS];
@@ -64,6 +86,8 @@ struct StellarSystemState {
     double credit_total{0.0};                // credits earned since reset        // 0 = not siphoned this tick, 1 = flowing, 3 = harmonic surge
     WorldStatus planet_status[MAX_PLANETS];
     uint32_t planet_vortex_ticks_left[MAX_PLANETS];  // singularity vortex pull
+    bool planet_charted[MAX_PLANETS];                // false until a probe scans the world
+    double planet_pending_yield[MAX_PLANETS];        // harvest rate revealed by the survey
 
     size_t conduit_count{0};
     uint32_t conduit_source[MAX_CONDUITS];
@@ -137,6 +161,13 @@ public:
     void SetConduitMaxLength(uint32_t index, double max_length);
     void UpdateStar();
     void RunBenchmark(uint64_t total_ticks);
+
+    // Rehydrates the kernel with a generated system. Clears tethers, missiles, debris and star events, then replaces
+    // the planet arrays. Every world starts uncharted with zero harvest. Returns false, changing nothing, if
+    // planet_count exceeds MAX_PLANETS.
+    bool LoadSystem(int32_t star_type, double star_radius, size_t planet_count, const PlanetConfig* planets);
+    // Charts an uncharted world and starts its harvest. Returns false for an unknown or already charted world.
+    bool SurveyPlanet(uint32_t idx);
 
     uint64_t tick() const { return current_tick; }
     const StellarSystemState& GetState() const { return state; }

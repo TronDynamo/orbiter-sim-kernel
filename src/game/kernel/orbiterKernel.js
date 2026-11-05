@@ -17,6 +17,8 @@ export const WEAPON = { ICBM: 0, CRACKER_DRILL: 1, STARKILLER: 2, SINGULARITY_TO
 export const CONDUIT_ERR = { BAD_PLANET: -1, DUPLICATE: -2, TOO_LONG: -3, OCCLUDED: -4, FULL: -5 };
 // Mirrors CONDUIT_RULES in config/planets.js: player conduits snap past maxLength and turn amber from amberLength.
 export const CONDUIT_RULES = { maxLength: 650, amberLength: 455 };
+// Mirrors STAR_* in src/orbiter_kernel.hpp: the star types a generated sector can open with.
+export const STAR_TYPE = { SOL: 0, BLACK_HOLE: 1, PULSAR: 2, BLUE_HYPERGIANT: 3, VOID: 4, RED_GIANT: 5, WHITE_DWARF: 6 };
 
 // Vite will not import files from public/ as modules in dev, so the module is fetched and imported
 // through a blob URL. The WebAssembly file is located explicitly, so this works in dev and in builds.
@@ -71,6 +73,9 @@ export class OrbiterKernel {
       // Planet index each missile homes on; -1 means the central star.
       target: new Int32Array(m.HEAPU8.buffer, m._orbiter_missile_target(), MAX.missiles),
     };
+    this.loadPtr = m._orbiter_load_buffer();
+    this.loadBuf = f64(this.loadPtr, MAX.planets * 7);
+    this.charted = u8(m._orbiter_planet_charted(), MAX.planets);
     this.asteroids = {
       x: f64(m._orbiter_asteroid_x(), MAX.asteroids),
       y: f64(m._orbiter_asteroid_y(), MAX.asteroids),
@@ -114,6 +119,32 @@ export class OrbiterKernel {
     this._record({ op: "max", index, value });
   }
 
+  // Rehydrates the kernel with a generated system: tethers, missiles and debris are cleared and the worlds are
+  // replaced. Each world is {orbitRadius, angle, speed, radius, population, yieldRate}; all start uncharted.
+  // Recorded in the log, so a save replays the swap at the same tick.
+  loadSystem(system) {
+    const op = { op: "load", starType: system.starType, starRadius: system.starRadius, planets: system.planets.map((p) => ({ orbitRadius: p.orbitRadius, angle: p.angle, speed: p.speed, radius: p.radius, population: p.population, yieldRate: p.yieldRate })) };
+    if (op.planets.length > MAX.planets) return -1;
+    this._record(op);
+    return this._applyLoad(op);
+  }
+  _applyLoad(op) {
+    const n = op.planets.length;
+    op.planets.forEach((p, i) => {
+      const b = this.loadBuf, o = i * 7;
+      b[o] = i; b[o + 1] = p.orbitRadius; b[o + 2] = p.angle; b[o + 3] = p.speed;
+      b[o + 4] = p.radius; b[o + 5] = p.population; b[o + 6] = p.yieldRate;
+    });
+    return this.m._orbiter_load_system(op.starType, op.starRadius, n, this.loadPtr);
+  }
+  // Charts an uncharted world, starting its harvest. Returns 0, or -1 for an unknown or charted world.
+  surveyPlanet(index) {
+    const r = this.m._orbiter_survey_planet(index);
+    if (r === 0) this._record({ op: "survey", index });
+    return r;
+  }
+  isCharted(index) { return this.charted[index] === 1; }
+
   _record(op) { this.log.push({ t: this.tickCount, ...op }); }
   _applyRaw(op) {
     switch (op.op) {
@@ -121,6 +152,8 @@ export class OrbiterKernel {
       case "remove": this.m._orbiter_conduit_remove(op.index); break;
       case "max": this.m._orbiter_conduit_set_max_length(op.index, op.value); break;
       case "launch": this.m._orbiter_launch(op.type, op.x, op.y, op.target); break;
+      case "load": this._applyLoad(op); break;
+      case "survey": this.m._orbiter_survey_planet(op.index); break;
       default: throw new Error(`unknown kernel op ${op.op}`);
     }
   }

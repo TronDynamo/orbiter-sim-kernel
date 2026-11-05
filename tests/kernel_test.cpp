@@ -227,5 +227,33 @@ int main() {
     }
 
     std::printf("%s (%d failures)\n", failures ? "FAILED" : "PASSED", failures);
+    {
+        // A generated system replaces the old one: tethers and missiles go, and every world starts uncharted.
+        OrbiterSimulationEngine e;
+        e.AddConduit(0, 1);
+        PlanetConfig sys[3] = {{1, 120, 0.3, 0.01, 10, 5e6, 2.5}, {2, 180, 1.1, 0.008, 9, 2e6, 1.5}, {3, 260, 2.0, 0.005, 12, 9e6, 4.0}};
+        CHECK(e.LoadSystem(STAR_PULSAR, 12.0, 3, sys), "a three-world system loads");
+        const StellarSystemState& u = e.GetState();
+        CHECK(u.planet_count == 3, "the new planet count is in place");
+        CHECK(u.conduit_count == 0, "the old tethers are cleared");
+        CHECK(u.star_type == STAR_PULSAR && u.star_radius == 12.0, "the pulsar's radius is loaded");
+        CHECK(!u.planet_charted[0] && u.planet_yield_rate[0] == 0.0, "new worlds start uncharted with no harvest");
+        CHECK(std::abs(u.planet_x[1] - 180.0 * std::cos(1.1)) < 1e-9, "positions come from orbit radius and angle");
+        for (int i = 0; i < 600; ++i) e.UpdateTick();
+        CHECK(e.GetState().planet_gain_total[0] == 0.0, "an uncharted world yields nothing over ten seconds");
+        CHECK(e.SurveyPlanet(0) && u.planet_yield_rate[0] == 2.5, "a survey reveals the harvest rate");
+        CHECK(!e.SurveyPlanet(0), "a charted world cannot be surveyed twice");
+        CHECK(!e.SurveyPlanet(7), "an unknown world cannot be surveyed");
+        CHECK(!e.LoadSystem(STAR_SOL, 45.0, MAX_PLANETS + 1, sys), "more worlds than the kernel holds are refused");
+        CHECK(e.GetState().planet_count == 3, "a refused load changes nothing");
+    }
+    {
+        // A void has no star, so its radius is zero and nothing is occluded.
+        OrbiterSimulationEngine e;
+        PlanetConfig one[1] = {{1, 120, 0.0, 0.01, 10, 1e6, 1.0}};
+        CHECK(e.LoadSystem(STAR_VOID, 50.0, 1, one), "a void system loads");
+        CHECK(e.GetState().star_radius == 0.0, "a void has no star radius");
+    }
+
     return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }

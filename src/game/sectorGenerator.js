@@ -1,10 +1,10 @@
 // sectorGenerator.js — deterministic seeded sector generator, Orbiter.
-// No external procedural-generator file named b81e35e exists in this
-// workspace, so "b81e35e" is treated here as the deterministic seed, not
-// as a file to import. Same seed -> same sectors, same planet order.
+// Sector codes (SECTOR-NNN or SECTOR-NNN-WORD) decide each sector. Same code, same sector, same planet order.
 // No dependencies, no DOM, so it can be tested headlessly in Node.
 
-export const GENERATOR_SEED = "b81e35e";
+// Sector codes read SECTOR-NNN or SECTOR-NNN-WORD (e.g. SECTOR-082-PULSAR, SECTOR-909-BLACKHOLE). The number and the
+// word decide the sector: its star, its hazards and how many planets it has.
+export const GENERATOR_SEED = "SECTOR-001";
 
 // Small deterministic hash of a string -> uint32.
 export function hashSeed(str) {
@@ -119,5 +119,44 @@ export function publicSector(sector) {
       biome: p.surveyed ? p.biome : null,
       multiplier: p.surveyed ? p.multiplier : null,
     })),
+  };
+}
+
+// Star anchor by the word after the number in a sector code. Missing or unknown words mean a Sol-type star.
+const ANCHOR_BY_WORD = {
+  PULSAR: {anchorType: "pulsar", starType: "Pulsar", hazards: ["Extreme Hazard", "Rotating beam spikes", "Extreme radiation"]},
+  VOID: {anchorType: "void", starType: "Starless Drift", hazards: ["Starless Drift", "Deep Fog", "Low solar power"]},
+  HYPER: {anchorType: "blue_hypergiant", starType: "Blue Supergiant", hazards: ["Scorched Worlds", "Intense stellar wind"]},
+  BLACKHOLE: {anchorType: "black_hole", starType: "Singularity", hazards: ["Event horizon", "Inward gravitational drift"]},
+  RED: {anchorType: "red_giant", starType: "Red Supergiant", hazards: ["Coronal flares", "Tethers within orbit 2 incinerated"]},
+  DWARF: {anchorType: "white_dwarf", starType: "White Dwarf", hazards: ["Low solar power", "Geothermal reliance"]},
+};
+const SOL_ANCHOR = {anchorType: "sol", starType: "Yellow Sol", hazards: ["Standard occlusion"]};
+
+// Reads a sector code. Returns {code, number, word} or null when the code does not match SECTOR-NNN[-WORD].
+export function parseSectorCode(code) {
+  const m = /^SECTOR-(\d{3})(?:-([A-Z]+))?$/.exec(String(code ?? "").trim().toUpperCase());
+  if (!m) return null;
+  return {code: m[0], number: Number(m[1]), word: m[2] ?? ""};
+}
+
+// A sector built from its code alone: the star and hazards come from the anchor word, and the planet count
+// from the number (3 to 6). The same code always gives the same sector.
+export function sectorFromCode(code, seed = GENERATOR_SEED) {
+  const parsed = parseSectorCode(code);
+  if (!parsed) throw new Error(`Bad sector code: ${code}`);
+  const anchor = ANCHOR_BY_WORD[parsed.word] ?? SOL_ANCHOR;
+  const planetCount = 3 + (parsed.number % 4);
+  const rng = makeRng(`${seed}:${parsed.code}:code`);
+  return {
+    id: parsed.code,
+    name: parsed.code,
+    starType: anchor.starType,
+    anchorType: anchor.anchorType,
+    planetCount,
+    hazards: [...anchor.hazards],
+    rewards: [],
+    description: `${anchor.starType}, ${anchor.hazards[0]}`,
+    planets: makePlanets(parsed.code, planetCount, rng),
   };
 }
