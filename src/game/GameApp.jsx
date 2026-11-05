@@ -29,6 +29,8 @@ import {stepFleet, sendShip, shipPosition, interceptAt, depotPos, MAX_PROPELLANT
 import {Icon, drawArk, drawRelay} from "./icons.jsx";
 import {Academy} from "./Academy.jsx";
 import {drawPseudo3DShip, sunLocal, emitPlume, updatePlumes, drawPlumes} from "./pseudo3d.js";
+import {JUMP_GATE_COST, JUMP_GATE_BEACON_ORBIT_RADIUS, openStarchart, initiateJump, advanceWarp} from "./jumpGate.js";
+import {drawAnchor} from "./anchors.js";
 import {HudChip, HudMeter} from "./hud.jsx";
 import {ShipPreview} from "./ShipPreview.jsx";
 
@@ -163,6 +165,9 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       if (e.button !== 0) return;
       const P = positions(); if (!P) return;
       const p = toWorld(e);
+      if (st.current.jumpGate?.built && !s0.mode && !s0.depotPlace && Math.abs(Math.hypot(p.x, p.y) - JUMP_GATE_BEACON_ORBIT_RADIUS) < 14) {
+        u.current.starchart = true; refresh(); return;
+      }
       if (s0.depotPlace) {
         const need = shortfall(st.current, DEPOT_COST);
         if (need) { say(`Fuel depot needs ${need}.`); refresh(); return; }
@@ -468,6 +473,23 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         }
       }
 
+      // Jump Gate beacon ring and the anchor of a jumped-to sector
+      const gate = s.jumpGate;
+      if (gate?.built) {
+        const c = toS({x: 0, y: 0});
+        const rr = Math.abs(toS({x: JUMP_GATE_BEACON_ORBIT_RADIUS, y: 0}).x - c.x);
+        ctx.strokeStyle = "rgba(0,240,255,0.7)"; ctx.lineWidth = 1.5; ctx.setLineDash([6, 6]);
+        ctx.beginPath(); ctx.arc(c.x, c.y, rr, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+        const bx = c.x + rr, by = c.y;
+        ctx.fillStyle = "#00f0ff"; ctx.shadowColor = "#00f0ff"; ctx.shadowBlur = 10;
+        ctx.beginPath(); ctx.arc(bx, by, 5, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
+      }
+      if (gate?.currentSector && gate.currentSector.anchorType && gate.currentSector.anchorType !== "sol") {
+        const c = toS({x: 0, y: 0});
+        drawAnchor(ctx, gate.currentSector.anchorType, c.x, c.y, now / 1000);
+        ctx.font = "10px 'JetBrains Mono', monospace"; ctx.fillStyle = "#e2e8f0"; ctx.textAlign = "center";
+        ctx.fillText(gate.currentSector.name, c.x, c.y + 96);
+      }
       // uncharted worlds: label the ones no probe has scanned yet
       for (const id of ["thalassa", "aeros", "kryos"]) {
         if ((s.surveyed ?? {})[id] || !P[id]) continue;
@@ -505,6 +527,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
     };
 
     let fleetTick = -1, prevP = {};
+    let warpT = performance.now();
     let frames = 0, fpsT = performance.now(), prevStatus = null, lastAutosave = performance.now();
     const loop = (now) => {
       frames += 1;
@@ -521,6 +544,11 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
             const vel = {};
             for (const id of Object.keys(P)) if (prevP[id]) vel[id] = {x: (P[id].x - prevP[id].x) / dt, y: (P[id].y - prevP[id].y) / dt};
             for (const m of stepFleet(s, P, dt, {conduits: liveConduits(), velocity: vel})) say(m);
+            if (s.jumpGate?.warp?.active) {
+              advanceWarp(s.jumpGate, Math.max(0, (now - warpT) / 1000));
+              if (!s.jumpGate.warp.active) say(`Arrived in ${s.jumpGate.currentSector.name}. Fleet, research and treasury came with you.`, true);
+            }
+            warpT = now;
             if (u.current.deployRelay) {
               u.current.deployRelay = false;
               const tender = s.fleet.find((x) => x.id === u.current.selected);
@@ -760,6 +788,23 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
     u.current.msg = `Targeting ${W.name}: click ${W.target === "core" ? "Sol Core" : "a world"}. Esc cancels.`;
     refresh();
   }
+  function gateOf() { return (st.current.jumpGate ??= {built: false, beacon: null, currentSector: null, warp: {active: false, phase: "idle", progress: 0, destination: null}}); }
+  function buildGate() {
+    const g = gateOf();
+    if (g.built) return flash("The Stellar Jump Gate is already online.");
+    const need = shortfall(st.current, JUMP_GATE_COST);
+    if (need) return flash(`Jump gate needs ${need}.`);
+    for (const [k, v] of Object.entries(JUMP_GATE_COST)) st.current[k] -= v;
+    g.built = true; g.beacon = {orbitRadius: JUMP_GATE_BEACON_ORBIT_RADIUS};
+    flash("Stellar Jump Gate online. Click its beacon in the outer orbit.", true);
+    refresh();
+  }
+  function jumpTo(sector) {
+    const r = initiateJump(gateOf(), sector);
+    if (r.ok) { u.current.starchart = false; flash(`Slipstream engaged for ${sector.name}.`, true); }
+    else flash(`Jump refused: ${String(r.reason).replace(/_/g, " ")}.`);
+    refresh();
+  }
   function buildHull(type) { const r = orderShip(st.current, type); u.current.msg = r.msg; refresh(); }
   function setSpeed(v) {
     u.current.speed = v; u.current.paused = false;
@@ -849,6 +894,30 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         </div>
       </footer>
 
+      {u.current.starchart && st.current.jumpGate?.built ? (() => {
+        const sectors = openStarchart(st.current.jumpGate).sectors;
+        return (
+          <div style={{position: "absolute", inset: 0, zIndex: 12, display: "grid", placeItems: "center", background: "rgba(2,6,23,0.6)"}}>
+            <div className="glass" style={{width: 560, maxWidth: "92vw", padding: 18, borderRadius: 14}}>
+              <div style={{display: "flex", justifyContent: "space-between", marginBottom: 8}}><b className="hud-label">Sector Starchart</b><button className="pill zelo" onClick={() => { u.current.starchart = false; refresh(); }}>Close</button></div>
+              {sectors.map((sec) => (
+                <div key={sec.id} style={{borderTop: "1px solid rgba(255,255,255,0.08)", padding: "10px 0"}}>
+                  <div style={{display: "flex", justifyContent: "space-between"}}><b className="mono">{sec.name}</b><span>{sec.planets.length} planets</span></div>
+                  <div style={{fontSize: 12, opacity: 0.85, margin: "3px 0"}}>{sec.starType} · {sec.description}</div>
+                  <div className="ship-badges mono"><span>{sec.hazards.join(" · ")}</span></div>
+                  <button className="pill zelo" style={{marginTop: 6}} onClick={() => jumpTo(sec)}>Initiate Jump</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })() : null}
+      {st.current.jumpGate?.warp?.active ? (
+        <div className="glass" style={{position: "absolute", left: "50%", top: "14%", transform: "translateX(-50%)", zIndex: 13, padding: "10px 16px", borderRadius: 10, minWidth: 260}}>
+          <div className="hud-label" style={{marginBottom: 6}}>SLIPSTREAM</div>
+          <div style={{height: 4, background: "rgba(255,255,255,0.1)", borderRadius: 2}}><div style={{height: 4, width: `${Math.round(st.current.jumpGate.warp.progress * 100)}%`, background: "#00f0ff", borderRadius: 2}} /></div>
+        </div>
+      ) : null}
       {selShip ? (
         <aside className="hud-panel hud-engineering" aria-label="Vessel engineering">
           <div className="hud-kicker mono">VESSEL ENGINEERING · {SHIPS[selShip.type].name.toUpperCase()} #{selShip.id}</div>
@@ -949,6 +1018,12 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
             <div style={{fontSize: 12, opacity: 0.8, margin: "2px 0 4px"}}>Refuels and repairs docked ships. Place in orbit or deep space.</div>
             <div className="ship-badges mono"><span>150 CREDITS</span><span>80 ALLOYS</span><span>60 COOLANT</span></div>
             <button className="pill zelo" disabled={!!shortfall(s, DEPOT_COST)} onClick={() => { u.current.depotPlace = true; flash("Click a world to orbit it, or empty space to hold station."); refresh(); }}>Deploy fuel depot</button>
+          </div>
+          <div style={{borderTop: "1px solid rgba(255,255,255,0.08)", padding: "8px 0", marginTop: 6}}>
+            <div style={{display: "flex", justifyContent: "space-between"}}><b>Stellar Jump Gate</b><span>{st.current.jumpGate?.built ? "Online" : "Offline"}</span></div>
+            <div style={{fontSize: 12, opacity: 0.8, margin: "2px 0 4px"}}>Folds space into a sector of your choice. Fleet, research and treasury come with you.</div>
+            <div className="ship-badges mono"><span>600 CREDITS</span><span>300 ALLOYS</span><span>150 COMPUTE</span></div>
+            <button className="pill zelo" disabled={!!st.current.jumpGate?.built || !!shortfall(s, JUMP_GATE_COST)} onClick={buildGate}>Build Jump Gate</button>
           </div>
         </aside>
       ) : null}
