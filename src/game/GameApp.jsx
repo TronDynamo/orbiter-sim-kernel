@@ -45,6 +45,38 @@ const CONDUIT_MSG = {
 };
 // Which stockpile each world's siphoned output feeds (game data; the kernel only produces the flow).
 // Conduit tone by tension: cyan below 70% of the snap limit, amber to 90%, a pulsing red beyond that.
+// Conduit shape: slack sags at low tension, straightens as it nears the snap limit, and hums past 80%.
+const SNAP_HUM_RATIO = 0.8;
+const conduitPoint = (a, b, ratio, now, t, seed = 0) => {
+  const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1;
+  const nx = -dy / len, ny = dx / len;
+  const slack = Math.max(0, 1 - ratio / SNAP_HUM_RATIO) * 0.1 * len;
+  const sag = 4 * slack * t * (1 - t);
+  const amp = ratio >= SNAP_HUM_RATIO ? 0.8 + 2 * Math.min(1, (ratio - SNAP_HUM_RATIO) / 0.12) : 0;
+  const hum = amp * Math.sin(now / 22 + t * 23 + seed);
+  return {x: a.x + dx * t + nx * (sag + hum), y: a.y + dy * t + ny * (sag + hum)};
+};
+const conduitPath = (ctx, a, b, ratio, now, seed = 0) => {
+  ctx.beginPath();
+  for (let i = 0; i <= 24; i++) {
+    const q = conduitPoint(a, b, ratio, now, i / 24, seed);
+    if (i === 0) ctx.moveTo(q.x, q.y); else ctx.lineTo(q.x, q.y);
+  }
+  ctx.stroke();
+};
+// Packet colour per resource, so the player can read what a line carries at a glance.
+const PULSE_COLOR = {biomass: "#4ade80", cryo: "#7dd3fc", alloys: "#fb923c", compute: "#c4b5fd", credits: "#fde047", fuel: "#f472b6", propellant: "#f97316"};
+// Compressed packets of light travelling source to target; faster and more of them as throughput rises.
+const drawPulses = (ctx, a, b, ratio, now, flow, color, seed) => {
+  const n = Math.min(4, 1 + Math.floor(flow / 40)), speed = 0.2 + Math.min(1, flow / 200) * 0.6;
+  for (let k = 0; k < n; k++) {
+    const u = ((now / 1000) * speed + seed + k / n) % 1;
+    const q = conduitPoint(a, b, ratio, now, u, seed);
+    const g = ctx.createRadialGradient(q.x, q.y, 0, q.x, q.y, 7);
+    g.addColorStop(0, "#ffffff"); g.addColorStop(0.35, color); g.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(q.x, q.y, 7, 0, Math.PI * 2); ctx.fill();
+  }
+};
 const tensionTone = (r, now) => r >= 0.9 ? `rgba(239,68,68,${(0.55 + 0.45 * Math.sin(now / 120)).toFixed(3)})` : r >= 0.7 ? "#f59e0b" : "#38bdf8";
 // Fallback yield for a world with no biome class (should not occur for generated worlds).
 const DEFAULT_YIELD = 6;
@@ -339,9 +371,9 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         const a = toS(P[t.a]), b = toS(P[t.b]), ratio = tensionOf(t, P), col = tensionColor(ratio);
         ctx.strokeStyle = col; ctx.lineWidth = 3;
         ctx.shadowColor = col; ctx.shadowBlur = ratio >= 0.8 ? 14 : 4;
-        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        conduitPath(ctx, a, b, ratio, now, t.a.length);
         ctx.shadowBlur = 0;
-        const m = {x: (a.x + b.x) / 2, y: (a.y + b.y) / 2};
+        const m = conduitPoint(a, b, ratio, now, 0.5);
         ctx.font = "11px system-ui"; ctx.fillStyle = col; ctx.textAlign = "center";
         ctx.fillText(`${Math.round(ratio * 100)}%`, m.x, m.y - 6);
       }
@@ -356,8 +388,16 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           const ratio = len / (kernel.conduits.maxLength[c] || CONDUIT_RULES.maxLength);
           const col = snapped ? "#EF4444" : occluded ? "rgba(148,163,184,0.35)" : tensionTone(ratio, now);
           ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.setLineDash(snapped ? [4, 6] : []);
-          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); ctx.setLineDash([]);
-          const m = {x: (a.x + b.x) / 2, y: (a.y + b.y) / 2};
+          if (snapped) { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+          else conduitPath(ctx, a, b, ratio, now, c);
+          ctx.setLineDash([]);
+          // a live line carries its source world's resource: packets in that resource's colour
+          const flow = kernel.conduits.throughput[c];
+          if (!snapped && !occluded && flow > 0) {
+            const res = resourceFor(sysRef.current, kernel.conduits.source[c]);
+            drawPulses(ctx, a, b, ratio, now, flow, PULSE_COLOR[res] ?? "#e2e8f0", c * 0.37);
+          }
+          const m = snapped ? {x: (a.x + b.x) / 2, y: (a.y + b.y) / 2} : conduitPoint(a, b, ratio, now, 0.5, c);
           ctx.font = "11px system-ui"; ctx.fillStyle = col; ctx.textAlign = "center";
           ctx.fillText(snapped ? "snapped" : occluded ? "in shadow" : ratio >= 0.7 ? `TENSION: ${Math.round(ratio * 100)}%` : `${Math.round(kernel.conduits.throughput[c])} flow · ${Math.round(len)}u`, m.x, m.y - 6);
         }
