@@ -1,5 +1,5 @@
 /* Title screen, ported from the cinematic intro. Every rule is scoped under .intro-root. */
-.intro-root { position: fixed; inset: 0; z-index: 50; background: #030712; color: #f8fafc; overflow: hidden;
+.intro-root { position: fixed; inset: 0; z-index: 50; background: #030712; color: #f8fafc; overflow-x: hidden; overflow-y: auto; -webkit-overflow-scrolling: touch;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; user-select: none; }
 .intro-root .intro-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; pointer-events: none; }
 .intro-root .intro-video-shade { position: absolute; inset: 0; z-index: 0; pointer-events: none;
@@ -61,3 +61,27 @@
 
 .intro-root .intro-start,
 .intro-root .intro-secondary { white-space: nowrap; }
+
+/* Small screens: the title screen scrolls, the background stays fixed, and the menu column keeps its buttons on screen. */
+.intro-root .intro-video, .intro-root .intro-video-shade, .intro-root .intro-canvas, .intro-root .intro-crt,
+.intro-root .intro-warp, .intro-root .intro-modal { position: fixed; }
+.intro-root .intro-hud { height: auto; min-height: 100%; box-sizing: border-box; flex-shrink: 0; }
+.intro-root .intro-buttons { width: min(100%, 520px); max-width: 520px; box-sizing: border-box; }
+.intro-root .intro-buttons > .intro-start,
+.intro-root .intro-buttons > .intro-secondary { flex: 0 0 auto; width: 100%; min-width: 0; white-space: normal; }
+
+/* Landscape phones (short screens): title block on the left, the menu on the right, so the whole screen fits without cropping.
+   If it still does not fit, the root scrolls and the page can be pinch-zoomed. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .intro-root .intro-hud { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; justify-items: center;
+    column-gap: 20px; row-gap: 4px; padding: 12px 24px; }
+  .intro-root .intro-pill, .intro-root .intro-title, .intro-root .intro-sub, .intro-root .intro-lore { grid-column: 1; }
+  .intro-root .intro-title { font-size: clamp(2.2rem, 9vh, 3.5rem); margin-bottom: 0; }
+  .intro-root .intro-sub { font-size: clamp(0.9rem, 4vh, 1.2rem); }
+  .intro-root .intro-lore { font-size: 12px; line-height: 1.45; margin-bottom: 0; max-width: 380px; }
+  .intro-root .intro-buttons { grid-column: 2; grid-row: 1 / span 4; max-width: 340px; gap: 6px !important; }
+  .intro-root .intro-buttons > button { padding: 8px 14px; font-size: 12px; }
+  .intro-root .intro-grid { display: none; }
+  .intro-root .intro-top { top: 10px; left: 16px; right: 16px; }
+}
+
