@@ -36,3 +36,7 @@
 .intro-root .seed-row { display: flex; gap: 8px; align-items: stretch; min-width: 0; }
 .intro-root .seed-row input { flex: 1; min-width: 0; width: 100%; }
 .intro-root .seed-row > button { flex: none; height: auto; min-height: 0; padding: 10px 14px; }
+
+/* Shipyard stat badges: hull, weapons, sub-light speed and fleet power under each card. */
+.ship-badges { display: flex; flex-wrap: wrap; gap: 4px; font-size: 11px; margin: 4px 0 6px; }
+.ship-badges span { border: 1px solid rgba(56,189,248,0.3); border-radius: 6px; padding: 2px 6px; color: #e2e8f0; background: rgba(15,23,42,0.85); }

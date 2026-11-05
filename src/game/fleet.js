@@ -6,7 +6,7 @@ import {SHIPS} from "./ships.js";
 
 export const SHIP_ORBIT = 26;             // low-orbit radius around a world (world units)
 export const ORBIT_RATE = 0.02;           // radians per tick around a world
-export const IMPULSE = {corvette: 2.6, destroyer: 1.8, cruiser: 1.1};  // world units per tick
+export const IMPULSE = Object.fromEntries(Object.entries(SHIPS).map(([k, v]) => [k, v.speed]));  // world units per tick
 export const SURF_MULT = 5;               // conduit surfing speed multiplier
 export const PROPELLANT_PER_TICK = 0.05;  // propellant per tick of impulse burn (placeholder)
 const ARRIVE_PAD = 4;                     // arrival distance beyond the world's radius

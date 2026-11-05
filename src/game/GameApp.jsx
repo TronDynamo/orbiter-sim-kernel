@@ -24,7 +24,7 @@ import {TechWeb} from "./TechWeb.jsx";
 import {SenateChamber} from "./SenateChamber.jsx";
 import {VictoryModal} from "./VictoryModal.jsx";
 import {RULES, newState, snapTethers, network, tick, tryTether, checkTether, cut, tetherAt, tensionOf, tensionColor, build, hitBody, distToTether, orderShip, shortfall, fireWeapon} from "./rules.js";
-import {SHIPS, SHIP_ORDER, COST_LABEL, drawShip, fleetPower} from "./ships.js";
+import {SHIPS, SHIP_ORDER, COST_LABEL, drawShip, fleetPower, FLIGHT_LENGTH} from "./ships.js";
 import {stepFleet, sendShip, shipPosition, interceptAt} from "./fleet.js";
 import {Icon, drawArk, drawRelay} from "./icons.jsx";
 import {Academy} from "./Academy.jsx";
@@ -406,7 +406,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         const tt = now / 1000;
         for (const f of s.fleet) {
           const q = toS(shipPosition(f, P));
-          drawShip(ctx, f.type, q.x, q.y, f.heading ?? 0, {thrust: f.thrust ?? 0, t: tt});
+          drawShip(ctx, f.type, q.x, q.y, f.heading ?? 0, {thrust: f.thrust ?? 0, t: tt, length: FLIGHT_LENGTH[f.type]});
           if (f.id === s0.selected) {
             ctx.strokeStyle = "#38bdf8"; ctx.lineWidth = 1.2; ctx.setLineDash([3, 4]);
             ctx.beginPath(); ctx.arc(q.x, q.y, 18, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
@@ -810,7 +810,8 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
               <div key={id} style={{borderTop: "1px solid rgba(255,255,255,0.08)", padding: "8px 0"}}>
                 <ShipPreview type={id} />
                 <div style={{display: "flex", justifyContent: "space-between"}}><b>{ship.name}</b><span>{ship.seconds}s build</span></div>
-                <div style={{fontSize: 12, opacity: 0.8, margin: "2px 0 4px"}}>{ship.blurb} · power {ship.power}</div>
+                <div style={{fontSize: 12, opacity: 0.8, margin: "2px 0 4px"}}>{ship.blurb}</div>
+                <div className="ship-badges mono"><span>HULL {ship.hull}</span><span>{ship.weapons}</span><span>SPEED {ship.speed}</span><span>POWER {ship.power}</span></div>
                 <div style={{fontSize: 12, marginBottom: 6}}>{Object.entries(ship.cost).map(([k, v]) => `${v} ${COST_LABEL[k]}`).join(" · ")}</div>
                 <button className="pill zelo" disabled={!!short} title={short ? `Short: ${short}` : `Build ${ship.name}`}
                   onClick={() => buildHull(id)} style={{opacity: short ? 0.45 : 1, cursor: short ? "not-allowed" : "pointer"}}>Build</button>

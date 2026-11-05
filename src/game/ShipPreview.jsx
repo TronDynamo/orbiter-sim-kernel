@@ -1,17 +1,40 @@
-// A small static view of a hull for the shipyard cards, drawn with the same routine as the map.
+// A shipyard card's preview bay: the hull drawn large, idling with a slow float and a small thrust plume.
 import {useEffect, useRef} from "react";
-import {drawShip, HULL_SIZE} from "./ships.js";
+import {drawShip} from "./ships.js";
 
-const PREVIEW_SCALE = {corvette: 3.4, destroyer: 2.6, cruiser: 1.9};
+const PREVIEW_FIT = {corvette: 0.8, destroyer: 0.9, cruiser: 0.95};
 
 export function ShipPreview({type}) {
   const ref = useRef(null);
   useEffect(() => {
-    const c = ref.current, ctx = c.getContext("2d"), dpr = Math.min(window.devicePixelRatio || 1, 2);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, c.clientWidth, c.clientHeight);
-    drawShip(ctx, type, c.clientWidth / 2, c.clientHeight / 2, 0, {thrust: 0.5, t: 0, scale: PREVIEW_SCALE[type] ?? 2});
+    const c = ref.current;
+    if (!c) return undefined;
+    const ctx = c.getContext("2d");
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    let size = {w: 0, h: 0};
+    const fit = () => {
+      size = {w: c.clientWidth, h: c.clientHeight};
+      c.width = Math.round(size.w * dpr); c.height = Math.round(size.h * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    fit();
+    const t0 = performance.now();
+    let raf = 0;
+    const frame = (now) => {
+      const {w, h} = size, t = (now - t0) / 1000;
+      ctx.clearRect(0, 0, w, h);
+      const length = Math.min(w * 0.72, h * 1.1) * (PREVIEW_FIT[type] ?? 0.9);
+      const float = Math.sin(t * 1.6) * 3;
+      drawShip(ctx, type, w / 2, h / 2 + float, 0, {thrust: 0.55, t, length});
+      raf = requestAnimationFrame(frame);
+    };
+    raf = requestAnimationFrame(frame);
+    window.addEventListener("resize", fit);
+    return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", fit); };
   }, [type]);
-  const size = HULL_SIZE[type] ?? {length: 20, beam: 12};
-  return <canvas ref={ref} className="ship-preview" style={{width: "100%", height: Math.max(64, size.beam * 2.4) + "px"}} aria-label={type} />;
+  return (
+    <div style={{background: "rgba(2,6,23,0.9)", border: "1px solid rgba(56,189,248,0.2)", borderRadius: 12, height: 96, margin: "6px 0", overflow: "hidden"}}>
+      <canvas ref={ref} aria-label={type} style={{display: "block", width: "100%", height: "100%"}} />
+    </div>
+  );
 }
