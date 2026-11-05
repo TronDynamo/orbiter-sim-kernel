@@ -13,7 +13,11 @@
 * { box-sizing: border-box; }
 html, body, #root { margin: 0; height: 100%; background: var(--bg); color: var(--text); overflow: hidden; }
 body { font-family: var(--sans); -webkit-font-smoothing: antialiased; }
-button { font: inherit; color: inherit; cursor: pointer; }
+/* Default button: dark surface and light text. Without this, a bare button gets the browser's light grey
+   background with the inherited near-white text, which is unreadable. Specific button styles override this. */
+button { font: inherit; color: #e2e8f0; background: rgba(15, 23, 42, 0.92); border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 8px; cursor: pointer; }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .app { position: fixed; inset: 0; }
 .stage { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }

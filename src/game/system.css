@@ -112,3 +112,19 @@ body { font-family: Inter, system-ui, sans-serif; }
   background: repeating-linear-gradient(0deg, rgba(0,0,0,0.28) 0 1px, transparent 1px 3px); }
 .hud-pip.noisy { filter: contrast(1.25) saturate(0.6) hue-rotate(-8deg); }
 .hud-pip-frame[hidden] { display: none; }
+
+/* Flight Academy briefing: a readable card with dark buttons and a clear primary action. */
+.academy-box { width: min(92vw, 440px); max-height: calc(100dvh - 32px); overflow-y: auto; padding: 22px; display: flex; flex-direction: column; gap: 12px; text-align: left; }
+.academy-kicker { font-size: 11px; letter-spacing: 0.14em; color: #7dd3fc; }
+.academy-title { margin: 0; font-size: 22px; color: #f8fafc; }
+.academy-body { margin: 0; font-size: 14px; line-height: 1.55; color: #cbd5e1; }
+.academy-dots { display: flex; gap: 6px; }
+.academy-dots span { width: 8px; height: 8px; border-radius: 50%; background: rgba(148, 163, 184, 0.35); }
+.academy-dots span.on { background: #38bdf8; box-shadow: 0 0 8px #38bdf8; }
+.academy-nav { display: flex; gap: 10px; }
+.academy-btn { flex: 1; padding: 11px 14px; font-weight: 700; letter-spacing: 0.06em; }
+.academy-btn:disabled { opacity: 0.4; }
+.academy-btn.primary { background: linear-gradient(135deg, #06b6d4, #2563eb); color: #030712; border-color: #7dd3fc; }
+.academy-skip { width: 100%; padding: 10px 14px; background: transparent; color: #94a3b8; border-color: rgba(148, 163, 184, 0.3); }
+.academy-skip:hover { color: #e2e8f0; }
+
