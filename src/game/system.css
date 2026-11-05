@@ -19,3 +19,20 @@
 
 /* The title menu stacks its buttons at natural height rather than sharing the screen height. */
 .intro-root .intro-buttons > button { flex: 0 0 auto; height: auto; min-height: 46px; padding: 12px 18px; }
+
+/* New Campaign: each difficulty is a compact row that starts the campaign; text wraps on phones. */
+.intro-root .intro-box { max-height: 88vh; overflow-y: auto; }
+.intro-root .difficulty-option {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+  width: 100%; height: auto; min-height: 0; padding: 12px 14px; text-align: left;
+  white-space: normal; text-transform: none; letter-spacing: normal; font-size: 14px;
+}
+.intro-root .difficulty-option b { letter-spacing: 0.08em; text-transform: uppercase; }
+.intro-root .difficulty-option span { font-size: 12px; opacity: 0.85; font-weight: 400; line-height: 1.4; }
+.intro-root .difficulty-option:disabled { opacity: 0.45; }
+.intro-root .difficulty-option { background: #0f1a2e; border: 1px solid #1e3a5f; color: #e2e8f0; }
+.intro-root .difficulty-option b { color: #7dd3fc; }
+.intro-root .difficulty-option:hover:not(:disabled) { border-color: #38bdf8; background: #132340; }
+.intro-root .seed-row { display: flex; gap: 8px; align-items: stretch; min-width: 0; }
+.intro-root .seed-row input { flex: 1; min-width: 0; width: 100%; }
+.intro-root .seed-row > button { flex: none; height: auto; min-height: 0; padding: 10px 14px; }

@@ -26,7 +26,6 @@ export function IntroScreen({kernelStatus, onStart, onLoad}) {
   const [panel, setPanel] = useState(null); // null | "new" | "load" | "settings" | "roster" | "credits"
   const [, setSaveTick] = useState(0);      // re-reads the save list after a delete
   const [seedText, setSeedText] = useState("");
-  const [difficulty, setDifficulty] = useState("commander");
   if (!audioRef.current) audioRef.current = createAudio();
   const kernelOnline = kernelStatus === "ONLINE";
   const saves = listSaves();
@@ -105,7 +104,7 @@ export function IntroScreen({kernelStatus, onStart, onLoad}) {
     setPanel(null);
     setTimeout(next, 1400);
   };
-  const beginNew = () => {
+  const beginNew = (difficulty) => {
     const seed = seedText.trim() || randomSeed();
     go(() => onStart({seed, difficulty}));
   };
@@ -186,19 +185,19 @@ export function IntroScreen({kernelStatus, onStart, onLoad}) {
             {panel === "new" ? (
               <div style={{display: "flex", flexDirection: "column", gap: 12, padding: 4}}>
                 <div style={{fontSize: 13, opacity: 0.85}}>The seed sets where the worlds start in their orbits and names the sector. Leave it blank for a random sector.</div>
-                <div style={{display: "flex", gap: 8}}>
+                <div className="seed-row">
                   <input value={seedText} onChange={(e) => setSeedText(e.target.value.slice(0, 24))} placeholder="random"
                     style={{flex: 1, padding: "8px 10px", borderRadius: 8, border: "1px solid #334155", background: "#0b1220", color: "#e2e8f0", fontFamily: "monospace"}} />
                   <button className="intro-secondary" onClick={() => setSeedText(randomSeed())}>Roll</button>
                 </div>
                 {seedPreview ? <div className="mono" style={{fontSize: 12, color: "#64748b"}}>Sector: {seedPreview}</div> : null}
+                <div style={{fontSize: 12, opacity: 0.8}}>Pick a difficulty to start the campaign:</div>
                 {Object.entries(DIFFICULTIES).map(([key, d]) => (
-                  <button key={key} className={difficulty === key ? "intro-start" : "intro-secondary"} onClick={() => setDifficulty(key)}
-                    style={{textAlign: "left"}}>
-                    <b>{d.label}</b> <span style={{opacity: 0.85, fontSize: 12}}>· {d.blurb}</span>
+                  <button key={key} className="difficulty-option" onClick={() => beginNew(key)} disabled={!kernelOnline}>
+                    <b>{d.label}</b>
+                    <span>{d.blurb}</span>
                   </button>
                 ))}
-                <button className="intro-start" onClick={beginNew} disabled={!kernelOnline}>Begin</button>
               </div>
             ) : null}
 
