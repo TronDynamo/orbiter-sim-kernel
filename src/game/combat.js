@@ -44,7 +44,10 @@ export function nextMount(tech, cur) {
 }
 
 export function newCombat() {
-  return {raiders: [], shots: [], fx: [], cool: {}, weld: [], raidT: RAID_INTERVAL, nextId: 1};
+  // activeT: seconds of combat left to show the PIP (set on every shot or hit); focus: where the fight is;
+  // noise: 0..1 heat of the PIP's CRT distortion, raised by hits on allied hulls and decaying
+  return {raiders: [], shots: [], fx: [], cool: {}, weld: [], raidT: RAID_INTERVAL, nextId: 1,
+    activeT: 0, focus: null, noise: 0};
 }
 
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -97,8 +100,11 @@ export function weldSparks(state, x, y, rand = Math.random) {
   spawnSparks(state, x, y, 14, rand() < 0.5 ? "#fef3c7" : "#fbbf24", rand, 120);
 }
 
+const PIP_HOLD = 4;   // seconds the PIP stays open after the last shot or hit
+
 function fire(state, key, mount, from, target, side, rand) {
   const def = MOUNTS[mount];
+  state.activeT = PIP_HOLD; state.focus = {x: from.x, y: from.y};
   const d = dist(from, target) || 1;
   const sp = def.speed;
   state.shots.push({
@@ -123,6 +129,9 @@ export function stepCombat(state, env) {
     const n = spawnRaid(state, env.edgeR ?? 300, rand);
     events.push({kind: "raid", n, msg: `[DEV] ${n} raider${n > 1 ? "s" : ""} spawned.`});
   }
+
+  state.activeT = Math.max(0, state.activeT - dt);
+  state.noise = Math.max(0, state.noise - dt * 1.5);
 
   // welding sparks for ships patched since the last step (queued by the UI, placed here with the positions)
   for (const id of state.weld.splice(0)) {
@@ -193,6 +202,8 @@ export function stepCombat(state, env) {
       for (const e of enemies) if (segDist(e, from, sh) <= sh.radius) applyHit(e, sh.damage);
       spawnSparks(state, sh.x, sh.y, 10, sh.color, rand, 260);
     } else {
+      state.activeT = PIP_HOLD; state.focus = {x: hit.x, y: hit.y};
+      if (hit._f) state.noise = 1;
       applyHit(hit, sh.damage);
       spawnSparks(state, hit.x, hit.y, 8, sh.color, rand, 180);
       spawnShards(state, hit.x, hit.y, 1, 5, rand, 60);

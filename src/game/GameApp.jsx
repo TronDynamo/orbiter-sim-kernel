@@ -32,6 +32,8 @@ import {Academy} from "./Academy.jsx";
 import {drawPseudo3DShip, sunLocal, emitPlume, updatePlumes, drawPlumes} from "./pseudo3d.js";
 import {shadowAt, drawUmbra, drawLensing, drawDebrisBelt} from "./stellarFx.js";
 import {newCombat, stepCombat, weldSparks, mountsOf, MOUNTS, SWAP_COST, nextMount} from "./combat.js";
+// Tactical PIP: a close-up of the fight, drawn at this magnification in a 300x190 viewport.
+const PIP_W = 300, PIP_H = 190, PIP_ZOOM = 3.2;
 import {JUMP_GATE_COST, JUMP_GATE_BEACON_ORBIT_RADIUS, openStarchart, initiateJump, advanceWarp} from "./jumpGate.js";
 import {drawAnchor} from "./anchors.js";
 import {HudChip, HudMeter} from "./hud.jsx";
@@ -103,6 +105,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
   const yieldOf = (id) => PLANET_DEFS.find((d) => d.key === id)?.yield ?? sysRef.current.planets.find((p) => p.id === id)?.yield ?? DEFAULT_YIELD;
   const st = useRef(newState());
   const combatRef = useRef(newCombat());   // raiders, shots and debris; hulls and mounts live on the fleet
+  const pipRef = useRef(null);             // tactical action picture-in-picture
   const u = useRef({drag: null, mode: null, msg: START_MSG, msgWin: false, paused: false, speed: 1, tick: 0, shipyard: false, armory: false, comms: false, governor: null, tech: false, senate: false, arm: null, hover: null, pointer: null, menu: false, confirm: null, autosaveAt: -1e9, fps: 0, selected: null, briefing: !!session.tutorial, depotPlace: false});
   const [ui, setUi] = useState({...u.current});
   const refresh = () => setUi({...u.current});
@@ -360,6 +363,49 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
     ov.addEventListener("pointermove", onMove);
     ov.addEventListener("pointerup", onUp);
     ov.addEventListener("pointercancel", onUp);
+
+    // Tactical PIP: zoomed out during a fight, a viewport centred on the action, closing 4 s after it ends
+    const drawPip = (P, now) => {
+      const pip = pipRef.current, cb = combatRef.current, s = st.current;
+      if (!pip) return;
+      const show = cb.activeT > 0 && cb.focus && scene.zoomUser < 1.0 && !s.won && !s.lost;
+      pip.parentElement.hidden = !show;
+      if (!show) return;
+      const c = pip.getContext("2d"), f = cb.focus, Z = PIP_ZOOM;
+      const T = (p) => ({x: PIP_W / 2 + (p.x - f.x) * Z, y: PIP_H / 2 + (p.y - f.y) * Z});
+      c.setTransform(1, 0, 0, 1, 0, 0);
+      c.fillStyle = "#030712"; c.fillRect(0, 0, pip.width, pip.height);
+      c.setTransform(pip.width / PIP_W, 0, 0, pip.height / PIP_H, 0, 0);
+      // planets: the world the fight is over shows as a glow
+      for (const p of sysRef.current.planets) { const q = P[p.id]; if (!q) continue; const pt = T(q); if (pt.x < -40 || pt.x > PIP_W + 40 || pt.y < -40 || pt.y > PIP_H + 40) continue; c.fillStyle = "rgba(56,189,248,0.25)"; c.beginPath(); c.arc(pt.x, pt.y, Math.max(2, p.r * Z * 0.5), 0, Math.PI * 2); c.fill(); }
+      // allied hulls, with scorch where they have taken damage
+      for (const sh of s.fleet) {
+        const q = T(shipPosition(sh, P));
+        drawPseudo3DShip(c, sh.type, q.x, q.y, sh.theta ?? sh.heading ?? 0, {length: FLIGHT_LENGTH[sh.type] * 1.6, thrust: sh.thrust ?? 0});
+        const max = SHIPS[sh.type].hull, hp = sh.hp ?? max;
+        if (hp < max) { c.fillStyle = `rgba(15,10,5,${(0.3 + 0.4 * (1 - hp / max)).toFixed(3)})`; c.beginPath(); c.arc(q.x + 4, q.y - 3, 4, 0, Math.PI * 2); c.fill(); }
+      }
+      // raiders, shots and debris, drawn with the same look as the map
+      for (const r of cb.raiders) { const q = T(r), a = Math.atan2(r.vy, r.vx); c.save(); c.translate(q.x, q.y); c.rotate(a); c.fillStyle = "#f87171"; c.beginPath(); c.moveTo(8, 0); c.lineTo(-6, -5); c.lineTo(-6, 5); c.closePath(); c.fill(); c.restore(); }
+      for (const sh of cb.shots) {
+        const q = T(sh), back = T({x: sh.x - sh.vx * 0.03, y: sh.y - sh.vy * 0.03});
+        if (sh.kind === "kinetic") { c.strokeStyle = "#e0f2fe"; c.lineWidth = 1.6; c.beginPath(); c.moveTo(back.x, back.y); c.lineTo(q.x, q.y); c.stroke(); }
+        else { c.fillStyle = sh.kind === "plasma" ? "#fb923c" : "#fde68a"; c.beginPath(); c.arc(q.x, q.y, sh.kind === "plasma" ? 4 : 2, 0, Math.PI * 2); c.fill(); }
+      }
+      for (const e of cb.fx) {
+        const q = T(e), a = Math.max(0, e.life / e.max);
+        c.globalAlpha = a; c.fillStyle = e.color;
+        if (e.kind === "spark") c.fillRect(q.x - 1, q.y - 1, 2.4, 2.4);
+        else { c.beginPath(); e.pts.forEach((p, i) => (i ? c.lineTo(q.x + p.x * 1.4, q.y + p.y * 1.4) : c.moveTo(q.x + p.x * 1.4, q.y + p.y * 1.4))); c.closePath(); c.fill(); }
+      }
+      c.globalAlpha = 1;
+      // CRT distortion after heavy hits: noise bars that fade with cb.noise
+      if (cb.noise > 0.02) {
+        c.fillStyle = `rgba(226,232,240,${(0.35 * cb.noise).toFixed(3)})`;
+        for (let i = 0; i < 10; i++) c.fillRect(0, Math.random() * PIP_H, PIP_W, 1 + Math.random() * 2);
+      }
+      pip.classList.toggle("noisy", cb.noise > 0.2);
+    };
 
     const plumeBank = new Map();
     let plumeT = performance.now();
@@ -821,6 +867,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           }
         }
         drawOverlay(P, now);
+        drawPip(P, now);
         s0.tick = Math.floor(gameT);
         if (now - lastUi > 150) { lastUi = now; setUi({...s0}); }
       }
@@ -1122,6 +1169,9 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           <div style={{height: 4, background: "rgba(255,255,255,0.1)", borderRadius: 2}}><div style={{height: 4, width: `${Math.round(st.current.jumpGate.warp.progress * 100)}%`, background: "#00f0ff", borderRadius: 2}} /></div>
         </div>
       ) : null}
+      <div className="hud-pip-frame" aria-hidden="true">
+        <canvas ref={pipRef} className="hud-pip" width={PIP_W * 2} height={PIP_H * 2} style={{width: PIP_W, height: PIP_H}} />
+      </div>
       {selShip ? (
         <aside className="hud-panel hud-engineering" aria-label="Vessel engineering">
           <div className="hud-kicker mono">VESSEL ENGINEERING · {SHIPS[selShip.type].name.toUpperCase()} #{selShip.id}</div>

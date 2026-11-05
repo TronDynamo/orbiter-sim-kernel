@@ -104,3 +104,11 @@ body { font-family: Inter, system-ui, sans-serif; }
 .hud-socket { display: flex; flex-direction: column; gap: 4px; padding: 6px 0 6px 8px; border-left: 2px solid rgba(56, 189, 248, 0.45); }
 .hud-socket-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 11px; }
 .hud-socket .hud-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+/* Tactical PIP: chamfered viewport top-right, CRT scanlines, distortion while the noise is up. */
+.hud-pip-frame { position: absolute; top: 72px; right: 12px; z-index: 7; padding: 2px; background: rgba(56, 189, 248, 0.35);
+  clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px); }
+.hud-pip { display: block; background: #030712; clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px); }
+.hud-pip-frame::after { content: ""; position: absolute; inset: 2px; pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,0.28) 0 1px, transparent 1px 3px); }
+.hud-pip.noisy { filter: contrast(1.25) saturate(0.6) hue-rotate(-8deg); }
+.hud-pip-frame[hidden] { display: none; }

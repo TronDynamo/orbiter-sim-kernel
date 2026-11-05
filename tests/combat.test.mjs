@@ -10,6 +10,23 @@ test("a socket swaps to the next unlocked weapon, cycling, and reports none when
   assert.equal(nextMount({flak: true, lance: true}, "lance"), "coilgun", "wraps back to the always-available Coilgun");
 });
 
+test("the PIP opens on fire, follows the fight, and closes 4 s after it ends", () => {
+  const s = newCombat();
+  s.raiders.push({id: 1, x: 120, y: 0, vx: 0, vy: 0, hp: 40, maxHp: 40, mounts: [], bounty: 0});
+  run(s, [ship(20, "corvette", 0, 0)], 0.05);
+  assert.ok(s.activeT > 0, "open while firing");
+  assert.ok(s.focus, "centred on the fight");
+  run(s, [], 4.5);
+  assert.equal(s.activeT, 0, "closed after the hold");
+});
+
+test("a hit on an allied hull raises the PIP's distortion", () => {
+  const s = newCombat();
+  s.raiders.push({id: 1, x: 40, y: 0, vx: 0, vy: 0, hp: 40, maxHp: 40, mounts: ["lance"], bounty: 0});
+  run(s, [ship(21, "corvette", 0, 0, {hp: 40})], 0.5);
+  assert.ok(s.noise > 0, "an ally hit raises the distortion");
+});
+
 test("a dev raid spawns on demand, even where the ambient timer is off", () => {
   const s = newCombat();
   const ev = stepCombat(s, {dt: 0, fleet: [], planets: [], core: {x: 0, y: 0}, pos, raidNow: true, rand: seeded(9)});
