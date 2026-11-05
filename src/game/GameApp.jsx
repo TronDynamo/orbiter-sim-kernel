@@ -169,8 +169,8 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
 
     const say = (text, win = false) => { s0.msg = text; s0.msgWin = win; };
     const toWorld = (e) => {
-      const r = ov.getBoundingClientRect(), c = scene.sim.c, zb = c[4] * scene.base;
-      return {x: c[2] + (e.clientX - r.left - c[0]) / zb, y: c[3] + (e.clientY - r.top - c[1]) / zb};
+      const r = ov.getBoundingClientRect(), c = scene.sim.c, zb = c[4] * scene.base, pitch = scene.pitch ?? 1;
+      return {x: c[2] + (e.clientX - r.left - c[0]) / zb, y: c[3] + (e.clientY - r.top - c[1]) / (zb * pitch)};
     };
     const positions = () => {
       const sim = scene.sim;
@@ -227,11 +227,14 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
     const touches = new Map();
     let pinch = null;
     const pinchDist = () => { const [a, b] = [...touches.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
+    const pinchCenterY = () => { const [a, b] = [...touches.values()]; return (a.y + b.y) / 2; };
     const onDown = (e) => {
       if (e.button !== 0) return;
+      // Desktop: Shift + drag tilts the camera angle. Left drag still pans.
+      if (e.pointerType !== "touch" && e.shiftKey) { s0.pitchY = e.clientY; ov.setPointerCapture(e.pointerId); return; }
       if (e.pointerType === "touch") {
         touches.set(e.pointerId, {x: e.clientX, y: e.clientY});
-        if (touches.size >= 2) { s0.drag = null; s0.pan = null; pinch = {d: pinchDist()}; return; }
+        if (touches.size >= 2) { s0.drag = null; s0.pan = null; pinch = {d: pinchDist(), cy: pinchCenterY()}; return; }
       }
       if (u.current.msg === START_MSG) { u.current.msg = ""; u.current.msgWin = false; refresh(); }
       const open = u.current;
@@ -325,12 +328,15 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       ov.setPointerCapture(e.pointerId);
     };
     const onMove = (e) => {
+      if (s0.pitchY != null) { const dy = e.clientY - s0.pitchY; s0.pitchY = e.clientY; scene.pitchBy(dy); return; }
       if (e.pointerType === "touch" && touches.has(e.pointerId)) {
         touches.set(e.pointerId, {x: e.clientX, y: e.clientY});
         if (touches.size >= 2 && pinch) {
-          const d = pinchDist();
+          // Pinch zooms; a two-finger vertical drag tilts the camera angle.
+          const d = pinchDist(), cy = pinchCenterY();
           if (pinch.d > 0 && d > 0) scene.zoomBy(d / pinch.d);
-          pinch.d = d;
+          scene.pitchBy(cy - pinch.cy);
+          pinch.d = d; pinch.cy = cy;
           return;
         }
       }
@@ -347,6 +353,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       if (s0.arm) { const P = positions(); s0.hover = P ? hitBody(st.current, P, toWorld(e)) : null; }
     };
     const onUp = (e) => {
+      if (s0.pitchY != null) { s0.pitchY = null; return; }
       if (e?.pointerType === "touch") {
         touches.delete(e.pointerId);
         if (touches.size < 2) pinch = null;

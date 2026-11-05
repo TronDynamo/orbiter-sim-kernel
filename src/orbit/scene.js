@@ -143,6 +143,9 @@ export class OrbitScene {
     this.raf = requestAnimationFrame((t) => this.frame(t));
   }
 
+  // Camera angle: 1 = looking straight down the system; lower values tip the plane toward the viewer.
+  pitchBy(dy) { this.pitch = Math.max(0.35, Math.min(1, (this.pitch ?? 1) + dy * 0.0035)); }
+
   // Phone tilt → tiny parallax wobble (stars drift against the system). Off for prefers-reduced-motion.
   setupTilt() {
     this.tilt = { x: 0, y: 0 }; this.tiltTarget = { x: 0, y: 0 };
@@ -200,9 +203,9 @@ export class OrbitScene {
 
   // Drag the map: move the camera focus by a screen-space delta (px), in world units at the current zoom.
   panBy(px, py) {
-    const c = this.sim.c, z = c[4] * this.base;
+    const c = this.sim.c, z = c[4] * this.base, pitch = this.pitch ?? 1;
     if (!this.pan) this.pan = { x: c[2], y: c[3] };
-    this.pan.x -= px / z; this.pan.y -= py / z;
+    this.pan.x -= px / z; this.pan.y -= py / (z * pitch);
   }
 
   setGalaxy(id) {
@@ -235,7 +238,7 @@ export class OrbitScene {
 
   toScreen(wx, wy) {
     const c = this.sim.c, zb = c[4] * this.base;
-    return { x: c[0] + (wx - c[2]) * zb, y: c[1] + (wy - c[3]) * zb };
+    return { x: c[0] + (wx - c[2]) * zb, y: c[1] + (wy - c[3]) * zb * (this.pitch ?? 1) };
   }
 
   // Place planets at the external positions for this frame: world coords (read by game logic)
@@ -377,7 +380,7 @@ export class OrbitScene {
     const z = this.cam.z * this.base;
     // Kernel positions are circular (x = r cos a, y = r sin a), so their track is a circle (ratio 1).
     // The engine-only view places planets on the tilted ellipse, so its track keeps ORBIT_Y.
-    const ratio = this.kernelOrbits ? 1 : ORBIT_Y;
+    const ratio = (this.kernelOrbits ? 1 : ORBIT_Y) * (this.pitch ?? 1);
     ctx.lineWidth = 1;
     for (const p of g.planets) {
       if (p.hidden) continue;
