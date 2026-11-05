@@ -6,8 +6,8 @@
 //     treasury: { credits, alloys, compute }, // preserved except gate cost
 //     fleet: [...ship objects],              // preserved by reference
 //     currentSector: { id, starType, anchorType, planets: [...] } | null,
-//     jumpGateBuilt: false,
-//     jumpGateBeacon: null,                  // { orbitRadius } once built
+//     built: false,
+//     beacon: null,                  // { orbitRadius } once built
 //     warp: { active, phase, progress, destination } // see advanceWarp
 //   }
 import { generateSectors, GENERATOR_SEED } from "./sectorGenerator.js";
@@ -22,8 +22,8 @@ export function makeInitialState(overrides = {}) {
     treasury: { credits: 0, alloys: 0, compute: 0 },
     fleet: [],
     currentSector: null,
-    jumpGateBuilt: false,
-    jumpGateBeacon: null,
+    built: false,
+    beacon: null,
     warp: { active: false, phase: "idle", progress: 0, destination: null },
     ...overrides,
   };
@@ -40,19 +40,19 @@ export function canAfford(treasury, cost = JUMP_GATE_COST) {
 // Deducts only if affordable. Returns { ok, reason? }.
 // On refusal, treasury and built flag are left untouched.
 export function buildJumpGate(state) {
-  if (state.jumpGateBuilt) return { ok: false, reason: "already_built" };
+  if (state.built) return { ok: false, reason: "already_built" };
   if (!canAfford(state.treasury)) return { ok: false, reason: "insufficient_funds" };
   state.treasury.credits -= JUMP_GATE_COST.credits;
   state.treasury.alloys -= JUMP_GATE_COST.alloys;
   state.treasury.compute -= JUMP_GATE_COST.compute;
-  state.jumpGateBuilt = true;
-  state.jumpGateBeacon = { orbitRadius: JUMP_GATE_BEACON_ORBIT_RADIUS };
+  state.built = true;
+  state.beacon = { orbitRadius: JUMP_GATE_BEACON_ORBIT_RADIUS };
   return { ok: true };
 }
 
 // Sector Starchart: only available once the gate is built.
 export function openStarchart(state, seed = GENERATOR_SEED) {
-  if (!state.jumpGateBuilt) return { ok: false, reason: "gate_not_built", sectors: [] };
+  if (!state.built) return { ok: false, reason: "gate_not_built", sectors: [] };
   return { ok: true, sectors: generateSectors(seed) };
 }
 
@@ -62,7 +62,7 @@ export function openStarchart(state, seed = GENERATOR_SEED) {
 // (surveyed=false) so a jump never carries surveyed state from a
 // previous visit in the same object.
 export function initiateJump(state, sector) {
-  if (!state.jumpGateBuilt) return { ok: false, reason: "gate_not_built" };
+  if (!state.built) return { ok: false, reason: "gate_not_built" };
   if (state.warp.active) return { ok: false, reason: "warp_in_progress" };
   if (!sector || !sector.id) return { ok: false, reason: "no_destination" };
   const destination = {

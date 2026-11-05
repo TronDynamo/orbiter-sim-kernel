@@ -23,6 +23,9 @@ export const CARGO_CAP = 200;             // freighter hold size
 export const SIPHON_PER_TICK = 0.5;       // cargo taken on per tick while siphoning
 export const SATS_PER_TENDER = 3;         // relay satellites carried by a Satellite Tender
 export const PLANET_RES = {thalassa: 'biomass', aeros: 'cryo', kryos: 'compute', ferrum: 'alloys'};
+// Resource a world yields: the current system's map on a jump, the starter map otherwise.
+const resOf = (s, id) => s.planetRes?.[id] ?? PLANET_RES[id];
+const homeOf = (s) => s.homePlanet ?? 'ferrum';
 const PLANET_NAME = {thalassa: 'Thalassa', aeros: 'Aeros', ferrum: 'Ferrum', kryos: 'Kryos'};
 export const CHARTED_AT_START = {thalassa: false, aeros: false, kryos: false, ferrum: true};
 const ARRIVE_PAD = 4;                     // arrival distance beyond the world's radius
@@ -69,7 +72,7 @@ export function stepFleet(s, P, ticks, ctx) {
   s.surveyed = s.surveyed ?? {...CHARTED_AT_START};
   const before = s.fleet.map((f) => shipPosition(f, P));
   for (const f of s.fleet) {
-    if (!f.mode) { f.mode = 'orbit'; f.planet = 'ferrum'; f.ang = f.phase ?? 0; } // hulls saved before flight existed
+    if (!f.mode) { f.mode = 'orbit'; f.planet = homeOf(s); f.ang = f.phase ?? 0; } // hulls saved before flight existed
     const max = SHIPS[f.type]?.hull ?? 100;
     if (f.hp === undefined) f.hp = max;
     if (f.mode === 'docked') {
@@ -88,7 +91,7 @@ export function stepFleet(s, P, ticks, ctx) {
         f.surveyLeft = Math.max(0, (f.surveyLeft ?? SURVEY_TICKS) - ticks);
         if (f.surveyLeft === 0) {
           s.surveyed[f.planet] = true;
-          msgs.push(`Survey complete: ${PLANET_NAME[f.planet] ?? f.planet} is charted.`);
+          msgs.push(`Survey complete: ${s.planetNames?.[f.planet] ?? PLANET_NAME[f.planet] ?? f.planet} is charted.`);
           f.mode = 'orbit';
         }
       }
@@ -117,7 +120,7 @@ export function stepFleet(s, P, ticks, ctx) {
     if (f.mode === 'surf') f.mode = 'transit'; // the beam was cut: fall back to an impulse burn
     // impulse transit: steer at where the target will be when the ship arrives (intercept)
     const T = P[f.to];
-    if (!T) { f.mode = 'orbit'; f.planet = 'ferrum'; f.ang = 0; continue; }
+    if (!T) { f.mode = 'orbit'; f.planet = homeOf(s); f.ang = 0; continue; }
     const v = ctx.velocity?.[f.to] ?? {x: 0, y: 0};
     const tau = Math.hypot(T.x - f.x, T.y - f.y) / speed;
     const dx = T.x + v.x * tau - f.x, dy = T.y + v.y * tau - f.y, d = Math.hypot(dx, dy);
@@ -139,17 +142,17 @@ export function stepFleet(s, P, ticks, ctx) {
       settleInOrbit(f, P, arrived);
       if (f.type === 'probe' && !s.surveyed[arrived]) {
         f.mode = 'survey'; f.surveyLeft = SURVEY_TICKS;
-        msgs.push(`${name} in orbit of ${PLANET_NAME[arrived] ?? arrived}: scan running.`);
-      } else if (f.type === 'freighter' && arrived === 'ferrum' && (f.cargo ?? 0) > 0) {
+        msgs.push(`${name} in orbit of ${s.planetNames?.[arrived] ?? PLANET_NAME[arrived] ?? arrived}: scan running.`);
+      } else if (f.type === 'freighter' && arrived === homeOf(s) && (f.cargo ?? 0) > 0) {
         const got = Math.floor(f.cargo);
         s[f.res] = (s[f.res] ?? 0) + got;
         msgs.push(`Freighter delivered ${got} ${f.res} to the Ferrum stockpile.`);
         f.cargo = 0; f.res = null;
-      } else if (f.type === 'freighter' && PLANET_RES[arrived] && s.surveyed[arrived]) {
-        if ((f.cargo ?? 0) > 0 && f.res !== PLANET_RES[arrived]) {
+      } else if (f.type === 'freighter' && resOf(s, arrived) && s.surveyed[arrived]) {
+        if ((f.cargo ?? 0) > 0 && f.res !== resOf(s, arrived)) {
           msgs.push(`Hold still carries ${f.res}. Deliver it to Ferrum first.`);
         } else {
-          f.mode = 'siphon'; f.res = PLANET_RES[arrived]; f.cargo = f.cargo ?? 0;
+          f.mode = 'siphon'; f.res = resOf(s, arrived); f.cargo = f.cargo ?? 0;
         }
       }
     }
@@ -168,7 +171,7 @@ export function sendShip(s, f, targetId, P, conduits, targetName) {
   if (f.mode === 'orbit' && f.planet === targetId) return {ok: false, msg: `${name} is already in orbit around ${targetName}.`};
   const T = P[targetId];
   if (!T) return {ok: false, msg: 'That target is out of reach.'};
-  if (f.type === 'freighter' && PLANET_RES[targetId] && targetId !== 'ferrum' && !(s.surveyed ?? CHARTED_AT_START)[targetId]) {
+  if (f.type === 'freighter' && resOf(s, targetId) && targetId !== homeOf(s) && !(s.surveyed ?? CHARTED_AT_START)[targetId]) {
     return {ok: false, msg: `Scan ${targetName} with a Survey Probe before siphoning it.`};
   }
   if (f.mode === 'orbit' && hasLive(conduits, f.planet, targetId)) {
