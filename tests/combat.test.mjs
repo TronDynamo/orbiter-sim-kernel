@@ -149,3 +149,18 @@ test("particles are recycled: a long fight reuses effect objects instead of grow
   assert.ok(s.fx.length <= 700, "the effect list stays under its cap");
   assert.ok(s.pool.length <= 700, "the pool stays under its cap");
 });
+
+test("an isolated projectile hit throws 6-10 composite fragments, and only from that impact", () => {
+  let landed = 0;
+  for (let seed = 1; seed <= 40; seed++) {
+    const s = newCombat();
+    s.raiders.push({id: 1, x: 60, y: 0, vx: 0, vy: 0, hp: 40, maxHp: 40, mounts: [], bounty: 0});
+    run(s, [ship(12, "corvette", 0, 0)], 0.15, {rand: seeded(seed)});
+    const hitLanded = s.raiders[0].hp < 40;
+    if (!hitLanded) continue;   // a miss throws only a glint
+    landed++;
+    const shards = s.fx.filter((e) => e.kind === "shard").length;
+    assert.ok(shards >= 6 && shards <= 10, `seed ${seed}: ${shards} fragments`);
+  }
+  assert.ok(landed >= 10, `expected several landed hits across seeds, got ${landed}`);
+});
