@@ -32,6 +32,16 @@ export const mountsOf = (f) => f.mounts ?? defaultMounts(f.type);
 export const maxHullOf = (f) => SHIPS[f.type]?.hull ?? 0;
 export const hullOf = (f) => Math.max(0, f.hp ?? maxHullOf(f));
 export const mountUnlocked = (tech, kind) => MOUNT_UNLOCK[kind] == null || !!tech?.[MOUNT_UNLOCK[kind]];
+// The next weapon a socket swaps to: the following unlocked type in cycle order, or null if none.
+export const MOUNT_ORDER = ["coilgun", "flak", "lance"];
+export function nextMount(tech, cur) {
+  const i = MOUNT_ORDER.indexOf(cur);
+  for (let step = 1; step < MOUNT_ORDER.length; step++) {
+    const k = MOUNT_ORDER[(i + step) % MOUNT_ORDER.length];
+    if (mountUnlocked(tech, k)) return k;
+  }
+  return null;
+}
 
 export function newCombat() {
   return {raiders: [], shots: [], fx: [], cool: {}, weld: [], raidT: RAID_INTERVAL, nextId: 1};
@@ -107,6 +117,12 @@ const allies0 = (fleet, env) => fleet.map((f) => ({f, p: env.pos(f)})).filter((a
 export function stepCombat(state, env) {
   const {dt, fleet, planets, core, tech, rand = Math.random} = env;
   const events = [];
+
+  // dev trigger: one raid now, without touching the ambient timer
+  if (env.raidNow) {
+    const n = spawnRaid(state, env.edgeR ?? 300, rand);
+    events.push({kind: "raid", n, msg: `[DEV] ${n} raider${n > 1 ? "s" : ""} spawned.`});
+  }
 
   // welding sparks for ships patched since the last step (queued by the UI, placed here with the positions)
   for (const id of state.weld.splice(0)) {

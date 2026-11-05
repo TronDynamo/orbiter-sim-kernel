@@ -1,7 +1,22 @@
 // Warship combat: raids, mounts, hits, bounties and permanent losses. Pure logic, no canvas.
 import {test} from "node:test";
 import assert from "node:assert/strict";
-import {newCombat, spawnRaid, stepCombat, defaultMounts, mountsOf, LOADOUT, RAID_BOUNTY, RAID_INTERVAL, RAID_MIN, RAID_MAX} from "../src/game/combat.js";
+import {newCombat, spawnRaid, stepCombat, defaultMounts, mountsOf, LOADOUT, RAID_BOUNTY, RAID_INTERVAL, RAID_MIN, RAID_MAX, nextMount} from "../src/game/combat.js";
+
+test("a socket swaps to the next unlocked weapon, cycling, and reports none when nothing is unlocked", () => {
+  assert.equal(nextMount({}, "coilgun"), null, "nothing else is researched");
+  assert.equal(nextMount({flak: true}, "coilgun"), "flak");
+  assert.equal(nextMount({flak: true, lance: true}, "flak"), "lance");
+  assert.equal(nextMount({flak: true, lance: true}, "lance"), "coilgun", "wraps back to the always-available Coilgun");
+});
+
+test("a dev raid spawns on demand, even where the ambient timer is off", () => {
+  const s = newCombat();
+  const ev = stepCombat(s, {dt: 0, fleet: [], planets: [], core: {x: 0, y: 0}, pos, raidNow: true, rand: seeded(9)});
+  assert.ok(ev.some((e) => e.kind === "raid"));
+  assert.ok(s.raiders.length >= RAID_MIN);
+  assert.equal(s.raidT, RAID_INTERVAL, "the ambient timer is not reset");
+});
 
 const pos = (f) => ({x: f.x, y: f.y});
 const ship = (id, type, x, y, extra = {}) => ({id, type, x, y, ...extra});

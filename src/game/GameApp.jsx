@@ -31,7 +31,7 @@ import {Icon, drawArk, drawRelay} from "./icons.jsx";
 import {Academy} from "./Academy.jsx";
 import {drawPseudo3DShip, sunLocal, emitPlume, updatePlumes, drawPlumes} from "./pseudo3d.js";
 import {shadowAt, drawUmbra, drawLensing, drawDebrisBelt} from "./stellarFx.js";
-import {newCombat, stepCombat, weldSparks, mountsOf, MOUNTS, SWAP_COST, mountUnlocked} from "./combat.js";
+import {newCombat, stepCombat, weldSparks, mountsOf, MOUNTS, SWAP_COST, nextMount} from "./combat.js";
 import {JUMP_GATE_COST, JUMP_GATE_BEACON_ORBIT_RADIUS, openStarchart, initiateJump, advanceWarp} from "./jumpGate.js";
 import {drawAnchor} from "./anchors.js";
 import {HudChip, HudMeter} from "./hud.jsx";
@@ -814,7 +814,8 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           const sys = sysRef.current;
           const edgeR = sys.type === "sector" ? Math.max(...sys.planets.map((p) => p.orbit)) : null;
           const planets = sys.planets.filter((p) => P[p.id]).map((p) => P[p.id]);
-          for (const ev of stepCombat(combatRef.current, {dt: cdt, fleet: s.fleet, planets, core: P.core, pos: (f) => shipPosition(f, P), tech: s.tech, edgeR})) {
+          const raidNow = !!s0.raidNow; s0.raidNow = false;
+          for (const ev of stepCombat(combatRef.current, {dt: cdt, fleet: s.fleet, planets, core: P.core, pos: (f) => shipPosition(f, P), tech: s.tech, edgeR, raidNow})) {
             if (ev.kind === "kill") s.credits += ev.bounty;
             say(ev.msg, ev.kind === "kill");
           }
@@ -847,6 +848,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         if (data) onLoad(data); else { say("No quick save yet. Press F5 during a campaign to make one."); refresh(); }
       }
       if (e.code === "Space") { e.preventDefault(); togglePause(); }
+      if ((e.key === "r" || e.key === "R") && !e.ctrlKey && !e.metaKey) { s0.raidNow = true; say("[DEV] Raid queued for the next frame."); refresh(); }
       if (e.key === "1" || e.key === "2" || e.key === "4") setSpeedKey(Number(e.key));
     };
     window.addEventListener("keydown", onKey);
@@ -920,11 +922,9 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
   function swapMount(id, slot) {
     const f = st.current.fleet.find((x) => x.id === id); if (!f) return;
     const mounts = mountsOf(f).slice();
-    const order = ["coilgun", "flak", "lance"];
     const cur = mounts[slot];
-    const next = order.filter((k) => mountUnlocked(st.current.tech, k) && k !== cur);
-    if (!next.length) { flash("No other mount is unlocked yet. Research it in the Tech Web."); return; }
-    const pick = next[(order.indexOf(cur) + 1) % order.length] ?? next[0];
+    const pick = nextMount(st.current.tech, cur);
+    if (!pick) { flash("No other mount is unlocked yet. Research it in the Tech Web."); return; }
     const cost = SWAP_COST[pick];
     if (st.current.alloys < cost) { flash(`Swapping to ${MOUNTS[pick].label} needs ${cost} Alloys.`); return; }
     st.current.alloys -= cost; mounts[slot] = pick; f.mounts = mounts;
@@ -934,6 +934,11 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
   // A patch queues welding sparks at the ship; the frame loop places them, since it holds the positions.
   function weldFx(f) {
     combatRef.current.weld.push(f.id);
+  }
+  // dev: queue one raid for the next frame (the R key does the same)
+  function devRaid() {
+    u.current.raidNow = true;
+    flash("[DEV] Raid queued.", true);
   }
   function toggleOverclock() {
     const f = st.current.fleet.find((x) => x.id === u.current.selected); if (!f) return;
@@ -1089,6 +1094,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           <button className={"hud-btn" + (u.current.armory ? " on" : "")} onClick={toggleArmory}><Icon name="armory" size={14} /> Armory</button>
           <button className={"hud-btn" + (u.current.comms ? " on" : "")} onClick={toggleComms}><Icon name="comms" size={14} /> Comms</button>
           <button className={"hud-btn" + (s.senate.dismissed ? "" : " flash-alert")} onClick={openSenate}><Icon name="senate" size={14} /> Senate</button>
+          <button className="hud-btn" title="Dev: spawn one raid now (also the R key). Remove before release." onClick={devRaid}>[+ Raid] Dev</button>
         </div>
       </footer>
 
@@ -1122,8 +1128,24 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           <HudMeter label="Hull" pct={selPct} color={selPct > 60 ? "#22c55e" : selPct > 30 ? "#eab308" : "#ef4444"} value={`${selHp}/${selMax}`} warn={selPct <= 30} />
           <div className="hud-fleet mono"><span>PROPELLANT {Math.floor(s.propellant)}/{MAX_PROPELLANT}</span><span>{String(selShip.mode ?? "orbit").toUpperCase()}</span></div>
           <button className="hud-btn" onClick={patchBulkhead}><Icon name="repair" size={14} /> Patch bulkhead · 10 Alloys</button>
-          {mountsOf(selShip).length ? <div className="hud-fleet mono"><span>MOUNTS</span><span>{mountsOf(selShip).map((k) => MOUNTS[k].label).join(" · ")}</span></div> : null}
-          {mountsOf(selShip).map((k, i) => <button key={i} className="hud-btn" onClick={() => swapMount(selShip.id, i)}><Icon name="power" size={14} /> Swap {MOUNTS[k].label} · Alloys {SWAP_COST.coilgun}/{SWAP_COST.flak}/{SWAP_COST.lance}</button>)}
+          {mountsOf(selShip).length ? (
+            <div className="hud-sockets" aria-label="Weapon mount sockets">
+              <div className="hud-fleet mono"><span>WEAPON SOCKETS</span><span>{s.alloys ? Math.floor(s.alloys) : 0} ALLOYS</span></div>
+              {mountsOf(selShip).map((k, i) => {
+                const nxt = nextMount(s.tech, k), cost = nxt ? SWAP_COST[nxt] : 0;
+                const short = nxt && s.alloys < cost;
+                const why = !nxt ? "Research Flak or Plasma Lances in the Tech Web to swap this socket." : short ? `Needs ${cost} Alloys.` : "";
+                return (
+                  <div className="hud-socket" key={i}>
+                    <div className="hud-socket-head"><span className="hud-label">Socket {i + 1}</span><span className="mono" style={{color: MOUNTS[k].color}}>{MOUNTS[k].label}</span></div>
+                    <button className="hud-btn" disabled={!nxt || short} title={why} onClick={() => swapMount(selShip.id, i)}>
+                      <Icon name="power" size={14} /> {nxt ? `Swap to ${MOUNTS[nxt].label} · ${cost} Alloys` : "No upgrade unlocked"}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
           <button className={"hud-btn" + (selShip.overclock ? " on" : "")} onClick={toggleOverclock}><Icon name="power" size={14} /> Overclock thrusters</button>
           {selShip.type === "tender" ? <button className="hud-btn" onClick={() => { u.current.deployRelay = true; }}><Icon name="relay" size={14} /> Deploy relay · {selShip.sats ?? 3} left</button> : null}
           {selShip.type === "freighter" ? <div className="hud-fleet mono"><span>HOLD {Math.floor(selShip.cargo ?? 0)}/{CARGO_CAP}</span><span>{selShip.res ? selShip.res.toUpperCase() : "EMPTY"}</span></div> : null}
