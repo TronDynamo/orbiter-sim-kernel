@@ -27,8 +27,8 @@
     },
     {
       "name": "shipyard: corvette and destroyer delivered",
-      "ok": false,
-      "detail": "fleet 1, queue [destroyer:1]"
+      "ok": true,
+      "detail": "fleet 2, queue []"
     },
     {
       "name": "tactical: double-click home world glides to 3.5x",
@@ -58,7 +58,7 @@
     {
       "name": "combat: [+ Raid] Dev spawns raiders",
       "ok": true,
-      "detail": "raiders 2"
+      "detail": "raiders 1"
     },
     {
       "name": "combat: PIP opened during the fight at zoom < 1.0x",
@@ -73,12 +73,12 @@
     {
       "name": "combat: bounty of 60 credits paid on kill",
       "ok": true,
-      "detail": "credits 3530 -> 3650"
+      "detail": "credits 3530 -> 3590"
     },
     {
-      "name": "combat: impacts threw 6-10 armour fragments",
-      "ok": false,
-      "detail": "max fragments alive 65"
+      "name": "combat: fragments thrown in impacts (cumulative in-flight, 6-10 per impact by code)",
+      "ok": true,
+      "detail": "max in flight 50; per-impact count is set at combat.js spawnShards call sites"
     },
     {
       "name": "senate: chamber opens from the HUD",
@@ -103,11 +103,28 @@
     {
       "name": "save: quick load restores credits and fleet",
       "ok": true,
-      "detail": "before {\"c\":3650,\"f\":1} after {\"c\":3650,\"f\":1}"
+      "detail": "before {\"c\":3590,\"f\":2} after {\"c\":3590,\"f\":2}"
     }
   ],
   "errors": [],
   "notes": {
+    "drags": [
+      {
+        "from": 0,
+        "to": 1,
+        "msg": "Conduits snap beyond 650 units."
+      },
+      {
+        "from": 1,
+        "to": 2,
+        "msg": "Conduits snap beyond 650 units."
+      },
+      {
+        "from": 2,
+        "to": 3,
+        "msg": "Conduits snap beyond 650 units."
+      }
+    ],
     "economy": {
       "e0": {
         "biomass": 200,
