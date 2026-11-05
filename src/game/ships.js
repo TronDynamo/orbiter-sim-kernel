@@ -127,3 +127,23 @@ export function drawShip(ctx, type, x, y, heading, opts = {}) {
   }
   ctx.restore();
 }
+
+// Fuel depot: a station that refuels and repairs docked ships. Built from the shipyard.
+export const DEPOT_COST = {credits: 150, alloys: 80, cryo: 60};
+
+// A microscopic tactical chevron for the system view: nose along +x, a short ion trail while thrusting.
+export function drawChevron(ctx, x, y, heading, opts = {}) {
+  const thrust = opts.thrust ?? 0, t = opts.t ?? 0;
+  ctx.save();
+  ctx.translate(x, y); ctx.rotate(heading);
+  if (thrust > 0) {
+    const L = 6 * thrust * (0.85 + 0.15 * Math.sin(t * 26));
+    const g = ctx.createLinearGradient(-1.5, 0, -1.5 - L, 0);
+    g.addColorStop(0, "rgba(186,230,253,0.9)"); g.addColorStop(1, "rgba(56,189,248,0)");
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.moveTo(-1.5, -0.9); ctx.lineTo(-1.5 - L, 0); ctx.lineTo(-1.5, 0.9); ctx.closePath(); ctx.fill();
+  }
+  ctx.fillStyle = "#e0f2fe";
+  ctx.beginPath(); ctx.moveTo(2.5, 0); ctx.lineTo(-1.5, -1.8); ctx.lineTo(-0.6, 0); ctx.lineTo(-1.5, 1.8); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}

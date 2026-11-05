@@ -169,7 +169,7 @@ export class OrbitScene {
 
   // Zoom in/out by a factor. Keeps the whole solar system in reach.
   zoomBy(f) {
-    this.zoomUser = Math.max(0.4, Math.min(2.2, this.zoomUser * f));
+    this.zoomUser = Math.max(0.2, Math.min(6.0, this.zoomUser * f));
     this.base = this.baseRaw * this.zoomUser;
   }
 

@@ -94,3 +94,7 @@ body { font-family: Inter, system-ui, sans-serif; }
   .hud-controls { top: auto; bottom: 14px; right: 12px; }
   .hud-dock { bottom: 14px; }
 }
+
+/* Vessel engineering drawer: docked bottom-right while a ship is selected. */
+.hud-engineering { position: absolute; right: 12px; bottom: 74px; width: 280px; z-index: 6; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.hud-engineering .hud-btn { justify-content: center; }

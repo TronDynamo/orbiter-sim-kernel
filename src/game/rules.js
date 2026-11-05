@@ -38,7 +38,9 @@ export const newState = () => ({
   compute: 0,    // siphoned from Kryos through conduits
   credits: 0,    // conduit and population income (see GameApp)
   queue: [],     // hulls under construction: {id, type, left}
-  fleet: [],     // launched hulls: {id, type, phase}
+  fleet: [],     // launched hulls: {id, type, mode, planet, ang, hp, overclock}
+  depots: [],    // deployed fuel depots: {id, planet|null, ang|x, y}
+  depotN: 0,
   shipN: 0,
   reload: {},    // seconds until each weapon can fire again, by kernel WeaponClass index
   spent: {},     // one-shot weapons already fired (Star-Killer)
@@ -194,7 +196,7 @@ export function tick(state, P) {
   state.queue = state.queue.filter((q) => {
     q.left -= 1;
     if (q.left > 0) return true;
-    state.fleet.push({id: q.id, type: q.type, mode: 'orbit', planet: 'ferrum', ang: state.fleet.length * 2.4, heading: 0, thrust: 0});
+    state.fleet.push({id: q.id, type: q.type, mode: 'orbit', planet: 'ferrum', ang: state.fleet.length * 2.4, heading: 0, thrust: 0, hp: SHIPS[q.type].hull});
     events.push({msg: `${SHIPS[q.type].name} launched. It holds orbit around Ferrum.`});
     return false;
   });
@@ -215,7 +217,7 @@ export function tick(state, P) {
 export function hitBody(state, P, pt) {
   let best = null, bd = Infinity;
   for (const id of Object.keys(P)) {
-    const r = id === 'core' ? RULES.EVENT_HORIZON : id === 'ark' ? 26 : id.startsWith('relay') ? 18 : 30;
+    const r = id === 'core' ? RULES.EVENT_HORIZON : id === 'ark' ? 26 : id.startsWith('relay') ? 18 : id.startsWith('depot') ? 12 : 30;
     const d = Math.hypot(P[id].x - pt.x, P[id].y - pt.y);
     if (d <= r && d < bd) { best = id; bd = d; }
   }

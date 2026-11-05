@@ -24,8 +24,8 @@ import {TechWeb} from "./TechWeb.jsx";
 import {SenateChamber} from "./SenateChamber.jsx";
 import {VictoryModal} from "./VictoryModal.jsx";
 import {RULES, newState, snapTethers, network, tick, tryTether, checkTether, cut, tetherAt, tensionOf, tensionColor, build, hitBody, distToTether, orderShip, shortfall, fireWeapon} from "./rules.js";
-import {SHIPS, SHIP_ORDER, COST_LABEL, drawShip, fleetPower, FLIGHT_LENGTH} from "./ships.js";
-import {stepFleet, sendShip, shipPosition, interceptAt} from "./fleet.js";
+import {SHIPS, SHIP_ORDER, COST_LABEL, drawShip, drawChevron, fleetPower, FLIGHT_LENGTH, DEPOT_COST} from "./ships.js";
+import {stepFleet, sendShip, shipPosition, interceptAt, depotPos, MAX_PROPELLANT} from "./fleet.js";
 import {Icon, drawArk, drawRelay} from "./icons.jsx";
 import {Academy} from "./Academy.jsx";
 import {HudChip, HudMeter} from "./hud.jsx";
@@ -57,7 +57,7 @@ const planetIndex = (id) => GAME_GALAXY.planets.findIndex((p) => p.id === id);
 function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
   const canvasRef = useRef(null), overlayRef = useRef(null), appRef = useRef(null);
   const st = useRef(newState());
-  const u = useRef({drag: null, mode: null, msg: START_MSG, msgWin: false, paused: false, speed: 1, tick: 0, shipyard: false, armory: false, comms: false, governor: null, tech: false, senate: false, arm: null, hover: null, pointer: null, menu: false, confirm: null, autosaveAt: -1e9, fps: 0, selected: null, briefing: !!session.tutorial});
+  const u = useRef({drag: null, mode: null, msg: START_MSG, msgWin: false, paused: false, speed: 1, tick: 0, shipyard: false, armory: false, comms: false, governor: null, tech: false, senate: false, arm: null, hover: null, pointer: null, menu: false, confirm: null, autosaveAt: -1e9, fps: 0, selected: null, briefing: !!session.tutorial, depotPlace: false});
   const [ui, setUi] = useState({...u.current});
   const refresh = () => setUi({...u.current});
   const difficulty = DIFFICULTIES[session.difficulty] ?? DIFFICULTIES.commander;
@@ -113,6 +113,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       const P = {core: {x: 0, y: 0}, ark: ARK_POS};
       GAME_GALAXY.planets.forEach((p, i) => { const o = i * BODY_STRIDE; P[p.id] = {x: sim.b[o + 10], y: sim.b[o + 11]}; });
       for (const r of st.current.relays) P[r.id] = {x: r.x, y: r.y};
+      for (const d of st.current.depots ?? []) P[d.id] = depotPos(d, P);
       return P;
     };
 
@@ -161,6 +162,19 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       if (e.button !== 0) return;
       const P = positions(); if (!P) return;
       const p = toWorld(e);
+      if (s0.depotPlace) {
+        const need = shortfall(st.current, DEPOT_COST);
+        if (need) { say(`Fuel depot needs ${need}.`); refresh(); return; }
+        const hit = hitBody(st.current, P, p);
+        const planet = hit && isPlanet(hit) ? hit : null;
+        for (const [k, v] of Object.entries(DEPOT_COST)) st.current[k] -= v;
+        const n = (st.current.depotN ?? 0) + 1; st.current.depotN = n;
+        const depot = planet ? {id: `depot${n}`, planet, ang: Math.atan2(p.y - P[planet].y, p.x - P[planet].x)} : {id: `depot${n}`, planet: null, x: p.x, y: p.y};
+        st.current.depots = [...(st.current.depots ?? []), depot];
+        s0.depotPlace = false;
+        say(planet ? `Fuel depot placed in orbit around ${planetName(planet)}.` : "Fuel depot holding station in deep space.", true);
+        refresh(); return;
+      }
       if (s0.mode === "relay" || s0.mode === "repair") {
         const res = build(st.current, s0.mode, p, P);
         say(res.msg);
@@ -254,11 +268,13 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       const ship = st.current.fleet.find((f) => f.id === s0.selected);
       if (!ship) { s0.selected = null; refresh(); return; }
       const id = hitBody(st.current, P, toWorld(e));
-      if (!id || !isPlanet(id)) { say("Right-click a world to send the selected ship."); refresh(); return; }
-      const r = sendShip(st.current, ship, id, P, liveConduits(), planetName(id));
+      if (!id || !(isPlanet(id) || id.startsWith("depot"))) { say("Right-click a world or fuel depot to send the selected ship."); refresh(); return; }
+      const r = sendShip(st.current, ship, id, P, liveConduits(), id.startsWith("depot") ? "the fuel depot" : planetName(id));
       say(r.msg, r.ok); refresh();
     };
+    const onWheel = (e) => { e.preventDefault(); scene.zoomBy(e.deltaY < 0 ? 1.12 : 1 / 1.12); };
     ov.addEventListener("contextmenu", onCtx);
+    ov.addEventListener("wheel", onWheel, {passive: false});
     ov.addEventListener("pointerdown", onDown);
     ov.addEventListener("pointermove", onMove);
     ov.addEventListener("pointerup", onUp);
@@ -405,12 +421,14 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       // ships: vector hulls flying the map; the selected ship gets a ring and a nav vector to its target
       if (s.fleet.length) {
         const tt = now / 1000;
+        const closeUp = scene.zoomUser >= 2;
         for (const f of s.fleet) {
           const q = toS(shipPosition(f, P));
-          drawShip(ctx, f.type, q.x, q.y, f.heading ?? 0, {thrust: f.thrust ?? 0, t: tt, length: FLIGHT_LENGTH[f.type]});
+          if (closeUp) drawShip(ctx, f.type, q.x, q.y, f.heading ?? 0, {thrust: f.thrust ?? 0, t: tt, length: FLIGHT_LENGTH[f.type] * scene.zoomUser / 2});
+          else drawChevron(ctx, q.x, q.y, f.heading ?? 0, {thrust: f.thrust ?? 0, t: tt});
           if (f.id === s0.selected) {
             ctx.strokeStyle = "#38bdf8"; ctx.lineWidth = 1.2; ctx.setLineDash([3, 4]);
-            ctx.beginPath(); ctx.arc(q.x, q.y, 18, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+            ctx.beginPath(); ctx.arc(q.x, q.y, closeUp ? 18 : 8, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
             const T = f.to && P[f.to];
             if (T && (f.mode === "transit" || f.mode === "surf")) {
               const tq = toS(T); ctx.strokeStyle = "rgba(56,189,248,0.6)"; ctx.lineWidth = 1;
@@ -420,6 +438,20 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         }
       }
 
+      // fuel depots: a hexagonal station ring with a slow spin, labelled in the telemetry face
+      for (const d of s.depots ?? []) {
+        const q = toS(P[d.id]);
+        ctx.strokeStyle = "#22d3ee"; ctx.lineWidth = 1.2; ctx.shadowColor = "#22d3ee"; ctx.shadowBlur = 6;
+        ctx.beginPath();
+        for (let k = 0; k < 6; k++) {
+          const a = (k * Math.PI) / 3 + now / 4000;
+          const x = q.x + 7 * Math.cos(a), y = q.y + 7 * Math.sin(a);
+          if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.closePath(); ctx.stroke(); ctx.shadowBlur = 0;
+        ctx.font = "9px 'JetBrains Mono', monospace"; ctx.fillStyle = "#67e8f9"; ctx.textAlign = "center";
+        ctx.fillText("DEPOT", q.x, q.y + 16);
+      }
       // Ark, relays, labels
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
       const ark = toS(ARK_POS);
@@ -591,6 +623,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       window.removeEventListener("blur", onBlur);
       window.removeEventListener("focus", onFocus);
       ov.removeEventListener("contextmenu", onCtx);
+      ov.removeEventListener("wheel", onWheel);
       ov.removeEventListener("pointerdown", onDown);
       ov.removeEventListener("pointermove", onMove);
       ov.removeEventListener("pointerup", onUp);
@@ -625,6 +658,21 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
   }
   function runStrike() { const c = u.current.confirm; u.current.confirm = null; c?.run(); refresh(); }
   function cancelStrike() { u.current.confirm = null; u.current.arm = null; notify("Strike cancelled."); }
+  function flash(text, win = false) { u.current.msg = text; u.current.msgWin = win; }
+  function patchBulkhead() {
+    const f = st.current.fleet.find((x) => x.id === u.current.selected); if (!f) return;
+    const max = SHIPS[f.type].hull, hp = f.hp ?? max;
+    if (hp >= max) flash("Bulkhead already intact.");
+    else if (st.current.alloys < 10) flash("Patching a bulkhead needs 10 Alloys.");
+    else { st.current.alloys -= 10; f.hp = Math.min(max, hp + 25); flash(`${SHIPS[f.type].name} bulkhead patched.`, true); }
+    refresh();
+  }
+  function toggleOverclock() {
+    const f = st.current.fleet.find((x) => x.id === u.current.selected); if (!f) return;
+    f.overclock = !f.overclock;
+    flash(f.overclock ? "Thrusters overclocked: 1.5x speed, double burn." : "Thrusters back to nominal burn.");
+    refresh();
+  }
   function toggleShipyard() { u.current.shipyard = !u.current.shipyard; u.current.armory = false; refresh(); }
   function toggleArmory() { u.current.armory = !u.current.armory; u.current.shipyard = false; refresh(); }
   function toggleTech() { u.current.tech = !u.current.tech; u.current.shipyard = false; u.current.armory = false; refresh(); }
@@ -696,6 +744,10 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
   const yr = s.year || 1;
   const radiationLabel = ["Low", "Rising", "High", "Severe", "Critical"][Math.min(4, Math.max(0, s.radiation))];
   const hullPct = Math.max(0, Math.round(s.hull));
+  const selShip = u.current.selected != null ? s.fleet.find((f) => f.id === u.current.selected) : null;
+  const selMax = selShip ? SHIPS[selShip.type].hull : 1;
+  const selHp = selShip ? Math.max(0, Math.round(selShip.hp ?? selMax)) : 0;
+  const selPct = Math.round((selHp / selMax) * 100);
   const hullColor = hullPct > 60 ? "#22c55e" : hullPct > 30 ? "#eab308" : "#ef4444";
   const radColor = s.radiation >= 4 ? "#ef4444" : s.radiation >= 2 ? "#f59e0b" : "#22d3ee";
   return (
@@ -755,6 +807,15 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         </div>
       </footer>
 
+      {selShip ? (
+        <aside className="hud-panel hud-engineering" aria-label="Vessel engineering">
+          <div className="hud-kicker mono">VESSEL ENGINEERING · {SHIPS[selShip.type].name.toUpperCase()} #{selShip.id}</div>
+          <HudMeter label="Hull" pct={selPct} color={selPct > 60 ? "#22c55e" : selPct > 30 ? "#eab308" : "#ef4444"} value={`${selHp}/${selMax}`} warn={selPct <= 30} />
+          <div className="hud-fleet mono"><span>PROPELLANT {Math.floor(s.propellant)}/{MAX_PROPELLANT}</span><span>{String(selShip.mode ?? "orbit").toUpperCase()}</span></div>
+          <button className="hud-btn" onClick={patchBulkhead}><Icon name="repair" size={14} /> Patch bulkhead · 10 Alloys</button>
+          <button className={"hud-btn" + (selShip.overclock ? " on" : "")} onClick={toggleOverclock}><Icon name="power" size={14} /> Overclock thrusters</button>
+        </aside>
+      ) : null}
       {u.current.governor ? (() => {
         const id = u.current.governor, idx = planetIndex(id), def = PLANET_DEFS.find((p) => p.key === id);
         const out = PLANET_OUTPUT.find((o) => o.planet === id);
@@ -837,6 +898,12 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           })}
           <div style={{fontSize: 12, opacity: 0.85, marginTop: 6}}>
             In production: {s.queue.length ? s.queue.map((q) => `${SHIPS[q.type].name} ${q.left}s`).join(", ") : "none"}
+          </div>
+          <div style={{borderTop: "1px solid rgba(255,255,255,0.08)", padding: "8px 0", marginTop: 6}}>
+            <div style={{display: "flex", justifyContent: "space-between"}}><b>Fuel Depot</b><span>Station</span></div>
+            <div style={{fontSize: 12, opacity: 0.8, margin: "2px 0 4px"}}>Refuels and repairs docked ships. Place in orbit or deep space.</div>
+            <div className="ship-badges mono"><span>150 CREDITS</span><span>80 ALLOYS</span><span>60 COOLANT</span></div>
+            <button className="pill zelo" disabled={!!shortfall(s, DEPOT_COST)} onClick={() => { u.current.depotPlace = true; flash("Click a world to orbit it, or empty space to hold station."); refresh(); }}>Deploy fuel depot</button>
           </div>
         </aside>
       ) : null}
