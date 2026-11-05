@@ -245,9 +245,12 @@ export class OrbitScene {
   }
 
   applyPositions() {
+    this.kernelOrbits = false;
     if (!this.positionSource || !this.sim) return;
     const list = this.positionSource();
     if (!list) return;
+    // The kernel places planets on true circles, so the tracks must be circles too (see drawOrbits).
+    this.kernelOrbits = true;
     const b = this.sim.b;
     list.forEach((p, i) => {
       if (!p) return;
@@ -363,12 +366,15 @@ export class OrbitScene {
     const { ctx } = this;
     const sun = this.toScreen(0, 0);
     const z = this.cam.z * this.base;
+    // Kernel positions are circular (x = r cos a, y = r sin a), so their track is a circle (ratio 1).
+    // The engine-only view places planets on the tilted ellipse, so its track keeps ORBIT_Y.
+    const ratio = this.kernelOrbits ? 1 : ORBIT_Y;
     ctx.lineWidth = 1;
     for (const p of g.planets) {
       if (p.hidden) continue;
       ctx.strokeStyle = `rgba(160,170,220,${(0.045 * (this.orbitScale ?? 1)).toFixed(4)})`; // Settings: orbit path opacity
       ctx.beginPath();
-      ctx.ellipse(sun.x, sun.y, p.orbit * z, p.orbit * ORBIT_Y * z, 0, 0, TAU);
+      ctx.ellipse(sun.x, sun.y, p.orbit * z, p.orbit * ratio * z, 0, 0, TAU);
       ctx.stroke();
     }
   }
