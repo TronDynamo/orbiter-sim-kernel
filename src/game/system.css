@@ -40,3 +40,57 @@
 /* Shipyard stat badges: hull, weapons, sub-light speed and fleet power under each card. */
 .ship-badges { display: flex; flex-wrap: wrap; gap: 4px; font-size: 11px; margin: 4px 0 6px; }
 .ship-badges span { border: 1px solid rgba(56,189,248,0.3); border-radius: 6px; padding: 2px 6px; color: #e2e8f0; background: rgba(15,23,42,0.85); }
+
+/* ---- Cockpit HUD: obsidian panels, chamfered corners, Orbitron labels, JetBrains Mono readouts ---- */
+body { font-family: Inter, system-ui, sans-serif; }
+.mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+.hud-label { font-family: Orbitron, sans-serif; font-weight: 700; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #94a3b8; }
+.hud-val { font-family: 'JetBrains Mono', monospace; font-weight: 600; font-variant-numeric: tabular-nums; color: #f8fafc; }
+.hud-panel {
+  background: rgba(3, 7, 18, 0.88); border: 1px solid rgba(56, 189, 248, 0.3);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  box-shadow: inset 0 0 12px rgba(56, 189, 248, 0.05), 0 4px 20px rgba(0, 0, 0, 0.6);
+  clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+}
+.hud-ribbon { position: absolute; top: 10px; left: 12px; right: 260px; z-index: 6; display: flex; flex-wrap: wrap; gap: 4px; padding: 6px 10px; }
+.hud-chip { display: flex; align-items: center; gap: 8px; padding: 4px 12px; border-left: 2px solid var(--c); color: var(--c); }
+.hud-chip-ico { color: var(--c); display: inline-flex; filter: drop-shadow(0 0 4px var(--c)); }
+.hud-chip-text { display: flex; flex-direction: column; line-height: 1.15; }
+.hud-chip .hud-label { color: var(--c); }
+.hud-chip .hud-val { font-size: 16px; }
+.hud-ark { position: absolute; left: 12px; top: 74px; width: 252px; z-index: 6; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.hud-kicker { font-size: 10px; letter-spacing: 0.12em; color: #7dd3fc; border-bottom: 1px solid rgba(56,189,248,0.2); padding-bottom: 6px; }
+.hud-meter-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+.hud-meter-head .hud-val { font-size: 12px; }
+.hud-bar { position: relative; height: 9px; background: rgba(15,23,42,0.9); border: 1px solid rgba(56,189,248,0.2); }
+.hud-bar i { display: block; height: 100%; width: var(--w); background: var(--c); box-shadow: 0 0 8px var(--c); transition: width 0.4s ease; }
+.hud-bar::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 9px, rgba(3,7,18,0.9) 9px 11px); pointer-events: none; }
+.hud-meter.warn .hud-bar i { animation: hud-flash 0.8s steps(2, end) infinite; }
+.hud-meter.warn .hud-val { color: #fca5a5; animation: hud-flash 0.8s steps(2, end) infinite; }
+@keyframes hud-flash { 50% { opacity: 0.35; } }
+.hud-fleet { font-size: 11px; color: #cbd5e1; display: flex; justify-content: space-between; border-top: 1px solid rgba(56,189,248,0.15); padding-top: 8px; }
+.hud-controls { position: absolute; top: 10px; right: 12px; z-index: 6; display: flex; gap: 8px; align-items: center; }
+.hud-seg { display: inline-flex; border: 1px solid rgba(56,189,248,0.3); border-radius: 8px; overflow: hidden; background: rgba(3,7,18,0.88); backdrop-filter: blur(12px); }
+.hud-seg button { font: 700 11px 'JetBrains Mono', monospace; padding: 7px 11px; background: transparent; color: #94a3b8; border: 0; border-right: 1px solid rgba(56,189,248,0.15); cursor: pointer; }
+.hud-seg button:last-child { border-right: 0; }
+.hud-seg button:hover { color: #e0f2fe; }
+.hud-seg button.on { color: #67e8f9; background: rgba(8,47,73,0.6); text-shadow: 0 0 8px rgba(34,211,238,0.8); box-shadow: inset 0 -2px 0 #22d3ee; }
+.hud-btn {
+  position: relative; display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  background: rgba(2,6,23,0.8); border: 1px solid rgba(56,189,248,0.2); border-radius: 8px; backdrop-filter: blur(12px);
+  color: #cbd5e1; font-family: Orbitron, sans-serif; font-weight: 700; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+  padding: 8px 12px; transition: all 0.15s ease;
+}
+.hud-btn:hover, .hud-btn.on { border-color: #38bdf8; background: rgba(12,74,110,0.5); color: #bae6fd; box-shadow: 0 0 15px rgba(56,189,248,0.3); }
+.hud-btn.on::after { content: ""; position: absolute; top: -5px; left: 50%; transform: translateX(-50%); width: 6px; height: 6px; border-radius: 50%; background: #38bdf8; box-shadow: 0 0 8px #38bdf8; }
+.hud-btn.hud-icon { padding: 8px 10px; }
+.hud-dock { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; justify-content: center; max-width: calc(100% - 24px); }
+.hud-dock-group { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; padding: 6px; }
+.hud-dock-group + .hud-dock-group { border-left: 1px solid rgba(56,189,248,0.25); padding-left: 14px; }
+.hud-dock .hud-btn { border-color: rgba(56,189,248,0.2); }
+@media (max-width: 760px) {
+  .hud-ribbon { right: 12px; top: 8px; }
+  .hud-ark { top: auto; bottom: 74px; width: 220px; }
+  .hud-controls { top: auto; bottom: 14px; right: 12px; }
+  .hud-dock { bottom: 14px; }
+}

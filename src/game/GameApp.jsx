@@ -28,6 +28,7 @@ import {SHIPS, SHIP_ORDER, COST_LABEL, drawShip, fleetPower, FLIGHT_LENGTH} from
 import {stepFleet, sendShip, shipPosition, interceptAt} from "./fleet.js";
 import {Icon, drawArk, drawRelay} from "./icons.jsx";
 import {Academy} from "./Academy.jsx";
+import {HudChip, HudMeter} from "./hud.jsx";
 import {ShipPreview} from "./ShipPreview.jsx";
 
 const START_MSG = "Drag from one world to another to build a conduit. Conduits snap beyond " + CONDUIT_RULES.maxLength + " units.";
@@ -694,48 +695,64 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
   const over = s.won || s.lost;
   const yr = s.year || 1;
   const radiationLabel = ["Low", "Rising", "High", "Severe", "Critical"][Math.min(4, Math.max(0, s.radiation))];
+  const hullPct = Math.max(0, Math.round(s.hull));
+  const hullColor = hullPct > 60 ? "#22c55e" : hullPct > 30 ? "#eab308" : "#ef4444";
+  const radColor = s.radiation >= 4 ? "#ef4444" : s.radiation >= 2 ? "#f59e0b" : "#22d3ee";
   return (
     <div className="app" ref={appRef}>
       <canvas ref={canvasRef} className="stage" />
       <canvas ref={overlayRef} className="stage" style={{pointerEvents: "auto", cursor: u.current.arm ? "none" : u.current.mode ? "crosshair" : "default"}} />
 
-      <div className="brand glass">
-        <div className="brand-kicker mono">ORBITER: STELLAR CONQUEST · MISSION TELEMETRY</div>
-        <div className="row"><span><Icon name="credits" /> Credits</span><b>{Math.floor(s.credits)}</b></div>
-        <div className="row"><span><Icon name="biomass" /> Biomass</span><b>{Math.floor(s.biomass)}</b></div>
-        <div className="row"><span><Icon name="alloys" /> Alloys</span><b>{Math.floor(s.alloys)}</b></div>
-        <div className="row"><span><Icon name="compute" /> Compute <button className="pill zelo" style={{padding: "0 6px", marginLeft: 4}} title="Orbital Tech Web" onClick={toggleTech}><Icon name="tech" /></button></span><b>{Math.floor(s.compute)}</b></div>
-        <div className="row"><span><Icon name="coolant" /> Coolant</span><b>{Math.floor(s.cryo)}</b></div>
-        <div className="row"><span><Icon name="fleet" /> Fleet</span><b>{s.fleet.length}</b></div>
-        <div className="row"><span><Icon name="power" /> Fleet power</span><b>{Math.round(fleetPower(s.fleet) * perks(s).fleetMult * 10) / 10}</b></div>
-        <div className="row"><span><Icon name="hull" /> Hull</span><b>{Math.max(0, Math.round(s.hull))}%</b></div>
-        <div className="row"><span><Icon name="fuel" /> Fuel</span><b>{Math.floor(s.fuel)}</b></div>
-        <div className="row"><span><Icon name="propellant" /> Propellant</span><b>{Math.floor(s.propellant)}</b></div>
-        <div className="row"><span><Icon name="singularity" /> Singularity data</span><b>{Math.floor(s.data)} / {RULES.DATA_GOAL}</b></div>
-        <div className="row"><span><Icon name="radiation" /> Radiation</span><b>{radiationLabel}</b></div>
-        <div className="row"><span>Year</span><b>{yr}</b></div>
-        {getSettings().fps ? <div className="row"><span>Frame rate</span><b>{u.current.fps} fps</b></div> : null}
+      <div className="hud-ribbon hud-panel" role="status" aria-label="Strategic resources">
+        <HudChip c="#f59e0b" icon="credits" label="Credits" value={Math.floor(s.credits)} />
+        <HudChip c="#10b981" icon="biomass" label="Biomass" value={Math.floor(s.biomass)} />
+        <HudChip c="#06b6d4" icon="coolant" label="Coolant" value={Math.floor(s.cryo)} />
+        <HudChip c="#f43f5e" icon="alloys" label="Alloys" value={Math.floor(s.alloys)} />
+        <HudChip c="#a855f7" icon="compute" label="Compute" value={Math.floor(s.compute)} />
       </div>
 
-      <div className="top-right" style={{gap: 8}}>
-        <button className="pill glass zelo" title="Menu (Esc)" aria-label="Menu" onClick={openMenu}><Icon name="gear" /></button>
-        <button className="pill glass zelo" onClick={togglePause}>{u.current.paused ? "Resume" : "Pause"}</button>
-        {[1, 2, 4].map((v) => (
-          <button key={v} className={"pill glass zelo" + (u.current.speed === v && !u.current.paused ? " on" : "")} onClick={() => setSpeed(v)}>{v}x</button>
-        ))}
-        <button className="pill glass zelo" onClick={restart}>Restart</button>
+      <aside className="hud-ark hud-panel" aria-label="Ark telemetry">
+        <div className="hud-kicker mono">ARK ENDEAVOR · TELEMETRY</div>
+        <HudMeter label="Hull" pct={hullPct} color={hullColor} value={`${hullPct}%`} warn={hullPct <= 30} />
+        <HudMeter label="Propellant" pct={Math.min(100, s.propellant)} color="#38bdf8" value={Math.floor(s.propellant)} />
+        <HudMeter label="Fuel" pct={Math.min(100, (s.fuel / Math.max(120, s.fuel)) * 100)} color="#60a5fa" value={Math.floor(s.fuel)} />
+        <HudMeter label={`Radiation · ${radiationLabel}`} pct={(s.radiation / 4) * 100} color={radColor} value={radiationLabel.toUpperCase()} warn={s.radiation >= 3} />
+        <HudMeter label="Singularity" pct={(s.data / RULES.DATA_GOAL) * 100} color="#c084fc" value={`${Math.floor(s.data)} / ${RULES.DATA_GOAL}`} />
+        <div className="hud-fleet mono">
+          <span>FLEET {s.fleet.length}</span>
+          <span>POWER {Math.round(fleetPower(s.fleet) * perks(s).fleetMult * 10) / 10}</span>
+        </div>
+        <div className="hud-fleet mono">
+          <span>CYCLE {String(yr).padStart(2, "0")} // TICK {(kernel?.tickCount ?? 0).toLocaleString("en-US")}</span>
+          {getSettings().fps ? <span>{u.current.fps} FPS</span> : null}
+        </div>
+      </aside>
+
+      <div className="hud-controls">
+        <div className="hud-seg" role="group" aria-label="Time controls">
+          <button className={u.current.paused ? "on" : ""} onClick={togglePause}>{u.current.paused ? "RESUME" : "PAUSE"}</button>
+          {[1, 2, 4].map((v) => (
+            <button key={v} className={u.current.speed === v && !u.current.paused ? "on" : ""} onClick={() => setSpeed(v)}>{v}X</button>
+          ))}
+        </div>
+        <button className="hud-btn" onClick={restart}>Restart</button>
+        <button className="hud-btn hud-icon" title="Menu (Esc)" aria-label="Menu" onClick={openMenu}><Icon name="gear" size={16} /></button>
       </div>
 
       {u.current.msg ? <div className={"toast glass" + (u.current.msgWin ? " win" : "")} style={{top: 60, pointerEvents: "none", maxWidth: 300, textAlign: "center", whiteSpace: "normal"}}>{u.current.msg}</div> : null}
 
-      <footer className="dock glass" style={{flexWrap: "wrap", gap: 6, justifyContent: "center"}}>
-        <button className={"pill zelo" + (u.current.mode === "relay" ? " on" : "")} onClick={() => setMode("relay")}><Icon name="relay" /> Relay satellite · 15 Alloys · 5 Coolant</button>
-        <button className={"pill zelo" + (u.current.mode === "repair" ? " on" : "")} onClick={() => setMode("repair")}><Icon name="repair" /> Patch hull · 10 Alloys</button>
-        <button className={"pill zelo" + (u.current.mode === "cut" ? " on" : "")} onClick={() => setMode("cut")}><Icon name="cut" /> Decouple tether</button>
-        <button className={"pill zelo" + (u.current.shipyard ? " on" : "")} onClick={toggleShipyard}><Icon name="shipyard" /> Shipyard</button>
-        <button className={"pill zelo" + (u.current.armory ? " on" : "")} onClick={toggleArmory}><Icon name="armory" /> Armory</button>
-        <button className={"pill zelo" + (u.current.comms ? " on" : "")} onClick={toggleComms}><Icon name="comms" /> Comms</button>
-        <button className={"pill zelo" + (s.senate.dismissed ? "" : " flash-alert")} onClick={openSenate}><Icon name="senate" /> Senate</button>
+      <footer className="hud-dock" aria-label="Command dock">
+        <div className="hud-dock-group">
+          <button className={"hud-btn" + (u.current.mode === "relay" ? " on" : "")} title="Relay satellite: 15 Alloys, 5 Coolant" onClick={() => setMode("relay")}><Icon name="relay" size={14} /> Relay</button>
+          <button className={"hud-btn" + (u.current.mode === "repair" ? " on" : "")} title="Patch hull: 10 Alloys" onClick={() => setMode("repair")}><Icon name="repair" size={14} /> Patch</button>
+          <button className={"hud-btn" + (u.current.mode === "cut" ? " on" : "")} onClick={() => setMode("cut")}><Icon name="cut" size={14} /> Decouple</button>
+        </div>
+        <div className="hud-dock-group">
+          <button className={"hud-btn" + (u.current.shipyard ? " on" : "")} onClick={toggleShipyard}><Icon name="shipyard" size={14} /> Shipyard</button>
+          <button className={"hud-btn" + (u.current.armory ? " on" : "")} onClick={toggleArmory}><Icon name="armory" size={14} /> Armory</button>
+          <button className={"hud-btn" + (u.current.comms ? " on" : "")} onClick={toggleComms}><Icon name="comms" size={14} /> Comms</button>
+          <button className={"hud-btn" + (s.senate.dismissed ? "" : " flash-alert")} onClick={openSenate}><Icon name="senate" size={14} /> Senate</button>
+        </div>
       </footer>
 
       {u.current.governor ? (() => {
