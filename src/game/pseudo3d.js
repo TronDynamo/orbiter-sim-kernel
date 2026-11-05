@@ -84,6 +84,9 @@ export function drawPseudo3DShip(ctx, type, x, y, heading, opts = {}) {
   ctx.lineWidth = Math.max(0.6, 1.1);
   ctx.beginPath(); ctx.moveTo(-38 * s, edge); ctx.lineTo(36 * s, edge); ctx.stroke();
 
+  drawSunRim(ctx, s, L);
+  if (type === "destroyer") drawTrough(ctx, s, L);
+
   // bridge layer: shifted a few pixels toward the star so it sits above the hull
   ctx.fillStyle = `rgba(186,230,253,${(0.25 + 0.4 * Math.abs(L.ly)).toFixed(3)})`;
   ctx.beginPath();
@@ -91,6 +94,44 @@ export function drawPseudo3DShip(ctx, type, x, y, heading, opts = {}) {
   ctx.fill();
 
   drawHullDetail(ctx, s, opts.thrust ?? 0);
+  ctx.restore();
+}
+
+// Directional star lighting. L is the sun direction in hull space: its ly sign says which flank faces Sol Core.
+// The sunward edge catches a specular rim (cyan bloom with a warm white-yellow core). The far flank falls into
+// navy ambient shadow. Drawn with additive blending so the highlight sits on the hull instead of over it.
+function drawSunRim(ctx, s, L) {
+  const lit = Math.max(0, L.ly), dark = Math.max(0, -L.ly);
+  const side = L.ly >= 0 ? 1 : -1, y = side * 13 * s;
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.globalCompositeOperation = "lighter";
+  ctx.strokeStyle = `rgba(56,189,248,${(0.18 + 0.5 * Math.abs(L.ly)).toFixed(3)})`; ctx.lineWidth = 2.6 * s;
+  ctx.beginPath(); ctx.moveTo(-34 * s, y); ctx.lineTo(30 * s, y); ctx.stroke();
+  ctx.strokeStyle = `rgba(254,240,138,${(0.2 + 0.7 * Math.abs(L.ly)).toFixed(3)})`; ctx.lineWidth = 0.9 * s;
+  ctx.beginPath(); ctx.moveTo(-34 * s, y); ctx.lineTo(30 * s, y); ctx.stroke();
+  ctx.restore();
+  // the far flank sinks into navy ambient shadow
+  const far = -side, shade = 0.3 + 0.45 * (1 - lit) + 0.1 * dark;
+  ctx.save();
+  const g = ctx.createLinearGradient(0, far * 2 * s, 0, far * 15 * s);
+  g.addColorStop(0, `rgba(3,7,18,${(shade * 0.4).toFixed(3)})`);
+  g.addColorStop(1, `rgba(3,7,18,${shade.toFixed(3)})`);
+  ctx.fillStyle = g;
+  ctx.fillRect(-36 * s, Math.min(far * 2 * s, far * 15 * s), 70 * s, 13 * s);
+  ctx.restore();
+}
+
+// The Destroyer's spinal railgun trough: a recessed channel along the hull. Its sunward wall is occluded
+// (ambient occlusion), so the channel reads as a real cut into the hull rather than a painted line.
+function drawTrough(ctx, s, L) {
+  const side = L.ly >= 0 ? 1 : -1;
+  ctx.save();
+  ctx.fillStyle = "rgba(2,6,23,0.72)"; ctx.fillRect(-30 * s, -1.6 * s, 52 * s, 3.2 * s);
+  ctx.fillStyle = `rgba(2,6,23,${(0.35 + 0.4 * Math.abs(L.ly)).toFixed(3)})`;
+  ctx.fillRect(-30 * s, (side > 0 ? -1.6 : 0.2) * s, 52 * s, 1.4 * s);
+  ctx.strokeStyle = `rgba(254,240,138,${(0.12 + 0.5 * Math.abs(L.ly)).toFixed(3)})`; ctx.lineWidth = 0.8 * s;
+  ctx.beginPath(); ctx.moveTo(-30 * s, side * 1.6 * s); ctx.lineTo(22 * s, side * 1.6 * s); ctx.stroke();
   ctx.restore();
 }
 

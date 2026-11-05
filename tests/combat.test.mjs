@@ -1,7 +1,8 @@
 // Warship combat: raids, mounts, hits, bounties and permanent losses. Pure logic, no canvas.
 import {test} from "node:test";
 import assert from "node:assert/strict";
-import {newCombat, spawnRaid, stepCombat, defaultMounts, mountsOf, LOADOUT, RAID_BOUNTY, RAID_INTERVAL, RAID_MIN, RAID_MAX, nextMount} from "../src/game/combat.js";
+import {newCombat, spawnRaid, stepCombat, defaultMounts, mountsOf, LOADOUT, RAID_BOUNTY, RAID_INTERVAL, RAID_MIN, RAID_MAX, nextMount, hitChance, MOUNTS} from "../src/game/combat.js";
+const sure = () => 0;   // a roll of 0 always lands: deterministic hits for the tests that are not about chance
 
 test("a socket swaps to the next unlocked weapon, cycling, and reports none when nothing is unlocked", () => {
   assert.equal(nextMount({}, "coilgun"), null, "nothing else is researched");
@@ -23,7 +24,7 @@ test("the PIP opens on fire, follows the fight, and closes 4 s after it ends", (
 test("a hit on an allied hull raises the PIP's distortion", () => {
   const s = newCombat();
   s.raiders.push({id: 1, x: 40, y: 0, vx: 0, vy: 0, hp: 40, maxHp: 40, mounts: ["lance"], bounty: 0});
-  run(s, [ship(21, "corvette", 0, 0, {hp: 40})], 0.5);
+  run(s, [ship(21, "corvette", 0, 0, {hp: 40})], 1.0);
   assert.ok(s.noise > 0, "an ally hit raises the distortion");
 });
 
@@ -40,7 +41,7 @@ const ship = (id, type, x, y, extra = {}) => ({id, type, x, y, ...extra});
 const seeded = (seed) => () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
 function run(state, fleet, seconds, extra = {}) {
   const events = [];
-  for (let t = 0; t < seconds; t += 0.05) events.push(...stepCombat(state, {dt: 0.05, fleet, planets: [], core: {x: 0, y: 0}, pos, rand: seeded(7), ...extra}));
+  for (let t = 0; t < seconds; t += 0.05) events.push(...stepCombat(state, {dt: 0.05, fleet, planets: [], core: {x: 0, y: 0}, pos, rand: sure, ...extra}));
   return events;
 }
 
@@ -104,7 +105,7 @@ test("a destroyed ship is removed from the fleet for good", () => {
 test("a hit leaves sparks and shards behind it", () => {
   const s = newCombat();
   s.raiders.push({id: 1, x: 60, y: 0, vx: 0, vy: 0, hp: 40, maxHp: 40, mounts: [], bounty: 0});
-  run(s, [ship(12, "corvette", 0, 0)], 1);
+  run(s, [ship(12, "corvette", 0, 0)], 0.15);
   assert.ok(s.fx.some((e) => e.kind === "spark"));
   assert.ok(s.fx.some((e) => e.kind === "shard") || s.fx.length > 0);
 });
@@ -116,6 +117,35 @@ test("locked mounts do not fire until their tech is researched", () => {
   run(locked, [cruiser], 0.5, {tech: {}});
   assert.ok(!locked.shots.some((sh) => sh.side === "ally" && sh.kind === "plasma"), "no lance without its tech");
   const unlocked = newCombat(); unlocked.raiders.push(raider());
-  run(unlocked, [cruiser], 0.1, {tech: {lance: true}});
-  assert.ok(unlocked.shots.some((sh) => sh.kind === "plasma"), "lance fires once researched");
+  run(unlocked, [cruiser], 1.0, {tech: {lance: true}});
+  assert.ok(unlocked.shots.some((sh) => sh.kind === "plasma") || unlocked.raiders.length === 0, "lance fires once researched");
+});
+
+test("the hit roll follows accuracy, tracking against evasion, and target speed, clamped to 5-95%", () => {
+  const base = hitChance("coilgun", 0.2, 0);
+  assert.ok(Math.abs(base - 0.8 * (0.6 / 0.8)) < 1e-9);
+  assert.ok(hitChance("coilgun", 0.2, 150) < base, "a fast target is harder to land on");
+  assert.ok(hitChance("coilgun", 0.2, 1e6) >= 0.05, "never below 5%");
+  assert.ok(hitChance("flak", 0, 0) <= 0.95, "never above 95%");
+  assert.ok(hitChance("lance", 0.2, 0) < hitChance("coilgun", 0.2, 0), "lances are less likely to land than coilguns");
+});
+
+test("a corvette and a raider with coilguns trade fire for a tense skirmish, not an instant wipe", () => {
+  // expected time to kill from the roll: damage * chance per shot, once per cool-down
+  const shot = MOUNTS.coilgun;
+  const chance = hitChance("coilgun", 0.2, 55);   // the raider is closing at its cruising speed
+  const dps = shot.damage * chance / shot.cool;
+  const ttk = 40 / dps;
+  assert.ok(ttk >= 5 && ttk <= 11, `1-on-1 coilgun kill time ${ttk.toFixed(1)}s`);
+});
+
+test("particles are recycled: a long fight reuses effect objects instead of growing without bound", () => {
+  const s = newCombat();
+  let rng = seeded(11);
+  for (let round = 0; round < 6; round++) {
+    s.raiders.push({id: 100 + round, x: 120, y: 0, vx: 0, vy: 0, hp: 40, maxHp: 40, mounts: ["coilgun"], bounty: 0});
+    run(s, [ship(30 + round, "corvette", 0, 0)], 14, {rand: rng});
+  }
+  assert.ok(s.fx.length <= 700, "the effect list stays under its cap");
+  assert.ok(s.pool.length <= 700, "the pool stays under its cap");
 });

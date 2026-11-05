@@ -31,6 +31,7 @@ import {Icon, drawArk, drawRelay} from "./icons.jsx";
 import {Academy} from "./Academy.jsx";
 import {drawPseudo3DShip, sunLocal, emitPlume, updatePlumes, drawPlumes} from "./pseudo3d.js";
 import {shadowAt, drawUmbra, drawLensing, drawDebrisBelt} from "./stellarFx.js";
+import {drawCombatFx, drawHullDamage} from "./combatFx.js";
 import {newCombat, stepCombat, weldSparks, mountsOf, MOUNTS, SWAP_COST, nextMount} from "./combat.js";
 // Tactical PIP: a close-up of the fight, drawn at this magnification in a 300x190 viewport.
 const PIP_W = 300, PIP_H = 190, PIP_ZOOM = 3.2;
@@ -385,20 +386,8 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         const max = SHIPS[sh.type].hull, hp = sh.hp ?? max;
         if (hp < max) { c.fillStyle = `rgba(15,10,5,${(0.3 + 0.4 * (1 - hp / max)).toFixed(3)})`; c.beginPath(); c.arc(q.x + 4, q.y - 3, 4, 0, Math.PI * 2); c.fill(); }
       }
-      // raiders, shots and debris, drawn with the same look as the map
-      for (const r of cb.raiders) { const q = T(r), a = Math.atan2(r.vy, r.vx); c.save(); c.translate(q.x, q.y); c.rotate(a); c.fillStyle = "#f87171"; c.beginPath(); c.moveTo(8, 0); c.lineTo(-6, -5); c.lineTo(-6, 5); c.closePath(); c.fill(); c.restore(); }
-      for (const sh of cb.shots) {
-        const q = T(sh), back = T({x: sh.x - sh.vx * 0.03, y: sh.y - sh.vy * 0.03});
-        if (sh.kind === "kinetic") { c.strokeStyle = "#e0f2fe"; c.lineWidth = 1.6; c.beginPath(); c.moveTo(back.x, back.y); c.lineTo(q.x, q.y); c.stroke(); }
-        else { c.fillStyle = sh.kind === "plasma" ? "#fb923c" : "#fde68a"; c.beginPath(); c.arc(q.x, q.y, sh.kind === "plasma" ? 4 : 2, 0, Math.PI * 2); c.fill(); }
-      }
-      for (const e of cb.fx) {
-        const q = T(e), a = Math.max(0, e.life / e.max);
-        c.globalAlpha = a; c.fillStyle = e.color;
-        if (e.kind === "spark") c.fillRect(q.x - 1, q.y - 1, 2.4, 2.4);
-        else { c.beginPath(); e.pts.forEach((p, i) => (i ? c.lineTo(q.x + p.x * 1.4, q.y + p.y * 1.4) : c.moveTo(q.x + p.x * 1.4, q.y + p.y * 1.4))); c.closePath(); c.fill(); }
-      }
-      c.globalAlpha = 1;
+      // raiders, weapon discharge, impacts and debris: the same renderer as the map, at PIP scale
+      drawCombatFx(c, T, cb, 1, now / 1000);
       // CRT distortion after heavy hits: noise bars that fade with cb.noise
       if (cb.noise > 0.02) {
         c.fillStyle = `rgba(226,232,240,${(0.35 * cb.noise).toFixed(3)})`;
@@ -517,54 +506,14 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         }
       }
 
-      // warship combat: raiders, shots, debris and visual damage states
+      // warship combat: raiders, weapon discharge, impacts and debris, then hull damage on each ship
       {
         const cb = combatRef.current, k = Math.max(0.6, Math.min(2, scene.zoomUser));
-        for (const r of cb.raiders) {
-          const q = toS(r), a = Math.atan2(r.vy, r.vx);
-          ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(a);
-          ctx.fillStyle = "#f87171"; ctx.shadowColor = "#ef4444"; ctx.shadowBlur = 8;
-          ctx.beginPath(); ctx.moveTo(7 * k, 0); ctx.lineTo(-5 * k, -4.5 * k); ctx.lineTo(-5 * k, 4.5 * k); ctx.closePath(); ctx.fill();
-          ctx.restore(); ctx.shadowBlur = 0;
-        }
-        for (const sh of cb.shots) {
-          const q = toS(sh), back = toS({x: sh.x - sh.vx * 0.03, y: sh.y - sh.vy * 0.03});
-          if (sh.kind === "kinetic") {
-            ctx.strokeStyle = "#e0f2fe"; ctx.lineWidth = 1.6; ctx.shadowColor = "#bae6fd"; ctx.shadowBlur = 6;
-            ctx.beginPath(); ctx.moveTo(back.x, back.y); ctx.lineTo(q.x, q.y); ctx.stroke();
-          } else if (sh.kind === "plasma") {
-            ctx.fillStyle = "#fb923c"; ctx.shadowColor = "#f97316"; ctx.shadowBlur = 10;
-            ctx.beginPath(); ctx.arc(q.x, q.y, 3.5 * k, 0, Math.PI * 2); ctx.fill();
-          } else {
-            ctx.fillStyle = "#fde68a"; ctx.shadowBlur = 0;
-            ctx.beginPath(); ctx.arc(q.x, q.y, 1.5, 0, Math.PI * 2); ctx.fill();
-          }
-        }
-        ctx.shadowBlur = 0;
-        for (const e of cb.fx) {
-          const q = toS(e), a = Math.max(0, e.life / e.max);
-          if (e.kind === "spark") { ctx.globalAlpha = a; ctx.fillStyle = e.color; ctx.fillRect(q.x - 1, q.y - 1, 2.2, 2.2); }
-          else {
-            ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(e.rot);
-            ctx.globalAlpha = Math.min(1, a * 1.2); ctx.fillStyle = e.color; ctx.strokeStyle = "rgba(226,232,240,0.5)"; ctx.lineWidth = 0.8;
-            ctx.beginPath(); e.pts.forEach((p, i) => (i ? ctx.lineTo(p.x * k, p.y * k) : ctx.moveTo(p.x * k, p.y * k)));
-            ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
-          }
-        }
-        ctx.globalAlpha = 1;
-        // damage states: scorch marks as hulls fall, and flickering arcs below half hull
+        drawCombatFx(ctx, toS, cb, k, now / 1000);
         for (const f of s.fleet) {
           const max = SHIPS[f.type].hull, hp = f.hp ?? max;
           if (hp >= max) continue;
-          const q = toS(shipPosition(f, P)), pct = hp / max;
-          ctx.fillStyle = `rgba(15,10,5,${(0.25 + 0.4 * (1 - pct)).toFixed(3)})`;
-          ctx.beginPath(); ctx.arc(q.x + 3 * k, q.y - 2 * k, 4 * k, 0, Math.PI * 2); ctx.fill();
-          if (pct < 0.5 && Math.random() < 0.3) {
-            ctx.strokeStyle = "#67e8f9"; ctx.lineWidth = 1; ctx.shadowColor = "#22d3ee"; ctx.shadowBlur = 6;
-            ctx.beginPath(); ctx.moveTo(q.x - 9 * k, q.y + (Math.random() - 0.5) * 6 * k);
-            for (let j = 1; j <= 3; j++) ctx.lineTo(q.x - 9 * k + j * 6 * k, q.y + (Math.random() - 0.5) * 10 * k);
-            ctx.stroke(); ctx.shadowBlur = 0;
-          }
+          drawHullDamage(ctx, toS(shipPosition(f, P)), hp / max, k, now / 1000);
         }
       }
 
