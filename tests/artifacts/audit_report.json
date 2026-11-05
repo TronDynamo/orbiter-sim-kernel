@@ -1,0 +1,127 @@
+{
+  "steps": [
+    {
+      "name": "campaign starts into the HUD",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "economy: planets have world positions",
+      "ok": true,
+      "detail": "planets 4"
+    },
+    {
+      "name": "economy: drag between worlds builds a conduit",
+      "ok": false,
+      "detail": "\"Conduit built\" messages 0 -> 0"
+    },
+    {
+      "name": "economy: stockpiles stay finite and non-negative over 6 s",
+      "ok": true,
+      "detail": "{\"biomass\":200,\"cryo\":300,\"alloys\":900,\"compute\":400} -> {\"biomass\":200,\"cryo\":300,\"alloys\":900,\"compute\":400}"
+    },
+    {
+      "name": "shipyard: Build clicked for corvette and destroyer",
+      "ok": true,
+      "detail": "[true,true]"
+    },
+    {
+      "name": "shipyard: corvette and destroyer delivered",
+      "ok": false,
+      "detail": "fleet 1, queue [destroyer:1]"
+    },
+    {
+      "name": "tactical: double-click home world glides to 3.5x",
+      "ok": true,
+      "detail": "zoomTarget 3.500"
+    },
+    {
+      "name": "tactical: engineering drawer opens for the selected corvette",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tactical: weapon sockets render",
+      "ok": true,
+      "detail": "sockets 1"
+    },
+    {
+      "name": "tactical: weapon swap spends Alloys",
+      "ok": true,
+      "detail": "alloys 680 -> 620"
+    },
+    {
+      "name": "tactical: patch bulkhead restores +25 hull",
+      "ok": true,
+      "detail": "hp 12 -> 37"
+    },
+    {
+      "name": "combat: [+ Raid] Dev spawns raiders",
+      "ok": true,
+      "detail": "raiders 2"
+    },
+    {
+      "name": "combat: PIP opened during the fight at zoom < 1.0x",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "combat: raiders destroyed within 60 s",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "combat: bounty of 60 credits paid on kill",
+      "ok": true,
+      "detail": "credits 3530 -> 3650"
+    },
+    {
+      "name": "combat: impacts threw 6-10 armour fragments",
+      "ok": false,
+      "detail": "max fragments alive 65"
+    },
+    {
+      "name": "senate: chamber opens from the HUD",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "armory: opens from the HUD",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "comms: terminal opens from the HUD",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "save: quick save writes an orbiter key to localStorage",
+      "ok": true,
+      "detail": "orbiter_save_v1:autosave,orbiter_save_v1:quicksave"
+    },
+    {
+      "name": "save: quick load restores credits and fleet",
+      "ok": true,
+      "detail": "before {\"c\":3650,\"f\":1} after {\"c\":3650,\"f\":1}"
+    }
+  ],
+  "errors": [],
+  "notes": {
+    "economy": {
+      "e0": {
+        "biomass": 200,
+        "cryo": 300,
+        "alloys": 900,
+        "compute": 400
+      },
+      "e1": {
+        "biomass": 200,
+        "cryo": 300,
+        "alloys": 900,
+        "compute": 400
+      }
+    }
+  },
+  "errorCount": 0
+}
