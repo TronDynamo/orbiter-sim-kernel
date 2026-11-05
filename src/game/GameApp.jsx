@@ -30,6 +30,7 @@ import {stepFleet, sendShip, shipPosition, interceptAt, depotPos, MAX_PROPELLANT
 import {Icon, drawArk, drawRelay} from "./icons.jsx";
 import {Academy} from "./Academy.jsx";
 import {drawPseudo3DShip, sunLocal, emitPlume, updatePlumes, drawPlumes} from "./pseudo3d.js";
+import {shadowAt, drawUmbra, drawLensing, drawDebrisBelt} from "./stellarFx.js";
 import {JUMP_GATE_COST, JUMP_GATE_BEACON_ORBIT_RADIUS, openStarchart, initiateJump, advanceWarp} from "./jumpGate.js";
 import {drawAnchor} from "./anchors.js";
 import {HudChip, HudMeter} from "./hud.jsx";
@@ -364,6 +365,14 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       const s = st.current, w = ov.clientWidth, h = ov.clientHeight;
       ctx.clearRect(0, 0, w, h);
       const toS = (p) => scene.toScreen(p.x, p.y);
+      const sysNow = sysRef.current, star = P.core;
+
+      // stellar backdrop: planetary umbra cones, black-hole or pulsar lensing, belts on shattered worlds
+      const bodies = sysNow.planets.filter((p) => P[p.id]).map((p) => ({...P[p.id], R: p.r}));
+      if (sysNow.anchor !== "void") for (const b of bodies) drawUmbra(ctx, toS, star, b, b.R);
+      if (sysNow.anchor === "black_hole" || sysNow.anchor === "pulsar") drawLensing(ctx, toS, star, sysNow.sun?.radius ?? 22, now / 1000);
+      const fractured = kernel ? sysNow.planets.filter((p, i) => kernel.planets.status[i] === WORLD.FRACTURED && P[p.id]).map((p) => P[p.id]) : [];
+      for (const fp of fractured) drawDebrisBelt(ctx, toS, star, Math.hypot(fp.x - star.x, fp.y - star.y), now / 1000);
 
       // tethers, coloured by tension
       for (const t of s.tethers) {
@@ -385,6 +394,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           if (!A || !B) continue;
           const a = toS(A), b = toS(B), len = kernel.conduits.length[c];
           const snapped = !!kernel.conduits.snapped[c], occluded = !!kernel.conduits.occluded[c];
+          ctx.globalAlpha = 1 - 0.55 * shadowAt({x: (A.x + B.x) / 2, y: (A.y + B.y) / 2}, star, bodies);
           const ratio = len / (kernel.conduits.maxLength[c] || CONDUIT_RULES.maxLength);
           const col = snapped ? "#EF4444" : occluded ? "rgba(148,163,184,0.35)" : tensionTone(ratio, now);
           ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.setLineDash(snapped ? [4, 6] : []);
@@ -402,6 +412,8 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           ctx.fillText(snapped ? "snapped" : occluded ? "in shadow" : ratio >= 0.7 ? `TENSION: ${Math.round(ratio * 100)}%` : `${Math.round(kernel.conduits.throughput[c])} flow · ${Math.round(len)}u`, m.x, m.y - 6);
         }
       }
+
+      ctx.globalAlpha = 1;
 
       // drag preview: green when the transfer window is open, red when not
       if (s0.drag && P[s0.drag.from]) {
@@ -449,7 +461,10 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         }
         ctx.fillStyle = "rgba(160,160,170,0.8)";
         for (let a = 0; a < kernel.asteroidCount; a++) {
-          const q = toS({x: kernel.asteroids.x[a], y: kernel.asteroids.y[a]});
+          const ax = kernel.asteroids.x[a], ay = kernel.asteroids.y[a];
+          // rocks at a shattered world's spawn point are drawn as its rotating belt instead
+          if (fractured.some((fp) => Math.hypot(fp.x - ax, fp.y - ay) < 30)) continue;
+          const q = toS({x: ax, y: ay});
           ctx.fillRect(q.x, q.y, 2, 2);
         }
       }
@@ -518,12 +533,14 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           const q = toS(world);
           const heading = f.theta ?? f.heading ?? 0;   // banked along the velocity vector
           const length = closeUp ? FLIGHT_LENGTH[f.type] * scene.zoomUser / 2 : 0;
+          ctx.globalAlpha = 1 - 0.5 * shadowAt(world, star, bodies);   // planetary shadow dims the hull
           if (closeUp) drawPseudo3DShip(ctx, f.type, q.x, q.y, heading, {length, roll: f.roll ?? 0, thrust: f.thrust ?? 0, sunDir: sunLocal(world.x, world.y, heading, sunW)});
           else drawChevron(ctx, q.x, q.y, heading, {thrust: f.thrust ?? 0, t: tt});
           // detached ion plumes: emitted at the stern, left behind to drift
           const tail = closeUp ? length * 0.5 : 3;
           emitPlume(plumeBank, f.id, q.x, q.y, heading, f.thrust ?? 0, dtP, tail);
           drawPlumes(ctx, plumeBank.get(f.id));
+          ctx.globalAlpha = 1;
           if (f.mode === "survey") {
             const frac = 1 - (f.surveyLeft ?? SURVEY_TICKS) / SURVEY_TICKS;
             ctx.strokeStyle = "#67e8f9"; ctx.lineWidth = 2;

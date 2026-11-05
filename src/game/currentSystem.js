@@ -165,6 +165,7 @@ export function systemFromSector(sector) {
     dot: "#7fd3ff",
     subtitle: `${sector.id} • ${sector.starType}`,
     subtitleNote: sector.description ?? "",
+    anchor: sector.anchorType,
     sun: SUN_BY_ANCHOR[sector.anchorType] ?? GAME_GALAXY.sun,
     nebula: SUN_BY_ANCHOR[sector.anchorType]?.base ?? GAME_GALAXY.nebula,
     planets,
