@@ -25,7 +25,7 @@ import {SenateChamber} from "./SenateChamber.jsx";
 import {VictoryModal} from "./VictoryModal.jsx";
 import {RULES, newState, snapTethers, network, tick, tryTether, checkTether, cut, tetherAt, tensionOf, tensionColor, build, hitBody, distToTether, orderShip, shortfall, fireWeapon} from "./rules.js";
 import {SHIPS, SHIP_ORDER, COST_LABEL, drawShip, drawChevron, fleetPower, FLIGHT_LENGTH, DEPOT_COST} from "./ships.js";
-import {stepFleet, sendShip, shipPosition, interceptAt, depotPos, MAX_PROPELLANT} from "./fleet.js";
+import {stepFleet, sendShip, shipPosition, interceptAt, depotPos, MAX_PROPELLANT, deploySatellite, SURVEY_TICKS, CARGO_CAP} from "./fleet.js";
 import {Icon, drawArk, drawRelay} from "./icons.jsx";
 import {Academy} from "./Academy.jsx";
 import {drawPseudo3DShip, sunLocal, emitPlume, updatePlumes, drawPlumes} from "./pseudo3d.js";
@@ -189,7 +189,15 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         else {
           const c = conduitAt(P, p);
           if (c < 0) say("Click right on a tether to decouple it.");
-          else { kernel.removeConduit(c); snapSeen.clear(); say("Conduit decoupled."); }
+          else {
+            const a = GAME_GALAXY.planets[kernel.conduits.source[c]].id, b = GAME_GALAXY.planets[kernel.conduits.target[c]].id;
+            const ten = P[a] && P[b] ? Math.hypot(P[b].x - P[a].x, P[b].y - P[a].y) / CONDUIT_RULES.maxLength : 0;
+            kernel.removeConduit(c); snapSeen.clear();
+            if (ten >= 0.85) {
+              st.current.propellant = Math.max(0, st.current.propellant - 3);
+              say(`[ EMERGENCY CUT ] Explosive bolts severed the line at ${Math.round(ten * 100)}% tension before whiplash. Vented 3 propellant.`);
+            } else say("Conduit decoupled cleanly. No damage.");
+          }
         }
         refresh();
         return;
@@ -439,6 +447,15 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           const tail = closeUp ? length * 0.5 : 3;
           emitPlume(plumeBank, f.id, q.x, q.y, heading, f.thrust ?? 0, dtP, tail);
           drawPlumes(ctx, plumeBank.get(f.id));
+          if (f.mode === "survey") {
+            const frac = 1 - (f.surveyLeft ?? SURVEY_TICKS) / SURVEY_TICKS;
+            ctx.strokeStyle = "#67e8f9"; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(q.x, q.y, 12, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2); ctx.stroke();
+          }
+          if (f.type === "freighter" && (f.cargo ?? 0) > 0) {
+            ctx.fillStyle = "rgba(2,6,23,0.8)"; ctx.fillRect(q.x - 12, q.y + 10, 24, 3);
+            ctx.fillStyle = "#fbbf24"; ctx.fillRect(q.x - 12, q.y + 10, 24 * (f.cargo / CARGO_CAP), 3);
+          }
           if (f.id === s0.selected) {
             ctx.strokeStyle = "#38bdf8"; ctx.lineWidth = 1.2; ctx.setLineDash([3, 4]);
             ctx.beginPath(); ctx.arc(q.x, q.y, closeUp ? 18 : 8, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
@@ -451,6 +468,13 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         }
       }
 
+      // uncharted worlds: label the ones no probe has scanned yet
+      for (const id of ["thalassa", "aeros", "kryos"]) {
+        if ((s.surveyed ?? {})[id] || !P[id]) continue;
+        const q = toS(P[id]);
+        ctx.font = "9px 'JetBrains Mono', monospace"; ctx.fillStyle = "#94a3b8"; ctx.textAlign = "center";
+        ctx.fillText("UNCHARTED", q.x, q.y + 34);
+      }
       // fuel depots: a hexagonal station ring with a slow spin, labelled in the telemetry face
       for (const d of s.depots ?? []) {
         const q = toS(P[d.id]);
@@ -496,7 +520,12 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           if (dt > 0) {
             const vel = {};
             for (const id of Object.keys(P)) if (prevP[id]) vel[id] = {x: (P[id].x - prevP[id].x) / dt, y: (P[id].y - prevP[id].y) / dt};
-            stepFleet(s, P, dt, {conduits: liveConduits(), velocity: vel});
+            for (const m of stepFleet(s, P, dt, {conduits: liveConduits(), velocity: vel})) say(m);
+            if (u.current.deployRelay) {
+              u.current.deployRelay = false;
+              const tender = s.fleet.find((x) => x.id === u.current.selected);
+              say(tender ? deploySatellite(s, tender, P).msg : "Select a Satellite Tender first.");
+            }
             fleetTick = kernel.tickCount;
             prevP = Object.fromEntries(Object.keys(P).map((id) => [id, {x: P[id].x, y: P[id].y}]));
           }
@@ -827,6 +856,9 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           <div className="hud-fleet mono"><span>PROPELLANT {Math.floor(s.propellant)}/{MAX_PROPELLANT}</span><span>{String(selShip.mode ?? "orbit").toUpperCase()}</span></div>
           <button className="hud-btn" onClick={patchBulkhead}><Icon name="repair" size={14} /> Patch bulkhead · 10 Alloys</button>
           <button className={"hud-btn" + (selShip.overclock ? " on" : "")} onClick={toggleOverclock}><Icon name="power" size={14} /> Overclock thrusters</button>
+          {selShip.type === "tender" ? <button className="hud-btn" onClick={() => { u.current.deployRelay = true; }}><Icon name="relay" size={14} /> Deploy relay · {selShip.sats ?? 3} left</button> : null}
+          {selShip.type === "freighter" ? <div className="hud-fleet mono"><span>HOLD {Math.floor(selShip.cargo ?? 0)}/{CARGO_CAP}</span><span>{selShip.res ? selShip.res.toUpperCase() : "EMPTY"}</span></div> : null}
+          {selShip.type === "probe" ? <div className="hud-fleet mono"><span>SCAN</span><span>{selShip.mode === "survey" ? `${Math.round((1 - (selShip.surveyLeft ?? SURVEY_TICKS) / SURVEY_TICKS) * 100)}%` : "IDLE"}</span></div> : null}
         </aside>
       ) : null}
       {u.current.governor ? (() => {

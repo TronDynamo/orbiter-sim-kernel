@@ -41,6 +41,7 @@ export const newState = () => ({
   fleet: [],     // launched hulls: {id, type, mode, planet, ang, hp, overclock}
   depots: [],    // deployed fuel depots: {id, planet|null, ang|x, y}
   depotN: 0,
+  surveyed: {thalassa: false, aeros: false, kryos: false, ferrum: true},  // worlds scanned by a Survey Probe
   shipN: 0,
   reload: {},    // seconds until each weapon can fire again, by kernel WeaponClass index
   spent: {},     // one-shot weapons already fired (Star-Killer)

@@ -4,14 +4,17 @@ export const SHIPS = {
   corvette: {name: 'Corvette', cost: {credits: 120, alloys: 40}, seconds: 5, power: 1, speed: 2.6, hull: 40, weapons: 'Twin ion cannons', blurb: 'Fast interceptor raider'},
   destroyer: {name: 'Destroyer', cost: {credits: 350, alloys: 180, cryo: 50}, seconds: 12, power: 4, speed: 1.8, hull: 120, weapons: 'Railgun + 4 flak', blurb: 'Screen and railgun escort'},
   cruiser: {name: 'Dreadnought', cost: {credits: 900, alloys: 520, compute: 120}, seconds: 25, power: 12, speed: 1.1, hull: 400, weapons: 'Spinal cannons + missiles', blurb: 'Heavy capital siege platform'},
+  probe: {name: 'Survey Probe', cost: {credits: 60, alloys: 20}, seconds: 4, power: 0, speed: 3.4, hull: 25, weapons: 'Spectrometer array', blurb: 'Scans uncharted worlds in 5 s'},
+  tender: {name: 'Satellite Tender', cost: {credits: 200, alloys: 120, cryo: 30}, seconds: 10, power: 1, speed: 1.5, hull: 90, weapons: 'Relay bay, 3 satellites', blurb: 'Lays relay satellites around the sun'},
+  freighter: {name: 'Mining Freighter', cost: {credits: 260, alloys: 150}, seconds: 10, power: 1, speed: 1.2, hull: 110, weapons: '200-unit cargo hold', blurb: 'Siphons charted worlds, hauls to Ferrum'},
 };
-export const SHIP_ORDER = ['corvette', 'destroyer', 'cruiser'];
+export const SHIP_ORDER = ['corvette', 'destroyer', 'cruiser', 'probe', 'tender', 'freighter'];
 export const COST_LABEL = {credits: 'Credits', alloys: 'Alloys', cryo: 'Coolant', compute: 'Compute'};
 
 export const fleetPower = (fleet) => fleet.reduce((sum, f) => sum + (SHIPS[f.type]?.power ?? 0), 0);
 
 // On-map length in screen pixels, per the flight spec.
-export const FLIGHT_LENGTH = {corvette: 18, destroyer: 32, cruiser: 52};
+export const FLIGHT_LENGTH = {corvette: 18, destroyer: 32, cruiser: 52, probe: 14, tender: 34, freighter: 38};
 export const HULL_SIZE = Object.fromEntries(Object.entries(FLIGHT_LENGTH).map(([k, v]) => [k, {length: v, beam: Math.round(v * 0.6)}]));
 
 export const DESIGN = 100;
@@ -36,7 +39,43 @@ function plume(ctx, x, y, len, width, rgb, thrust, t, seed) {
 
 // Draws a hull centred on (x, y) with its nose along heading (radians).
 // opts: length (screen px, defaults to the flight length), thrust 0..1, t seconds for flicker.
+// Civilian hulls, drawn in the same 100-unit design space as the warships.
+const CIVIL = {
+  probe: [[46, 0], [14, -7], [-22, -9], [-38, -4], [-38, 4], [-22, 9], [14, 7]],
+  tender: [[40, -16], [44, -6], [44, 6], [40, 16], [-34, 18], [-42, 8], [-42, -8], [-34, -18]],
+  freighter: [[30, -22], [42, -12], [42, 12], [30, 22], [-40, 22], [-46, 10], [-46, -10], [-40, -22]],
+};
+
+function drawCivilHull(ctx, type, x, y, heading, opts = {}) {
+  const length = opts.length ?? FLIGHT_LENGTH[type] ?? 20, thrust = opts.thrust ?? 0, t = opts.t ?? 0;
+  const s = length / DESIGN;
+  ctx.save();
+  ctx.translate(x, y); ctx.rotate(heading); ctx.scale(s, s);
+  ctx.lineJoin = 'round';
+  const pts = CIVIL[type];
+  ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+  for (const [a, b] of pts.slice(1)) ctx.lineTo(a, b);
+  ctx.closePath();
+  ctx.fillStyle = '#1e293b'; ctx.fill();
+  ctx.strokeStyle = '#7dd3fc'; ctx.lineWidth = 1.6 / s; ctx.stroke();
+  // hull seams and a cyan bay line so the three classes read apart at a glance
+  ctx.strokeStyle = 'rgba(125,211,252,0.55)'; ctx.lineWidth = 1 / s;
+  ctx.beginPath();
+  if (type === 'tender') { for (const px of [-20, 6]) { ctx.moveTo(px, -16); ctx.lineTo(px, 16); } ctx.arc(-26, 0, 4, 0, Math.PI * 2); }
+  else if (type === 'freighter') { ctx.rect(-30, -12, 40, 24); }
+  else { ctx.moveTo(-12, 0); ctx.lineTo(30, 0); }
+  ctx.stroke();
+  if (thrust > 0) {
+    const L = 22 * thrust * (0.85 + 0.15 * Math.sin(t * 26));
+    const g = ctx.createLinearGradient(-44, 0, -44 - L, 0);
+    g.addColorStop(0, 'rgba(186,230,253,0.9)'); g.addColorStop(1, 'rgba(56,189,248,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(-44, -5); ctx.lineTo(-44 - L, 0); ctx.lineTo(-44, 5); ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+}
+
 export function drawShip(ctx, type, x, y, heading, opts = {}) {
+  if (CIVIL[type]) return drawCivilHull(ctx, type, x, y, heading, opts);
   const thrust = opts.thrust ?? 0, t = opts.t ?? 0;
   const length = opts.length ?? FLIGHT_LENGTH[type] ?? 20;
   const s = length / DESIGN;
