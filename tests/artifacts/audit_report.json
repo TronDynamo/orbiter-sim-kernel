@@ -1,54 +1,44 @@
 {
   "steps": [
     {
-      "name": "campaign starts into the HUD",
+      "name": "campaign starts into the HUD with test funds",
       "ok": true,
       "detail": ""
     },
     {
-      "name": "economy: planets have world positions",
+      "name": "economy: at least one pair of worlds sits within 650 units",
       "ok": true,
-      "detail": "planets 4"
+      "detail": "pairs [[0,1,402],[0,3,164],[1,2,366],[1,3,429]]"
     },
     {
-      "name": "economy: drag between worlds builds a conduit",
+      "name": "economy: a conduit builds between worlds in range",
       "ok": false,
-      "detail": "\"Conduit built\" messages 0 -> 0"
-    },
-    {
-      "name": "economy: stockpiles stay finite and non-negative over 6 s",
-      "ok": true,
-      "detail": "{\"biomass\":200,\"cryo\":300,\"alloys\":900,\"compute\":400} -> {\"biomass\":200,\"cryo\":300,\"alloys\":900,\"compute\":400}"
+      "detail": "[\"dist 398\",\"Conduits snap beyond 650 units.\",\"dist 134\",\"Conduits snap beyond 650 units.\",\"dist 312\",\"Conduits snap beyond 650 units.\"]"
     },
     {
       "name": "shipyard: Build clicked for corvette and destroyer",
       "ok": true,
-      "detail": "[true,true]"
+      "detail": ""
     },
     {
       "name": "shipyard: corvette and destroyer delivered",
       "ok": true,
-      "detail": "fleet 2, queue []"
+      "detail": "[{\"id\":1,\"type\":\"corvette\",\"hp\":40},{\"id\":2,\"type\":\"destroyer\",\"hp\":120}]"
     },
     {
       "name": "tactical: double-click home world glides to 3.5x",
       "ok": true,
-      "detail": "zoomTarget 3.500"
+      "detail": ""
     },
     {
-      "name": "tactical: engineering drawer opens for the selected corvette",
+      "name": "tactical: engineering drawer opens for the corvette",
       "ok": true,
       "detail": ""
     },
     {
-      "name": "tactical: weapon sockets render",
-      "ok": true,
-      "detail": "sockets 1"
-    },
-    {
       "name": "tactical: weapon swap spends Alloys",
       "ok": true,
-      "detail": "alloys 680 -> 620"
+      "detail": "alloys 29780 -> 29720"
     },
     {
       "name": "tactical: patch bulkhead restores +25 hull",
@@ -56,39 +46,34 @@
       "detail": "hp 12 -> 37"
     },
     {
-      "name": "combat: [+ Raid] Dev spawns raiders",
-      "ok": true,
-      "detail": "raiders 1"
-    },
-    {
-      "name": "combat: PIP opened during the fight at zoom < 1.0x",
+      "name": "combat: PIP opens during the fight at zoom < 1.0x",
       "ok": true,
       "detail": ""
     },
     {
-      "name": "combat: raiders destroyed within 60 s",
+      "name": "combat: raiders destroyed",
       "ok": true,
       "detail": ""
     },
     {
-      "name": "combat: bounty of 60 credits paid on kill",
+      "name": "combat: bounty paid on kill (60 per raider)",
       "ok": true,
-      "detail": "credits 3530 -> 3590"
+      "detail": "credits 59530 -> 59590"
     },
     {
-      "name": "combat: fragments thrown in impacts (cumulative in-flight, 6-10 per impact by code)",
+      "name": "combat: fragments in flight during the fight",
       "ok": true,
-      "detail": "max in flight 50; per-impact count is set at combat.js spawnShards call sites"
+      "detail": "peak 66"
     },
     {
-      "name": "senate: chamber opens from the HUD",
+      "name": "armory: World-Cracker launched at a world",
       "ok": true,
-      "detail": ""
+      "detail": "target ferrum"
     },
     {
-      "name": "armory: opens from the HUD",
-      "ok": true,
-      "detail": ""
+      "name": "armory: target world transitions to FRACTURED",
+      "ok": false,
+      "detail": "status 0"
     },
     {
       "name": "comms: terminal opens from the HUD",
@@ -96,48 +81,41 @@
       "detail": ""
     },
     {
-      "name": "save: quick save writes an orbiter key to localStorage",
+      "name": "comms: ARIA-7 dialogue present",
+      "ok": false,
+      "detail": "ARIA-7 in DOM: false"
+    },
+    {
+      "name": "comms: typewriter progression (text reveals over time)",
+      "ok": false,
+      "detail": "chars 143 -> 143 in 150 ms"
+    },
+    {
+      "name": "save: quick save writes to localStorage",
       "ok": true,
       "detail": "orbiter_save_v1:autosave,orbiter_save_v1:quicksave"
     },
     {
       "name": "save: quick load restores credits and fleet",
       "ok": true,
-      "detail": "before {\"c\":3590,\"f\":2} after {\"c\":3590,\"f\":2}"
+      "detail": "before {\"c\":51590,\"f\":1} after {\"c\":51590,\"f\":1}"
     }
   ],
   "errors": [],
-  "notes": {
-    "drags": [
-      {
-        "from": 0,
-        "to": 1,
-        "msg": "Conduits snap beyond 650 units."
-      },
-      {
-        "from": 1,
-        "to": 2,
-        "msg": "Conduits snap beyond 650 units."
-      },
-      {
-        "from": 2,
-        "to": 3,
-        "msg": "Conduits snap beyond 650 units."
-      }
+  "telemetry": {
+    "conduit": [
+      "dist 398",
+      "Conduits snap beyond 650 units.",
+      "dist 134",
+      "Conduits snap beyond 650 units.",
+      "dist 312",
+      "Conduits snap beyond 650 units."
     ],
-    "economy": {
-      "e0": {
-        "biomass": 200,
-        "cryo": 300,
-        "alloys": 900,
-        "compute": 400
-      },
-      "e1": {
-        "biomass": 200,
-        "cryo": 300,
-        "alloys": 900,
-        "compute": 400
-      }
+    "combatPeakFragments": 66,
+    "comms": {
+      "charsAt0": 143,
+      "charsAt150ms": 143,
+      "ariaInDom": false
     }
   },
   "errorCount": 0
