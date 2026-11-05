@@ -55,3 +55,31 @@ test("starter worlds keep their resource", () => {
   assert.equal(resourceFor(bootSystem(), 0), "biomass");
   assert.equal(resourceFor(bootSystem(), 3), "compute");
 });
+
+test("the design sheet's biome names map to their yield classes", () => {
+  const sheet = {
+    pelagic: ["Pelagic Ocean", "Jungle", "Continental"],
+    methane: ["Methane Giant", "Toxic", "Sub-Neptune"],
+    basalt: ["Oxidized Iron", "Basalt", "Desert", "Scorched"],
+    glacier: ["Cryo-Glacier", "Nitrogen Ice"],
+    diamond: ["Carbon Diamond", "Precursor Ruin", "Crystal Shard"],
+  };
+  for (const [cls, names] of Object.entries(sheet)) for (const n of names) assert.equal(BIOME_CLASS[n], cls, n);
+});
+
+test("each yield class has its primary and secondary yield from the design sheet", () => {
+  const expect = {
+    pelagic: [15, "biomass", 7, "fuel"], methane: [12, "cryo", 6, "propellant"], basalt: [10, "alloys", 5, "credits"],
+    glacier: [8, "compute", 4, "cryo"], diamond: [14, "credits", 4, "alloys"],
+  };
+  for (const [cls, [py, pr, sy, sr]] of Object.entries(expect)) {
+    const c = YIELD_CLASSES[cls];
+    assert.deepEqual([c.yield, c.resource, c.secondary.yield, c.secondary.resource], [py, pr, sy, sr], cls);
+  }
+});
+
+test("generated worlds carry a secondary yield; starter worlds do not", () => {
+  const sector = sectorFromCode("SECTOR-082-PULSAR");
+  for (const p of systemFromSector(sector).planets) assert.ok(p.secondary && p.secondary.yield > 0);
+  for (const p of bootSystem().planets) assert.equal(p.secondary, undefined);
+});

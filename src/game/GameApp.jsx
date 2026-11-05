@@ -4,7 +4,7 @@ import {useEffect, useRef, useState} from "react";
 import {OrbitScene} from "../orbit/scene.js";
 import {BODY_STRIDE} from "../orbit/engine.js";
 import {ARK_POS} from "./galaxy.js";
-import {bootSystem, systemFromSector, kernelSystemFromSector, systemState, rehomeFleet, resourceFor, extraDestinations} from "./currentSystem.js";
+import {bootSystem, systemFromSector, kernelSystemFromSector, systemState, rehomeFleet, resourceFor, extraDestinations, RESOURCE_LABEL} from "./currentSystem.js";
 import {loadOrbiterKernel, TICKS_PER_SECOND, WEAPON, WORLD, CONDUIT_ERR, CONDUIT_RULES} from "./kernel/orbiterKernel.js";
 import {ARMORY, drawCage, drawMagma, drawIrradiated, drawBlackHole, drawSupernova} from "./armory.js";
 import {STAR_COLLAPSE, VORTEX, DRILL_CRACK_DISTANCE, PLANETS as PLANET_DEFS} from "../../config/planets.js";
@@ -63,7 +63,8 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
   const planetName = (id) => sysRef.current.planets.find((p) => p.id === id)?.name ?? id;
   const planetIndex = (id) => sysRef.current.planets.findIndex((p) => p.id === id);
   // Which stockpile each world's siphoned output feeds, resolved for the current system.
-  const outputsOf = () => sysRef.current.planets.map((p, i) => ({planet: p.id, resource: resourceFor(sysRef.current, i), index: i}));
+  // secondary is the half-rate second yield of a generated world (null for starter worlds).
+  const outputsOf = () => sysRef.current.planets.map((p, i) => ({planet: p.id, resource: resourceFor(sysRef.current, i), index: i, secondary: p.secondary ?? null, primary: yieldOf(p.id)}));
   // Starter worlds read config/planets.js; generated worlds carry the yield of their biome class (currentSystem.js).
   const yieldOf = (id) => PLANET_DEFS.find((d) => d.key === id)?.yield ?? sysRef.current.planets.find((p) => p.id === id)?.yield ?? DEFAULT_YIELD;
   const st = useRef(newState());
@@ -608,13 +609,20 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
                 if ((kernel.conduits.source[c] === idx || kernel.conduits.target[c] === idx) && kernel.conduits.occluded[c]) shadowed = true;
               }
               const out = outputsOf().find((o) => o.planet === p.id);
-              if (shadowed) s[out.resource] += yieldOf(p.id) * pz.occlusionShare * dt / TICKS_PER_SECOND;
+              if (shadowed) {
+                s[out.resource] += yieldOf(p.id) * pz.occlusionShare * dt / TICKS_PER_SECOND;
+                if (out.secondary) s[out.secondary.resource] += out.secondary.yield * pz.occlusionShare * dt / TICKS_PER_SECOND;
+              }
             }
           });
         }
         if (kernel) outputsOf().forEach((o, i) => {
           const idx = planetIndex(o.planet), total = kernel.planets.gainTotal[idx], d = total - gainSeen[i];
-          if (d > 0) { s[o.resource] += d * difficulty.income; gainSeen[i] = total; }
+          if (d > 0) {
+            s[o.resource] += d * difficulty.income;
+            if (o.secondary) s[o.secondary.resource] += d * (o.secondary.yield / o.primary) * difficulty.income;
+            gainSeen[i] = total;
+          }
         });
         if (kernel) for (let c = 0; c < kernel.conduitCount; c++) {
           if (kernel.conduits.snapped[c] && !snapSeen.has(c)) {
@@ -954,8 +962,10 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       {u.current.governor ? (() => {
         const id = u.current.governor, idx = planetIndex(id), def = {yield: yieldOf(id)};
         const out = outputsOf().find((o) => o.planet === id);
+        const surveyed = !!(s.surveyed ?? {})[id];
         return <GovernorPanel s={s} kernel={kernel} planet={sysRef.current.planets[idx]} idx={idx} base={def.yield}
-          outputLabel={out.resource} onBuild={govBuild} onClose={closeGovernor} />;
+          outputLabel={RESOURCE_LABEL[out.resource] ?? out.resource} secondary={surveyed && out.secondary ? {...out.secondary, label: RESOURCE_LABEL[out.secondary.resource] ?? out.secondary.resource} : null}
+          onBuild={govBuild} onClose={closeGovernor} />;
       })() : null}
 
       {u.current.tech ? <TechWeb s={s} onResearch={researchNow} onClose={toggleTech} /> : null}

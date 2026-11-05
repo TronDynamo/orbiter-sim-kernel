@@ -7,7 +7,7 @@ import {COST_LABEL} from "./ships.js";
 const STATUS = ["Intact", "Glassed", "Fractured", "Black hole"];
 const fmt = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}k` : `${Math.round(n)}`);
 
-export function GovernorPanel({s, kernel, planet, idx, base, outputLabel, onBuild, onClose}) {
+export function GovernorPanel({s, kernel, planet, idx, base, outputLabel, secondary, onBuild, onClose}) {
   const flowing = kernel.planets.flow[idx] > 0;
   const status = kernel.planets.status[idx];
   const population = kernel.planets.population[idx];
@@ -26,6 +26,7 @@ export function GovernorPanel({s, kernel, planet, idx, base, outputLabel, onBuil
         <div>Happiness: <b>{happy}</b> / 100</div>
         <div>Conduit link: <b>{flowing ? "flowing" : "none"}</b></div>
         <div>Output: <b>{flowing ? base : 0} {outputLabel}/s</b>{extra.map((d) => <span key={d.key}> + {d.rate} {d.resource}/s</span>)}</div>
+        {secondary ? <div>Secondary: <b>{flowing ? secondary.yield : 0} {secondary.label}/s</b></div> : null}
       </div>
       <div style={{borderTop: "1px solid rgba(255,255,255,0.08)", marginTop: 10, paddingTop: 8}}>
         <b style={{fontSize: 13}}>Infrastructure</b>

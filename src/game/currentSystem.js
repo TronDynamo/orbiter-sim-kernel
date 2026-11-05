@@ -27,22 +27,35 @@ export function bootSystem() {
 // Starter worlds keep their established resource.
 export const STARTER_RESOURCE = {thalassa: "biomass", aeros: "cryo", kryos: "compute", ferrum: "alloys"};
 
-// Biome-derived production for generated worlds. The yield is the kernel's harvest rate once the world
-// is surveyed, the same scale as the starter worlds. Only the first resource of each pair is wired.
+// Biome-derived production for generated worlds. Each class has a primary yield (the kernel's harvest rate
+// once the world is surveyed, the same scale as the starter worlds) and a secondary yield at roughly half rate.
+// Resource keys are the game's stockpiles: biomass, cryo (Coolant), alloys, compute, credits, fuel, propellant.
 export const YIELD_CLASSES = {
-  pelagic: {resource: "biomass", yield: 15, label: "Pelagic Ocean"},
-  methane: {resource: "cryo", yield: 12, label: "Methane Giant"},
-  basalt: {resource: "alloys", yield: 10, label: "Oxidized Iron / Basalt"},
-  cryo: {resource: "compute", yield: 8, label: "Cryo-Glacier"},
-  rare: {resource: "credits", yield: 14, label: "Carbon Diamond / Rare"},
+  pelagic: {label: "Pelagic Ocean", resource: "biomass", yield: 15, secondary: {resource: "fuel", yield: 7}},
+  methane: {label: "Methane Giant", resource: "cryo", yield: 12, secondary: {resource: "propellant", yield: 6}},
+  basalt: {label: "Oxidized Iron / Basalt", resource: "alloys", yield: 10, secondary: {resource: "credits", yield: 5}},
+  glacier: {label: "Cryo-Glacier", resource: "compute", yield: 8, secondary: {resource: "cryo", yield: 4}},
+  diamond: {label: "Carbon Diamond", resource: "credits", yield: 14, secondary: {resource: "alloys", yield: 4}},
 };
-// Sector biome name -> yield class. Desert, Scorched, Toxic and Jungle are assigned to the nearest class.
+// Display names for the stockpiles, used by the governor and the top bar.
+export const RESOURCE_LABEL = {
+  biomass: "Biomass", cryo: "Coolant", alloys: "Alloys", compute: "Compute", credits: "Credits",
+  fuel: "Fuel", propellant: "Propellant",
+};
+// Biome name -> yield class. Exact names from the design sheet, plus the names the sector generator emits.
+// Biomes not on the sheet (Volcanic, Barren Rock) keep the class they had before.
 export const BIOME_CLASS = {
-  "Ocean World": "pelagic", "Jungle Biosphere": "pelagic",
-  "Methane Giant": "methane", "Toxic": "methane",
-  "Rust Industrial": "basalt", "Volcanic": "basalt", "Barren Rock": "basalt", "Desert": "basalt", "Scorched": "basalt",
-  "Frozen Cryo-Sphere": "cryo", "Ice Drift": "cryo",
-  "Nebula Veil": "rare",
+  // Pelagic
+  "Pelagic Ocean": "pelagic", "Ocean World": "pelagic", "Jungle": "pelagic", "Jungle Biosphere": "pelagic", "Continental": "pelagic",
+  // Methane
+  "Methane Giant": "methane", "Toxic": "methane", "Sub-Neptune": "methane",
+  // Basalt
+  "Oxidized Iron": "basalt", "Rust Industrial": "basalt", "Basalt": "basalt", "Desert": "basalt", "Scorched": "basalt",
+  "Volcanic": "basalt", "Barren Rock": "basalt",
+  // Glacier
+  "Cryo-Glacier": "glacier", "Nitrogen Ice": "glacier", "Frozen Cryo-Sphere": "glacier", "Ice Drift": "glacier",
+  // Diamond
+  "Carbon Diamond": "diamond", "Precursor Ruin": "diamond", "Crystal Shard": "diamond", "Nebula Veil": "diamond",
 };
 export function yieldClassOf(biome) {
   return YIELD_CLASSES[BIOME_CLASS[biome]] ?? YIELD_CLASSES.basalt;
@@ -142,6 +155,7 @@ export function systemFromSector(sector) {
     biome: p.biome,
     yield: yieldClassOf(p.biome).yield,
     resource: yieldClassOf(p.biome).resource,
+    secondary: yieldClassOf(p.biome).secondary,
     yieldLabel: yieldClassOf(p.biome).label,
   }));
   return {
