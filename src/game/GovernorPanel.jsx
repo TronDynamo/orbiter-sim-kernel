@@ -1,3 +1,4 @@
+import {Icon} from "./icons.jsx";
 // Colony Governor: a planet's population, happiness, yield and infrastructure. Opens when a world is clicked.
 import {INFRA, infraOf, happinessOf, costOf} from "./colony.js";
 import {shortfall} from "./rules.js";
@@ -33,7 +34,7 @@ export function GovernorPanel({s, kernel, planet, idx, base, outputLabel, onBuil
           return (
             <div key={d.key} style={{padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.05)"}}>
               <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8}}>
-                <span style={{fontSize: 13}}><b>{d.name}</b>{has ? " ✓" : ""}</span>
+                <span style={{fontSize: 13}}><b>{d.name}</b>{has ? <Icon name="check" size={12} /> : ""}</span>
                 {has ? <span style={{fontSize: 11, opacity: 0.7}}>built</span> : (
                   <button className="pill zelo" disabled={!!why} title={why ? `Short: ${why}` : `Build ${d.name}`} onClick={() => onBuild(d.key)}
                     style={{opacity: why ? 0.45 : 1, cursor: why ? "not-allowed" : "pointer"}}>Build</button>

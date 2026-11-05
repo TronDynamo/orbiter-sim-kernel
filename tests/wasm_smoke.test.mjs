@@ -38,7 +38,7 @@ test('wasm kernel: player conduits are added, read through views and removed', {
   k._orbiter_tick(60);
   const lenPtr = k._orbiter_conduit_length() / 8;
   const len = k.HEAPF64[lenPtr];
-  assert.ok(len > 0 && len < 440, 'length is read through the view');
+  assert.ok(len > 0 && len < 650, 'length is read through the view');
   assert.equal(k._orbiter_conduit_remove(0), 0, 'conduit is removed');
   assert.equal(k._orbiter_conduit_count(), 0);
 });

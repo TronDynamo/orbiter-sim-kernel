@@ -16,7 +16,7 @@ export const WEAPON = { ICBM: 0, CRACKER_DRILL: 1, STARKILLER: 2, SINGULARITY_TO
 // Mirrors CONDUIT_ERR_* in src/orbiter_kernel.hpp: results of addConduit that are below zero.
 export const CONDUIT_ERR = { BAD_PLANET: -1, DUPLICATE: -2, TOO_LONG: -3, OCCLUDED: -4, FULL: -5 };
 // Mirrors CONDUIT_RULES in config/planets.js: player conduits snap past maxLength and turn amber from amberLength.
-export const CONDUIT_RULES = { maxLength: 440, amberLength: 340 };
+export const CONDUIT_RULES = { maxLength: 650, amberLength: 455 };
 
 // Vite will not import files from public/ as modules in dev, so the module is fetched and imported
 // through a blob URL. The WebAssembly file is located explicitly, so this works in dev and in builds.

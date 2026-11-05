@@ -12,7 +12,7 @@ export const GAME_GALAXY = {
   sun: {base: [170, 64, 46], patch: [230, 130, 90], glow: 'rgba(230,90,50,', radius: 44},
   nebula: [200, 70, 40],
   planets: [
-    {id: 'thalassa', name: 'Thalassa', tag: 'Thalassa', molten: true, color: '#7fd3ff', r: 10, orbit: 170, speed: 0.314, phase: 0.0, inner: true},
+    {id: 'thalassa', name: 'Thalassa', tag: 'Thalassa', color: '#7fd3ff', r: 10, orbit: 300, speed: 0.314, phase: 0.0, inner: true},
     {id: 'aeros', name: 'Aeros', tag: 'Aeros', color: '#d6a84f', r: 11, orbit: 255, speed: 0.196, phase: 2.0, inner: true},
     {id: 'ferrum', name: 'Ferrum', tag: 'Ferrum', color: '#8a6a5a', r: 10, orbit: 335, speed: 0.14, phase: 3.5},
     {id: 'kryos', name: 'Kryos', tag: 'Kryos', color: '#c9ecff', r: 12, orbit: 420, speed: 0.105, phase: 1.0},

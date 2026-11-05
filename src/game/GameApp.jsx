@@ -25,6 +25,10 @@ import {SenateChamber} from "./SenateChamber.jsx";
 import {VictoryModal} from "./VictoryModal.jsx";
 import {RULES, newState, snapTethers, network, tick, tryTether, checkTether, cut, tetherAt, tensionOf, tensionColor, build, hitBody, distToTether, orderShip, shortfall, fireWeapon} from "./rules.js";
 import {SHIPS, SHIP_ORDER, COST_LABEL, drawShip, fleetPower} from "./ships.js";
+import {stepFleet, sendShip, shipPosition, interceptAt} from "./fleet.js";
+import {Icon, drawArk, drawRelay} from "./icons.jsx";
+import {Academy} from "./Academy.jsx";
+import {ShipPreview} from "./ShipPreview.jsx";
 
 const START_MSG = "Drag from one world to another to build a conduit. Conduits snap beyond " + CONDUIT_RULES.maxLength + " units.";
 const CONDUIT_MSG = {
@@ -36,7 +40,8 @@ const CONDUIT_MSG = {
 };
 const isPlanet = (id) => GAME_GALAXY.planets.some((p) => p.id === id);
 // Which stockpile each world's siphoned output feeds (game data; the kernel only produces the flow).
-const FLEET_ORBIT = 26;   // world units around Ferrum where hulls hold orbit
+// Conduit tone by tension: cyan below 70% of the snap limit, amber to 90%, a pulsing red beyond that.
+const tensionTone = (r, now) => r >= 0.9 ? `rgba(239,68,68,${(0.55 + 0.45 * Math.sin(now / 120)).toFixed(3)})` : r >= 0.7 ? "#f59e0b" : "#38bdf8";
 const PLANET_OUTPUT = [
   {planet: "thalassa", resource: "biomass"},
   {planet: "aeros", resource: "cryo"},   // Coolant
@@ -51,7 +56,7 @@ const planetIndex = (id) => GAME_GALAXY.planets.findIndex((p) => p.id === id);
 function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
   const canvasRef = useRef(null), overlayRef = useRef(null), appRef = useRef(null);
   const st = useRef(newState());
-  const u = useRef({drag: null, mode: null, msg: START_MSG, msgWin: false, paused: false, speed: 1, tick: 0, shipyard: false, armory: false, comms: false, governor: null, tech: false, senate: false, arm: null, hover: null, pointer: null, menu: false, confirm: null, autosaveAt: -1e9, fps: 0});
+  const u = useRef({drag: null, mode: null, msg: START_MSG, msgWin: false, paused: false, speed: 1, tick: 0, shipyard: false, armory: false, comms: false, governor: null, tech: false, senate: false, arm: null, hover: null, pointer: null, menu: false, confirm: null, autosaveAt: -1e9, fps: 0, selected: null, briefing: !!session.tutorial});
   const [ui, setUi] = useState({...u.current});
   const refresh = () => setUi({...u.current});
   const difficulty = DIFFICULTIES[session.difficulty] ?? DIFFICULTIES.commander;
@@ -152,6 +157,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
     let buildTick = kernel.tickCount;            // kernel tick up to which structure income has been paid
 
     const onDown = (e) => {
+      if (e.button !== 0) return;
       const P = positions(); if (!P) return;
       const p = toWorld(e);
       if (s0.mode === "relay" || s0.mode === "repair") {
@@ -180,6 +186,12 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         const doFire = () => {
           const r = fireWeapon(st.current, W.type);
           if (!r.ok) { s0.arm = null; say(r.msg); refresh(); return; }
+          if (W.target !== "core" && interceptAt(st.current, id)) {
+            st.current.flashes.push({x: P[id].x, y: P[id].y, t: performance.now()});
+            say(`A ship in orbit around ${planetName(id)} intercepted the ${W.name}.`, true);
+            s0.arm = null; refresh();
+            return;
+          }
           if (W.target !== "core" && absorbStrike(st.current, id)) {
             // a barrier intercepts the strike: the shot never reaches the world, the shield is spent
             st.current.flashes.push({x: P[id].x, y: P[id].y, t: performance.now()});
@@ -202,8 +214,12 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         doFire();
         return;
       }
+      const zb = scene.sim.c[4] * scene.base;
+      const picked = st.current.fleet.find((f) => { const q = shipPosition(f, P); return Math.hypot(q.x - p.x, q.y - p.y) <= 16 / zb; });
+      if (picked) { s0.selected = picked.id; say(`${SHIPS[picked.type].name} selected. Right-click a world to send it.`); refresh(); return; }
       const id = hitBody(st.current, P, p);
       if (id) s0.drag = {from: id, cur: p, start: p};
+      else if (s0.selected != null) { s0.selected = null; say("Ship deselected."); refresh(); }
       ov.setPointerCapture(e.pointerId);
     };
     const onMove = (e) => {
@@ -226,6 +242,22 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       }
       s0.drag = null;
     };
+    const liveConduits = () => {
+      const out = [];
+      if (kernel) for (let c = 0; c < kernel.conduitCount; c++) out.push({a: GAME_GALAXY.planets[kernel.conduits.source[c]].id, b: GAME_GALAXY.planets[kernel.conduits.target[c]].id, snapped: !!kernel.conduits.snapped[c]});
+      return out;
+    };
+    const onCtx = (e) => {
+      e.preventDefault();
+      const P = positions(); if (!P || s0.selected == null) return;
+      const ship = st.current.fleet.find((f) => f.id === s0.selected);
+      if (!ship) { s0.selected = null; refresh(); return; }
+      const id = hitBody(st.current, P, toWorld(e));
+      if (!id || !isPlanet(id)) { say("Right-click a world to send the selected ship."); refresh(); return; }
+      const r = sendShip(st.current, ship, id, P, liveConduits(), planetName(id));
+      say(r.msg, r.ok); refresh();
+    };
+    ov.addEventListener("contextmenu", onCtx);
     ov.addEventListener("pointerdown", onDown);
     ov.addEventListener("pointermove", onMove);
     ov.addEventListener("pointerup", onUp);
@@ -256,12 +288,13 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           if (!A || !B) continue;
           const a = toS(A), b = toS(B), len = kernel.conduits.length[c];
           const snapped = !!kernel.conduits.snapped[c], occluded = !!kernel.conduits.occluded[c];
-          const col = snapped ? "#EF4444" : occluded ? "rgba(148,163,184,0.35)" : len > CONDUIT_RULES.amberLength ? "#F5C542" : "#10B981";
+          const ratio = len / (kernel.conduits.maxLength[c] || CONDUIT_RULES.maxLength);
+          const col = snapped ? "#EF4444" : occluded ? "rgba(148,163,184,0.35)" : tensionTone(ratio, now);
           ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.setLineDash(snapped ? [4, 6] : []);
           ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); ctx.setLineDash([]);
           const m = {x: (a.x + b.x) / 2, y: (a.y + b.y) / 2};
           ctx.font = "11px system-ui"; ctx.fillStyle = col; ctx.textAlign = "center";
-          ctx.fillText(snapped ? "snapped" : occluded ? "in shadow" : `${Math.round(kernel.conduits.throughput[c])} flow · ${Math.round(len)}u`, m.x, m.y - 6);
+          ctx.fillText(snapped ? "snapped" : occluded ? "in shadow" : ratio >= 0.7 ? `TENSION: ${Math.round(ratio * 100)}%` : `${Math.round(kernel.conduits.throughput[c])} flow · ${Math.round(len)}u`, m.x, m.y - 6);
         }
       }
 
@@ -368,25 +401,32 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         }
       }
 
-      // fleet: procedurally drawn hulls holding orbit around Ferrum
-      const fer = P.ferrum;
-      if (fer && s.fleet.length) {
-        const t = kernel ? kernel.tickCount / TICKS_PER_SECOND : 0;
+      // ships: vector hulls flying the map; the selected ship gets a ring and a nav vector to its target
+      if (s.fleet.length) {
+        const tt = now / 1000;
         for (const f of s.fleet) {
-          const ang = f.phase + t * 0.7;
-          const q = toS({x: fer.x + Math.cos(ang) * FLEET_ORBIT, y: fer.y + Math.sin(ang) * FLEET_ORBIT});
-          drawShip(ctx, f.type, q.x, q.y, ang + Math.PI / 2, 11);
+          const q = toS(shipPosition(f, P));
+          drawShip(ctx, f.type, q.x, q.y, f.heading ?? 0, {thrust: f.thrust ?? 0, t: tt});
+          if (f.id === s0.selected) {
+            ctx.strokeStyle = "#38bdf8"; ctx.lineWidth = 1.2; ctx.setLineDash([3, 4]);
+            ctx.beginPath(); ctx.arc(q.x, q.y, 18, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+            const T = f.to && P[f.to];
+            if (T && (f.mode === "transit" || f.mode === "surf")) {
+              const tq = toS(T); ctx.strokeStyle = "rgba(56,189,248,0.6)"; ctx.lineWidth = 1;
+              ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(tq.x, tq.y); ctx.stroke();
+            }
+          }
         }
       }
 
       // Ark, relays, labels
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
       const ark = toS(ARK_POS);
-      ctx.font = "20px system-ui"; ctx.fillText("🚀", ark.x, ark.y);
+      drawArk(ctx, ark.x, ark.y);
       ctx.font = "12px system-ui"; ctx.fillStyle = "#cfd8e6"; ctx.fillText("Ark Endeavor", ark.x, ark.y - 20);
       for (const r of s.relays) {
         const q = toS(r);
-        ctx.font = "16px system-ui"; ctx.fillText("📡", q.x, q.y);
+        drawRelay(ctx, q.x, q.y);
         ctx.font = "10px system-ui"; ctx.fillStyle = r.hp < 15 ? "#ff8a8a" : "#9fb3cc"; ctx.fillText(`${Math.max(0, Math.round(r.hp))}`, q.x, q.y + 14);
       }
       ctx.font = "12px system-ui"; ctx.fillStyle = "#cfd8e6";
@@ -394,6 +434,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
     };
 
+    let fleetTick = -1, prevP = {};
     let frames = 0, fpsT = performance.now(), prevStatus = null, lastAutosave = performance.now();
     const loop = (now) => {
       frames += 1;
@@ -403,6 +444,17 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         const s = st.current, gameT = sim.c[5];
         if (lastGame < 0) { lastGame = Math.floor(gameT); s.lastTick = lastGame; }
         for (const msg of snapTethers(s, P, now)) say(msg);
+        if (kernel) {
+          if (fleetTick < 0) fleetTick = kernel.tickCount;
+          const dt = kernel.tickCount - fleetTick;
+          if (dt > 0) {
+            const vel = {};
+            for (const id of Object.keys(P)) if (prevP[id]) vel[id] = {x: (P[id].x - prevP[id].x) / dt, y: (P[id].y - prevP[id].y) / dt};
+            stepFleet(s, P, dt, {conduits: liveConduits(), velocity: vel});
+            fleetTick = kernel.tickCount;
+            prevP = Object.fromEntries(Object.keys(P).map((id) => [id, {x: P[id].x, y: P[id].y}]));
+          }
+        }
         if (kernel) {
           const total = kernel.creditTotal, d = total - creditSeen;
           if (d > 0) { s.credits += d * difficulty.income; creditSeen = total; }
@@ -537,6 +589,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("blur", onBlur);
       window.removeEventListener("focus", onFocus);
+      ov.removeEventListener("contextmenu", onCtx);
       ov.removeEventListener("pointerdown", onDown);
       ov.removeEventListener("pointermove", onMove);
       ov.removeEventListener("pointerup", onUp);
@@ -556,8 +609,9 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
   function applySpeed() {
     const sc = window.__relic?.scene; if (!sc) return;
     const cur = u.current, over = st.current.won || st.current.lost;
-    sc.speed = cur.paused || cur.menu || over ? 0 : cur.speed;
+    sc.speed = cur.paused || cur.menu || cur.briefing || over ? 0 : cur.speed;
   }
+  function dismissBriefing() { u.current.briefing = false; applySpeed(); refresh(); }
   function openMenu() { if (u.current.menu) return; u.current.menu = true; applySpeed(); refresh(); }
   function closeMenu() { u.current.menu = false; applySpeed(); refresh(); }
   function syncSettings() { const sc = window.__relic?.scene; if (sc) sc.orbitScale = getSettings().orbitOpacity / 35; refresh(); }
@@ -647,24 +701,24 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
 
       <div className="brand glass">
         <div className="brand-kicker mono">ORBITER: STELLAR CONQUEST · MISSION TELEMETRY</div>
-        <div className="row"><span>💳 Credits</span><b>{Math.floor(s.credits)}</b></div>
-        <div className="row"><span>🌱 Biomass</span><b>{Math.floor(s.biomass)}</b></div>
-        <div className="row"><span>🔩 Alloys</span><b>{Math.floor(s.alloys)}</b></div>
-        <div className="row"><span>🧠 Compute <button className="pill zelo" style={{padding: "0 6px", marginLeft: 4}} title="Orbital Tech Web" onClick={toggleTech}>🧪</button></span><b>{Math.floor(s.compute)}</b></div>
-        <div className="row"><span>❄️ Coolant</span><b>{Math.floor(s.cryo)}</b></div>
-        <div className="row"><span>🚀 Fleet</span><b>{s.fleet.length}</b></div>
-        <div className="row"><span>⚡ Fleet power</span><b>{Math.round(fleetPower(s.fleet) * perks(s).fleetMult * 10) / 10}</b></div>
-        <div className="row"><span>🛡️ Hull</span><b>{Math.max(0, Math.round(s.hull))}%</b></div>
-        <div className="row"><span>⛽ Fuel</span><b>{Math.floor(s.fuel)}</b></div>
-        <div className="row"><span>🔥 Propellant</span><b>{Math.floor(s.propellant)}</b></div>
-        <div className="row"><span>🌀 Singularity data</span><b>{Math.floor(s.data)} / {RULES.DATA_GOAL}</b></div>
-        <div className="row"><span>☢️ Radiation</span><b>{radiationLabel}</b></div>
+        <div className="row"><span><Icon name="credits" /> Credits</span><b>{Math.floor(s.credits)}</b></div>
+        <div className="row"><span><Icon name="biomass" /> Biomass</span><b>{Math.floor(s.biomass)}</b></div>
+        <div className="row"><span><Icon name="alloys" /> Alloys</span><b>{Math.floor(s.alloys)}</b></div>
+        <div className="row"><span><Icon name="compute" /> Compute <button className="pill zelo" style={{padding: "0 6px", marginLeft: 4}} title="Orbital Tech Web" onClick={toggleTech}><Icon name="tech" /></button></span><b>{Math.floor(s.compute)}</b></div>
+        <div className="row"><span><Icon name="coolant" /> Coolant</span><b>{Math.floor(s.cryo)}</b></div>
+        <div className="row"><span><Icon name="fleet" /> Fleet</span><b>{s.fleet.length}</b></div>
+        <div className="row"><span><Icon name="power" /> Fleet power</span><b>{Math.round(fleetPower(s.fleet) * perks(s).fleetMult * 10) / 10}</b></div>
+        <div className="row"><span><Icon name="hull" /> Hull</span><b>{Math.max(0, Math.round(s.hull))}%</b></div>
+        <div className="row"><span><Icon name="fuel" /> Fuel</span><b>{Math.floor(s.fuel)}</b></div>
+        <div className="row"><span><Icon name="propellant" /> Propellant</span><b>{Math.floor(s.propellant)}</b></div>
+        <div className="row"><span><Icon name="singularity" /> Singularity data</span><b>{Math.floor(s.data)} / {RULES.DATA_GOAL}</b></div>
+        <div className="row"><span><Icon name="radiation" /> Radiation</span><b>{radiationLabel}</b></div>
         <div className="row"><span>Year</span><b>{yr}</b></div>
         {getSettings().fps ? <div className="row"><span>Frame rate</span><b>{u.current.fps} fps</b></div> : null}
       </div>
 
       <div className="top-right" style={{gap: 8}}>
-        <button className="pill glass zelo" title="Menu (Esc)" aria-label="Menu" onClick={openMenu}>⚙</button>
+        <button className="pill glass zelo" title="Menu (Esc)" aria-label="Menu" onClick={openMenu}><Icon name="gear" /></button>
         <button className="pill glass zelo" onClick={togglePause}>{u.current.paused ? "Resume" : "Pause"}</button>
         {[1, 2, 4].map((v) => (
           <button key={v} className={"pill glass zelo" + (u.current.speed === v && !u.current.paused ? " on" : "")} onClick={() => setSpeed(v)}>{v}x</button>
@@ -675,13 +729,13 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       {u.current.msg ? <div className={"toast glass" + (u.current.msgWin ? " win" : "")} style={{top: 60, pointerEvents: "none", maxWidth: 300, textAlign: "center", whiteSpace: "normal"}}>{u.current.msg}</div> : null}
 
       <footer className="dock glass" style={{flexWrap: "wrap", gap: 6, justifyContent: "center"}}>
-        <button className={"pill zelo" + (u.current.mode === "relay" ? " on" : "")} onClick={() => setMode("relay")}>📡 Relay satellite · 15🔩 5❄️</button>
-        <button className={"pill zelo" + (u.current.mode === "repair" ? " on" : "")} onClick={() => setMode("repair")}>🛡️ Patch hull · 10🔩</button>
-        <button className={"pill zelo" + (u.current.mode === "cut" ? " on" : "")} onClick={() => setMode("cut")}>✂️ Decouple tether</button>
-        <button className={"pill zelo" + (u.current.shipyard ? " on" : "")} onClick={toggleShipyard}>🚀 Shipyard</button>
-        <button className={"pill zelo" + (u.current.armory ? " on" : "")} onClick={toggleArmory}>☢️ Armory</button>
-        <button className={"pill zelo" + (u.current.comms ? " on" : "")} onClick={toggleComms}>📡 Comms</button>
-        <button className={"pill zelo" + (s.senate.dismissed ? "" : " flash-alert")} onClick={openSenate}>🏛️ Senate</button>
+        <button className={"pill zelo" + (u.current.mode === "relay" ? " on" : "")} onClick={() => setMode("relay")}><Icon name="relay" /> Relay satellite · 15 Alloys · 5 Coolant</button>
+        <button className={"pill zelo" + (u.current.mode === "repair" ? " on" : "")} onClick={() => setMode("repair")}><Icon name="repair" /> Patch hull · 10 Alloys</button>
+        <button className={"pill zelo" + (u.current.mode === "cut" ? " on" : "")} onClick={() => setMode("cut")}><Icon name="cut" /> Decouple tether</button>
+        <button className={"pill zelo" + (u.current.shipyard ? " on" : "")} onClick={toggleShipyard}><Icon name="shipyard" /> Shipyard</button>
+        <button className={"pill zelo" + (u.current.armory ? " on" : "")} onClick={toggleArmory}><Icon name="armory" /> Armory</button>
+        <button className={"pill zelo" + (u.current.comms ? " on" : "")} onClick={toggleComms}><Icon name="comms" /> Comms</button>
+        <button className={"pill zelo" + (s.senate.dismissed ? "" : " flash-alert")} onClick={openSenate}><Icon name="senate" /> Senate</button>
       </footer>
 
       {u.current.governor ? (() => {
@@ -706,6 +760,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           </div>
         </div>
       ) : null}
+      {u.current.briefing ? <Academy onDone={dismissBriefing} /> : null}
       {u.current.menu ? (
         <PauseMenu onResume={closeMenu} onQuickSave={() => persist("quicksave", "Quick save made.")}
           onSave={(slot) => persist(slot, "Game saved.")}
@@ -715,7 +770,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       {s.victory && !s.victoryAck ? <VictoryModal s={s} onKeep={keepPlaying} onRestart={restart} /> : null}
       {u.current.senateToast ? (
         <div key={u.current.senateToast.id} className={"senate-toast glass" + (u.current.senateToast.passed ? " passed" : " failed")}>
-          🏛️ {u.current.senateToast.text}
+          <Icon name="senate" /> {u.current.senateToast.text}
         </div>
       ) : null}
 
@@ -753,6 +808,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
             const ship = SHIPS[id], short = shortfall(s, ship.cost);
             return (
               <div key={id} style={{borderTop: "1px solid rgba(255,255,255,0.08)", padding: "8px 0"}}>
+                <ShipPreview type={id} />
                 <div style={{display: "flex", justifyContent: "space-between"}}><b>{ship.name}</b><span>{ship.seconds}s build</span></div>
                 <div style={{fontSize: 12, opacity: 0.8, margin: "2px 0 4px"}}>{ship.blurb} · power {ship.power}</div>
                 <div style={{fontSize: 12, marginBottom: 6}}>{Object.entries(ship.cost).map(([k, v]) => `${v} ${COST_LABEL[k]}`).join(" · ")}</div>
@@ -794,7 +850,7 @@ export function GameApp() {
     return () => { alive = false; };
   }, []);
   // Each new, restarted or loaded game is a new session with its own key, so the screen mounts clean.
-  const startNew = (opts) => { setSession({key: Date.now(), seed: opts.seed, difficulty: opts.difficulty, save: null}); setScreen("game"); };
+  const startNew = (opts) => { setSession({key: Date.now(), seed: opts.seed, difficulty: opts.difficulty, save: null, tutorial: !!opts.tutorial}); setScreen("game"); };
   const startLoad = (save) => { setSession({key: Date.now(), seed: save.seed, difficulty: save.difficulty, save}); setScreen("game"); };
   if (screen === "intro" || !kernel || !session) {
     return <IntroScreen kernelStatus={kernel ? "ONLINE" : "LOADING"} onStart={startNew} onLoad={startLoad} />;

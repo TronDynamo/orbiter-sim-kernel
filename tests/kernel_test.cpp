@@ -164,7 +164,8 @@ int main() {
 
         OrbiterSimulationEngine f;
         const auto& t = f.GetState();
-        CHECK(f.AddConduit(0, 3) == 0, "Thalassa to Kryos is accepted at the start");
+        // Aeros to Kryos can reach 675 units (255 + 420), past the 650 cap; Thalassa (orbit 300) to Kryos can reach 720.
+        CHECK(f.AddConduit(1, 3) == 0, "Aeros to Kryos is accepted at the start");
         for (int i = 0; i < 80000 && !t.conduit_snapped[0]; ++i) f.UpdateTick();
         CHECK(t.conduit_snapped[0], "a conduit stretched past the cap snaps");
         CHECK(t.conduit_throughput[0] == 0.0, "a snapped conduit carries no throughput");

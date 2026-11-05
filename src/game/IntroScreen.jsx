@@ -106,7 +106,7 @@ export function IntroScreen({kernelStatus, onStart, onLoad}) {
   };
   const beginNew = (difficulty) => {
     const seed = seedText.trim() || randomSeed();
-    go(() => onStart({seed, difficulty}));
+    go(() => onStart({seed, difficulty, tutorial: true}));
   };
   const continueLatest = () => { if (latest) go(() => onLoad(latest)); };
   const loadSlot = (id) => { const data = loadGame(id); if (data) go(() => onLoad(data)); };

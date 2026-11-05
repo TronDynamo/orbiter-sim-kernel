@@ -194,7 +194,7 @@ export function tick(state, P) {
   state.queue = state.queue.filter((q) => {
     q.left -= 1;
     if (q.left > 0) return true;
-    state.fleet.push({id: q.id, type: q.type, phase: state.fleet.length * 2.4});
+    state.fleet.push({id: q.id, type: q.type, mode: 'orbit', planet: 'ferrum', ang: state.fleet.length * 2.4, heading: 0, thrust: 0});
     events.push({msg: `${SHIPS[q.type].name} launched. It holds orbit around Ferrum.`});
     return false;
   });

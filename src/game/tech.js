@@ -1,7 +1,7 @@
 // Orbital tech tree. Research is paid in Compute. Perk values are PLACEHOLDERS until the design spec lands.
 export const TECHS = [
   {key: "beams", name: "High-Tensile Beams", tier: 1, cost: 120, requires: [],
-    perk: "Conduits snap 60 units later (limit 440 → 500)."},
+    perk: "Conduits snap 60 units later (limit 650 → 710)."},
   {key: "plating", name: "Phase Plating", tier: 1, cost: 160, requires: [],
     perk: "Shadowed worlds still earn 50% of their output while the sun blocks them."},
   {key: "spinal", name: "Spinal Mounts", tier: 2, cost: 320, requires: ["beams"],

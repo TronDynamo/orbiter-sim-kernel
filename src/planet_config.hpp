@@ -40,14 +40,14 @@ struct ConduitDef {
 
 constexpr size_t PLANET_COUNT = 4;
 constexpr size_t CONDUIT_COUNT = 0;
-constexpr double CONDUIT_MAX_LENGTH = 440.0;
-constexpr double CONDUIT_AMBER_LENGTH = 340.0;
+constexpr double CONDUIT_MAX_LENGTH = 650.0;
+constexpr double CONDUIT_AMBER_LENGTH = 455.0;
 constexpr double CREDITS_PER_MILLION_POP = 1.0;
 constexpr double CREDITS_PER_CONDUIT = 5.0;
 constexpr size_t WEAPON_COUNT = 4;
 
 inline constexpr PlanetDef PLANETS[PLANET_COUNT] = {
-    { 101u, 170.0, 0.0, 0.005233333333333334, 10.0, 12500000.0, 15.0 }, // Thalassa
+    { 101u, 300.0, 0.0, 0.005233333333333334, 10.0, 12500000.0, 15.0 }, // Thalassa
     { 102u, 255.0, 2.0, 0.003266666666666667, 11.0, 45000000.0, 12.0 }, // Aeros
     { 103u, 335.0, 3.5, 0.0023333333333333335, 10.0, 8200000.0, 10.0 }, // Ferrum
     { 104u, 420.0, 1.0, 0.00175, 12.0, 2100000.0, 8.0 }, // Kryos
