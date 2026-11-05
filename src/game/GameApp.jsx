@@ -211,8 +211,16 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
     let creditSeen = kernel.creditTotal;         // kernel credit total already credited
     let buildTick = kernel.tickCount;            // kernel tick up to which structure income has been paid
 
+    // Touch: two fingers pinch-zoom the map. A second finger cancels any one-finger drag, so a pinch never builds a conduit.
+    const touches = new Map();
+    let pinch = null;
+    const pinchDist = () => { const [a, b] = [...touches.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
     const onDown = (e) => {
       if (e.button !== 0) return;
+      if (e.pointerType === "touch") {
+        touches.set(e.pointerId, {x: e.clientX, y: e.clientY});
+        if (touches.size >= 2) { s0.drag = null; pinch = {d: pinchDist()}; return; }
+      }
       const P = positions(); if (!P) return;
       const p = toWorld(e);
       if (st.current.jumpGate?.built && !s0.mode && !s0.depotPlace && Math.abs(Math.hypot(p.x, p.y) - JUMP_GATE_BEACON_ORBIT_RADIUS) < 14) {
@@ -302,12 +310,26 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       ov.setPointerCapture(e.pointerId);
     };
     const onMove = (e) => {
+      if (e.pointerType === "touch" && touches.has(e.pointerId)) {
+        touches.set(e.pointerId, {x: e.clientX, y: e.clientY});
+        if (touches.size >= 2 && pinch) {
+          const d = pinchDist();
+          if (pinch.d > 0 && d > 0) scene.zoomBy(d / pinch.d);
+          pinch.d = d;
+          return;
+        }
+      }
       if (s0.drag) s0.drag.cur = toWorld(e);
       const r = ov.getBoundingClientRect();
       s0.pointer = {x: e.clientX - r.left, y: e.clientY - r.top};
       if (s0.arm) { const P = positions(); s0.hover = P ? hitBody(st.current, P, toWorld(e)) : null; }
     };
-    const onUp = () => {
+    const onUp = (e) => {
+      if (e?.pointerType === "touch") {
+        touches.delete(e.pointerId);
+        if (touches.size < 2) pinch = null;
+        if (touches.size > 0) return;
+      }
       const P = positions();
       if (s0.drag && P) {
         const target = hitBody(st.current, P, s0.drag.cur);

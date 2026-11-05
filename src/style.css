@@ -18,6 +18,10 @@ body { font-family: var(--sans); -webkit-font-smoothing: antialiased; }
 button { font: inherit; color: #e2e8f0; background: rgba(15, 23, 42, 0.92); border: 1px solid rgba(148, 163, 184, 0.35);
   border-radius: 8px; cursor: pointer; }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
+/* Dropdowns get the same dark surface and light text, so no control renders as a grey box with grey text. */
+select { font: inherit; color: #e2e8f0; background: rgba(15, 23, 42, 0.92); border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 8px; padding: 6px 10px; }
+select option { background: #0f172a; color: #e2e8f0; }
 
 .app { position: fixed; inset: 0; }
 .stage { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
