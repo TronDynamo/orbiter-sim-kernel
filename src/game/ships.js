@@ -14,7 +14,7 @@ export const fleetPower = (fleet) => fleet.reduce((sum, f) => sum + (SHIPS[f.typ
 export const FLIGHT_LENGTH = {corvette: 18, destroyer: 32, cruiser: 52};
 export const HULL_SIZE = Object.fromEntries(Object.entries(FLIGHT_LENGTH).map(([k, v]) => [k, {length: v, beam: Math.round(v * 0.6)}]));
 
-const DESIGN = 100;
+export const DESIGN = 100;
 
 // Exhaust: a tapered gradient with a hot core, plus drifting particles that thin out behind the nozzle.
 function plume(ctx, x, y, len, width, rgb, thrust, t, seed) {

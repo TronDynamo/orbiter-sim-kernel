@@ -28,6 +28,7 @@ import {SHIPS, SHIP_ORDER, COST_LABEL, drawShip, drawChevron, fleetPower, FLIGHT
 import {stepFleet, sendShip, shipPosition, interceptAt, depotPos, MAX_PROPELLANT} from "./fleet.js";
 import {Icon, drawArk, drawRelay} from "./icons.jsx";
 import {Academy} from "./Academy.jsx";
+import {drawPseudo3DShip, sunLocal, emitPlume, updatePlumes, drawPlumes} from "./pseudo3d.js";
 import {HudChip, HudMeter} from "./hud.jsx";
 import {ShipPreview} from "./ShipPreview.jsx";
 
@@ -280,6 +281,8 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
     ov.addEventListener("pointerup", onUp);
     ov.addEventListener("pointercancel", onUp);
 
+    const plumeBank = new Map();
+    let plumeT = performance.now();
     const drawOverlay = (P, now) => {
       const s = st.current, w = ov.clientWidth, h = ov.clientHeight;
       ctx.clearRect(0, 0, w, h);
@@ -422,10 +425,20 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       if (s.fleet.length) {
         const tt = now / 1000;
         const closeUp = scene.zoomUser >= 2;
+        const dtP = Math.min(0.05, Math.max(0, (now - plumeT) / 1000)); plumeT = now;
+        const sunW = P.sun ?? {x: 0, y: 0};
+        updatePlumes(plumeBank, dtP, new Set(s.fleet.map((f) => f.id)));
         for (const f of s.fleet) {
-          const q = toS(shipPosition(f, P));
-          if (closeUp) drawShip(ctx, f.type, q.x, q.y, f.heading ?? 0, {thrust: f.thrust ?? 0, t: tt, length: FLIGHT_LENGTH[f.type] * scene.zoomUser / 2});
-          else drawChevron(ctx, q.x, q.y, f.heading ?? 0, {thrust: f.thrust ?? 0, t: tt});
+          const world = shipPosition(f, P);
+          const q = toS(world);
+          const heading = f.theta ?? f.heading ?? 0;   // banked along the velocity vector
+          const length = closeUp ? FLIGHT_LENGTH[f.type] * scene.zoomUser / 2 : 0;
+          if (closeUp) drawPseudo3DShip(ctx, f.type, q.x, q.y, heading, {length, roll: f.roll ?? 0, sunDir: sunLocal(world.x, world.y, heading, sunW)});
+          else drawChevron(ctx, q.x, q.y, heading, {thrust: f.thrust ?? 0, t: tt});
+          // detached ion plumes: emitted at the stern, left behind to drift
+          const tail = closeUp ? length * 0.5 : 3;
+          emitPlume(plumeBank, f.id, q.x, q.y, heading, f.thrust ?? 0, dtP, tail);
+          drawPlumes(ctx, plumeBank.get(f.id));
           if (f.id === s0.selected) {
             ctx.strokeStyle = "#38bdf8"; ctx.lineWidth = 1.2; ctx.setLineDash([3, 4]);
             ctx.beginPath(); ctx.arc(q.x, q.y, closeUp ? 18 : 8, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);

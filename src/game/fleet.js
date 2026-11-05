@@ -3,6 +3,7 @@
 // live conduit at SURF_MULT times impulse speed, no propellant), docked (refuelling and repairing at a fuel depot).
 import {PLANETS} from "../../config/planets.js";
 import {SHIPS} from "./ships.js";
+import {bankShip} from "./pseudo3d.js";
 
 export const SHIP_ORBIT = 26;             // low-orbit radius around a world (world units)
 export const ORBIT_RATE = 0.02;           // radians per tick around a world
@@ -52,6 +53,7 @@ function settleInOrbit(f, P, id) {
 // Advances every ship by `ticks` kernel ticks. ctx: {conduits: [{a, b, snapped}], velocity: {id: {x, y}}}.
 export function stepFleet(s, P, ticks, ctx) {
   if (ticks <= 0) return;
+  const before = s.fleet.map((f) => shipPosition(f, P));
   for (const f of s.fleet) {
     if (!f.mode) { f.mode = 'orbit'; f.planet = 'ferrum'; f.ang = f.phase ?? 0; } // hulls saved before flight existed
     const max = SHIPS[f.type]?.hull ?? 100;
@@ -78,7 +80,7 @@ export function stepFleet(s, P, ticks, ctx) {
       const L = Math.max(1, Math.hypot(B.x - A.x, B.y - A.y));
       f.p = Math.min(1, f.p + (speed * SURF_MULT * ticks) / L);
       const q = shipPosition(f, P);
-      f.x = q.x; f.y = q.y; f.thrust = 1;
+      f.x = q.x; f.y = q.y; f.thrust = 0.45;   // surfing rides the tether on a throttled burn
       f.heading = Math.atan2(B.y - A.y, B.x - A.x);
       if (f.p >= 1) settleInOrbit(f, P, f.to);
       continue;
@@ -104,6 +106,10 @@ export function stepFleet(s, P, ticks, ctx) {
       } else settleInOrbit(f, P, f.to);
     }
   }
+  s.fleet.forEach((f, i) => {
+    const b = shipPosition(f, P), a = before[i];
+    bankShip(f, b.x - a.x, b.y - a.y, ticks);
+  });
 }
 
 // Issues a flight order to a world or a fuel depot. Returns {ok, msg}. A ship in orbit surfs when a live conduit joins
