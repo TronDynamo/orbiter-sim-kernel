@@ -8,6 +8,10 @@ export const TECHS = [
     perk: "Superweapons reload 25% faster."},
   {key: "anchors", name: "Singularity Anchors", tier: 2, cost: 420, requires: ["plating"],
     perk: "Fleet power +30%."},
+  {key: "flak", name: "Point-Defense Flak", tier: 1, cost: 140, requires: [],
+    perk: "Unlocks Point-Defense Flak mounts for warship swaps."},
+  {key: "lance", name: "Plasma Lances", tier: 2, cost: 360, requires: ["spinal"],
+    perk: "Unlocks Plasma Lance mounts for warship swaps."},
   {key: "dyson", name: "Dyson Framework", tier: 3, cost: 900, requires: ["spinal", "anchors"],
     perk: "Unlocks the Galactic Dyson Network victory: a conduit ring around the star."},
 ];

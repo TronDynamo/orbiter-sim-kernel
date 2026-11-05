@@ -31,6 +31,7 @@ import {Icon, drawArk, drawRelay} from "./icons.jsx";
 import {Academy} from "./Academy.jsx";
 import {drawPseudo3DShip, sunLocal, emitPlume, updatePlumes, drawPlumes} from "./pseudo3d.js";
 import {shadowAt, drawUmbra, drawLensing, drawDebrisBelt} from "./stellarFx.js";
+import {newCombat, stepCombat, weldSparks, mountsOf, MOUNTS, SWAP_COST, mountUnlocked} from "./combat.js";
 import {JUMP_GATE_COST, JUMP_GATE_BEACON_ORBIT_RADIUS, openStarchart, initiateJump, advanceWarp} from "./jumpGate.js";
 import {drawAnchor} from "./anchors.js";
 import {HudChip, HudMeter} from "./hud.jsx";
@@ -101,6 +102,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
   // Starter worlds read config/planets.js; generated worlds carry the yield of their biome class (currentSystem.js).
   const yieldOf = (id) => PLANET_DEFS.find((d) => d.key === id)?.yield ?? sysRef.current.planets.find((p) => p.id === id)?.yield ?? DEFAULT_YIELD;
   const st = useRef(newState());
+  const combatRef = useRef(newCombat());   // raiders, shots and debris; hulls and mounts live on the fleet
   const u = useRef({drag: null, mode: null, msg: START_MSG, msgWin: false, paused: false, speed: 1, tick: 0, shipyard: false, armory: false, comms: false, governor: null, tech: false, senate: false, arm: null, hover: null, pointer: null, menu: false, confirm: null, autosaveAt: -1e9, fps: 0, selected: null, briefing: !!session.tutorial, depotPlace: false});
   const [ui, setUi] = useState({...u.current});
   const refresh = () => setUi({...u.current});
@@ -469,6 +471,57 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         }
       }
 
+      // warship combat: raiders, shots, debris and visual damage states
+      {
+        const cb = combatRef.current, k = Math.max(0.6, Math.min(2, scene.zoomUser));
+        for (const r of cb.raiders) {
+          const q = toS(r), a = Math.atan2(r.vy, r.vx);
+          ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(a);
+          ctx.fillStyle = "#f87171"; ctx.shadowColor = "#ef4444"; ctx.shadowBlur = 8;
+          ctx.beginPath(); ctx.moveTo(7 * k, 0); ctx.lineTo(-5 * k, -4.5 * k); ctx.lineTo(-5 * k, 4.5 * k); ctx.closePath(); ctx.fill();
+          ctx.restore(); ctx.shadowBlur = 0;
+        }
+        for (const sh of cb.shots) {
+          const q = toS(sh), back = toS({x: sh.x - sh.vx * 0.03, y: sh.y - sh.vy * 0.03});
+          if (sh.kind === "kinetic") {
+            ctx.strokeStyle = "#e0f2fe"; ctx.lineWidth = 1.6; ctx.shadowColor = "#bae6fd"; ctx.shadowBlur = 6;
+            ctx.beginPath(); ctx.moveTo(back.x, back.y); ctx.lineTo(q.x, q.y); ctx.stroke();
+          } else if (sh.kind === "plasma") {
+            ctx.fillStyle = "#fb923c"; ctx.shadowColor = "#f97316"; ctx.shadowBlur = 10;
+            ctx.beginPath(); ctx.arc(q.x, q.y, 3.5 * k, 0, Math.PI * 2); ctx.fill();
+          } else {
+            ctx.fillStyle = "#fde68a"; ctx.shadowBlur = 0;
+            ctx.beginPath(); ctx.arc(q.x, q.y, 1.5, 0, Math.PI * 2); ctx.fill();
+          }
+        }
+        ctx.shadowBlur = 0;
+        for (const e of cb.fx) {
+          const q = toS(e), a = Math.max(0, e.life / e.max);
+          if (e.kind === "spark") { ctx.globalAlpha = a; ctx.fillStyle = e.color; ctx.fillRect(q.x - 1, q.y - 1, 2.2, 2.2); }
+          else {
+            ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(e.rot);
+            ctx.globalAlpha = Math.min(1, a * 1.2); ctx.fillStyle = e.color; ctx.strokeStyle = "rgba(226,232,240,0.5)"; ctx.lineWidth = 0.8;
+            ctx.beginPath(); e.pts.forEach((p, i) => (i ? ctx.lineTo(p.x * k, p.y * k) : ctx.moveTo(p.x * k, p.y * k)));
+            ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
+          }
+        }
+        ctx.globalAlpha = 1;
+        // damage states: scorch marks as hulls fall, and flickering arcs below half hull
+        for (const f of s.fleet) {
+          const max = SHIPS[f.type].hull, hp = f.hp ?? max;
+          if (hp >= max) continue;
+          const q = toS(shipPosition(f, P)), pct = hp / max;
+          ctx.fillStyle = `rgba(15,10,5,${(0.25 + 0.4 * (1 - pct)).toFixed(3)})`;
+          ctx.beginPath(); ctx.arc(q.x + 3 * k, q.y - 2 * k, 4 * k, 0, Math.PI * 2); ctx.fill();
+          if (pct < 0.5 && Math.random() < 0.3) {
+            ctx.strokeStyle = "#67e8f9"; ctx.lineWidth = 1; ctx.shadowColor = "#22d3ee"; ctx.shadowBlur = 6;
+            ctx.beginPath(); ctx.moveTo(q.x - 9 * k, q.y + (Math.random() - 0.5) * 6 * k);
+            for (let j = 1; j <= 3; j++) ctx.lineTo(q.x - 9 * k + j * 6 * k, q.y + (Math.random() - 0.5) * 10 * k);
+            ctx.stroke(); ctx.shadowBlur = 0;
+          }
+        }
+      }
+
       // Armory: cataclysm states read from the kernel, plus targeting feedback
       if (kernel) {
         const t = now / 1000;
@@ -618,7 +671,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
 
     let fleetTick = -1, prevP = {};
     let warpT = performance.now();
-    let frames = 0, fpsT = performance.now(), prevStatus = null, lastAutosave = performance.now();
+    let frames = 0, fpsT = performance.now(), prevStatus = null, lastAutosave = performance.now(), combatT = performance.now();
     const loop = (now) => {
       frames += 1;
       if (now - fpsT >= 1000) { s0.fps = Math.round((frames * 1000) / (now - fpsT)); frames = 0; fpsT = now; }
@@ -754,6 +807,18 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           if (persist("autosave")) s0.autosaveAt = now;
         }
         if (s.won || s.lost) scene.speed = 0;
+        // warship combat: raids in generated sectors, mounts firing, debris, bounties on kill. Scaled by game speed.
+        const cdt = Math.min(0.05, Math.max(0, (now - combatT) / 1000)) * (s0.paused ? 0 : (scene.speed || 0));
+        combatT = now;
+        if (!s.won && !s.lost) {
+          const sys = sysRef.current;
+          const edgeR = sys.type === "sector" ? Math.max(...sys.planets.map((p) => p.orbit)) : null;
+          const planets = sys.planets.filter((p) => P[p.id]).map((p) => P[p.id]);
+          for (const ev of stepCombat(combatRef.current, {dt: cdt, fleet: s.fleet, planets, core: P.core, pos: (f) => shipPosition(f, P), tech: s.tech, edgeR})) {
+            if (ev.kind === "kill") s.credits += ev.bounty;
+            say(ev.msg, ev.kind === "kill");
+          }
+        }
         drawOverlay(P, now);
         s0.tick = Math.floor(gameT);
         if (now - lastUi > 150) { lastUi = now; setUi({...s0}); }
@@ -844,8 +909,31 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
     const max = SHIPS[f.type].hull, hp = f.hp ?? max;
     if (hp >= max) flash("Bulkhead already intact.");
     else if (st.current.alloys < 10) flash("Patching a bulkhead needs 10 Alloys.");
-    else { st.current.alloys -= 10; f.hp = Math.min(max, hp + 25); flash(`${SHIPS[f.type].name} bulkhead patched.`, true); }
+    else {
+      st.current.alloys -= 10; f.hp = Math.min(max, hp + 25);
+      flash(`${SHIPS[f.type].name} bulkhead patched.`, true);
+      weldFx(f);
+    }
     refresh();
+  }
+  // Swaps one mount slot to the next weapon type the Tech Web has unlocked, paying Alloys for it.
+  function swapMount(id, slot) {
+    const f = st.current.fleet.find((x) => x.id === id); if (!f) return;
+    const mounts = mountsOf(f).slice();
+    const order = ["coilgun", "flak", "lance"];
+    const cur = mounts[slot];
+    const next = order.filter((k) => mountUnlocked(st.current.tech, k) && k !== cur);
+    if (!next.length) { flash("No other mount is unlocked yet. Research it in the Tech Web."); return; }
+    const pick = next[(order.indexOf(cur) + 1) % order.length] ?? next[0];
+    const cost = SWAP_COST[pick];
+    if (st.current.alloys < cost) { flash(`Swapping to ${MOUNTS[pick].label} needs ${cost} Alloys.`); return; }
+    st.current.alloys -= cost; mounts[slot] = pick; f.mounts = mounts;
+    flash(`${MOUNTS[cur].label} swapped for ${MOUNTS[pick].label}.`, true);
+    refresh();
+  }
+  // A patch queues welding sparks at the ship; the frame loop places them, since it holds the positions.
+  function weldFx(f) {
+    combatRef.current.weld.push(f.id);
   }
   function toggleOverclock() {
     const f = st.current.fleet.find((x) => x.id === u.current.selected); if (!f) return;
@@ -1034,6 +1122,8 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           <HudMeter label="Hull" pct={selPct} color={selPct > 60 ? "#22c55e" : selPct > 30 ? "#eab308" : "#ef4444"} value={`${selHp}/${selMax}`} warn={selPct <= 30} />
           <div className="hud-fleet mono"><span>PROPELLANT {Math.floor(s.propellant)}/{MAX_PROPELLANT}</span><span>{String(selShip.mode ?? "orbit").toUpperCase()}</span></div>
           <button className="hud-btn" onClick={patchBulkhead}><Icon name="repair" size={14} /> Patch bulkhead · 10 Alloys</button>
+          {mountsOf(selShip).length ? <div className="hud-fleet mono"><span>MOUNTS</span><span>{mountsOf(selShip).map((k) => MOUNTS[k].label).join(" · ")}</span></div> : null}
+          {mountsOf(selShip).map((k, i) => <button key={i} className="hud-btn" onClick={() => swapMount(selShip.id, i)}><Icon name="power" size={14} /> Swap {MOUNTS[k].label} · Alloys {SWAP_COST.coilgun}/{SWAP_COST.flak}/{SWAP_COST.lance}</button>)}
           <button className={"hud-btn" + (selShip.overclock ? " on" : "")} onClick={toggleOverclock}><Icon name="power" size={14} /> Overclock thrusters</button>
           {selShip.type === "tender" ? <button className="hud-btn" onClick={() => { u.current.deployRelay = true; }}><Icon name="relay" size={14} /> Deploy relay · {selShip.sats ?? 3} left</button> : null}
           {selShip.type === "freighter" ? <div className="hud-fleet mono"><span>HOLD {Math.floor(selShip.cargo ?? 0)}/{CARGO_CAP}</span><span>{selShip.res ? selShip.res.toUpperCase() : "EMPTY"}</span></div> : null}
