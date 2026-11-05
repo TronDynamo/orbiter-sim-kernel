@@ -16,6 +16,19 @@ const SIN_E = 0.55, COS_E = Math.sqrt(1 - SIN_E * SIN_E); // camera elevation ov
 const TAU = Math.PI * 2;
 const ORBIT_Y = 0.55; // ellipse squash for the tilted orbital plane
 const ZOOM = 1.6;
+
+// Camera tuning. Zoom is a range from full-system view to close inspection.
+export const ZOOM_MIN = 0.3, ZOOM_MAX = 4.5;
+export const ZOOM_DETAIL = 1.8;   // at or above this, ships draw as detailed hulls instead of chevrons
+export const ZOOM_FOLLOW = 2.0;   // at or above this, the camera centres on the followed body
+export const ZOOM_FOCUS = 3.5;    // double-click target zoom
+const ZOOM_GLIDE = 7;             // zoom approach rate (1/s)
+const FOCUS_GLIDE = 6;            // camera centre approach rate (1/s)
+
+// Frame-rate independent exponential approach: after time dt the gap has closed by 1 - exp(-rate * dt).
+export function easeToward(cur, target, dt, rate) {
+  return cur + (target - cur) * (1 - Math.exp(-dt * rate));
+}
 const SEL_SCALE = 1.75; // selected planet swells as the camera locks on
 
 function hexToRgb(hex) {
@@ -94,6 +107,9 @@ export class OrbitScene {
     this.nebulaDrift = true;
     this.panelWidth = 0; // css px of the right detail panel, for camera framing
     this.zoomUser = 0.72; // user zoom on top of the screen-fit size; 0.72 shows the whole system
+    this.zoomTarget = this.zoomUser; // where the zoom glides to
+    this.followFn = null; // () => {x, y} world point the camera centres on, or null
+    this.camF = null;     // smoothed camera centre while following
     this.time = 0;
     this.textures = {
       origin: null,
@@ -168,9 +184,17 @@ export class OrbitScene {
   }
 
   // Zoom in/out by a factor. Keeps the whole solar system in reach.
-  zoomBy(f) {
-    this.zoomUser = Math.max(0.2, Math.min(6.0, this.zoomUser * f));
-    this.base = this.baseRaw * this.zoomUser;
+  // Zoom glides toward the new level in frame(); snap skips the glide (used at load).
+  zoomBy(f, snap = false) {
+    this.zoomTo(this.zoomTarget * f, snap);
+  }
+  zoomTo(z, snap = false) {
+    this.zoomTarget = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z));
+    if (snap) { this.zoomUser = this.zoomTarget; this.base = this.baseRaw * this.zoomUser; }
+  }
+  // Camera follows fn() while zoomed in at or above ZOOM_FOLLOW. Pass null to release.
+  setFollow(fn) {
+    this.followFn = fn ?? null;
   }
 
   setGalaxy(id) {
@@ -208,6 +232,18 @@ export class OrbitScene {
 
   // Place planets at the external positions for this frame: world coords (read by game logic)
   // and screen coords (read by drawPlanet), projected with the same camera the engine uses.
+  // Centre the camera on the followed point, eased so it never jumps. Runs after the engine step,
+  // which otherwise pulls the focus toward the selected body or the origin.
+  followCamera(dt) {
+    const c = this.sim.c;
+    const p = this.followFn && this.zoomUser >= ZOOM_FOLLOW ? this.followFn() : null;
+    if (!p) { this.camF = null; return; }
+    if (!this.camF) this.camF = {x: c[2], y: c[3]};
+    this.camF.x = easeToward(this.camF.x, p.x, dt, FOCUS_GLIDE);
+    this.camF.y = easeToward(this.camF.y, p.y, dt, FOCUS_GLIDE);
+    c[2] = this.camF.x; c[3] = this.camF.y;
+  }
+
   applyPositions() {
     if (!this.positionSource || !this.sim) return;
     const list = this.positionSource();
@@ -238,10 +274,18 @@ export class OrbitScene {
     const kt = 1 - Math.exp(-dt * 4);
     this.tilt.x += (this.tiltTarget.x - this.tilt.x) * kt; this.tilt.y += (this.tiltTarget.y - this.tilt.y) * kt;
 
+    // zoom glide: approach the target, then snap when the difference is below a pixel-level fraction
+    const zGap = this.zoomTarget - this.zoomUser;
+    if (Math.abs(zGap) > 1e-4) {
+      this.zoomUser = easeToward(this.zoomUser, this.zoomTarget, dt, ZOOM_GLIDE);
+      this.base = this.baseRaw * this.zoomUser;
+    }
+
     if (this.sim) {
       this.sim.setView(this.w, this.h, this.base, this.panelWidth);
       this.sim.setParams(this.speed, this.density === 'dense' ? 700 : 260, ZOOM, SEL_SCALE, ORBIT_Y, SIN_E);
       this.sim.step(dt);
+      this.followCamera(dt);
       this.applyPositions();
       this.real = this.sim.c[6];
     }

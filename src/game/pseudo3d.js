@@ -44,7 +44,7 @@ export function sunLocal(x, y, heading, sun) {
 }
 
 // Hull with a keel ghost (depth), star-lit flank, and a bridge highlight nudged toward Sol Core.
-// opts: length (px), thrust (ignored here; plumes are detached), t, roll (radians), sunDir (from sunLocal).
+// opts: length (px), thrust (0..1, drives the engine flare glow), roll (radians), sunDir (from sunLocal).
 export function drawPseudo3DShip(ctx, type, x, y, heading, opts = {}) {
   const length = opts.length ?? FLIGHT_LENGTH[type] ?? 20;
   const roll = opts.roll ?? 0;
@@ -89,7 +89,30 @@ export function drawPseudo3DShip(ctx, type, x, y, heading, opts = {}) {
   ctx.beginPath();
   ctx.ellipse(8 * s + L.lx * 1.2, L.ly * 1.2, 5 * s, 2.4 * s, 0, 0, Math.PI * 2);
   ctx.fill();
+
+  drawHullDetail(ctx, s, opts.thrust ?? 0);
   ctx.restore();
+}
+
+// Close-up detail, drawn only at high zoom: armour bulkheads across the hull, engine flares at the stern
+// that brighten with thrust, and hardpoint mounts on the flanks. Hull-local coordinates, scaled by s.
+function drawHullDetail(ctx, s, thrust) {
+  ctx.strokeStyle = "rgba(15,23,42,0.55)";
+  ctx.lineWidth = Math.max(0.5, 0.8);
+  for (const x of [-22, -6, 10, 24]) {
+    ctx.beginPath(); ctx.moveTo(x * s, -11 * s); ctx.lineTo(x * s, 11 * s); ctx.stroke();
+  }
+  const burn = 0.35 + 0.65 * Math.min(1, Math.max(0, thrust));
+  for (const y of [-4.5, 4.5]) {
+    const g = ctx.createRadialGradient(-40 * s, y * s, 0, -40 * s, y * s, 7 * s);
+    g.addColorStop(0, `rgba(186,230,253,${(0.9 * burn).toFixed(3)})`);
+    g.addColorStop(0.4, `rgba(56,189,248,${(0.5 * burn).toFixed(3)})`);
+    g.addColorStop(1, "rgba(56,189,248,0)");
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(-40 * s, y * s, 7 * s, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.fillStyle = "rgba(148,163,184,0.75)";
+  for (const y of [-13, 13]) ctx.fillRect((-4 - 1.5) * s, (y - 1.5) * s, 3 * s, 3 * s);
 }
 
 // Ion plumes are particles emitted at the stern and left behind to drift, so they detach from the hull.

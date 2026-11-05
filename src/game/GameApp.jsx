@@ -1,7 +1,7 @@
 // Orbiter: Stellar Conquest screen. Reuses Orbit's solar-system scene (C++ WebAssembly orbit engine,
 // planets, dying star, starfield, styling). Tethers, the Ark and mission telemetry sit on top.
 import {useEffect, useRef, useState} from "react";
-import {OrbitScene} from "../orbit/scene.js";
+import {OrbitScene, ZOOM_DETAIL, ZOOM_FOCUS} from "../orbit/scene.js";
 import {BODY_STRIDE} from "../orbit/engine.js";
 import {ARK_POS} from "./galaxy.js";
 import {bootSystem, systemFromSector, kernelSystemFromSector, systemState, rehomeFleet, resourceFor, extraDestinations, RESOURCE_LABEL} from "./currentSystem.js";
@@ -76,7 +76,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
   useEffect(() => {
     const startSys = sysRef.current;
     const scene = new OrbitScene(canvasRef.current, {}, {galaxies: {[startSys.id]: startSys}, galaxyId: startSys.id});
-    scene.zoomBy(0.8); // frame all four orbits clear of the telemetry panel and the dock
+    scene.zoomBy(0.8, true); // frame all four orbits clear of the telemetry panel and the dock
     const ov = overlayRef.current, ctx = ov.getContext("2d");
     const s0 = u.current;
     let raf = 0, lastUi = 0, lastGame = -1;
@@ -254,7 +254,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       }
       const zb = scene.sim.c[4] * scene.base;
       const picked = st.current.fleet.find((f) => { const q = shipPosition(f, P); return Math.hypot(q.x - p.x, q.y - p.y) <= 16 / zb; });
-      if (picked) { s0.selected = picked.id; say(`${SHIPS[picked.type].name} selected. Right-click a world to send it.`); refresh(); return; }
+      if (picked) { s0.selected = picked.id; scene.setFollow(shipFollow(picked.id)); say(`${SHIPS[picked.type].name} selected. Right-click a world to send it.`); refresh(); return; }
       const id = hitBody(st.current, P, p);
       if (id) s0.drag = {from: id, cur: p, start: p};
       else if (s0.selected != null) { s0.selected = null; say("Ship deselected."); refresh(); }
@@ -295,9 +295,32 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       const r = sendShip(st.current, ship, id, P, liveConduits(), id.startsWith("depot") ? "the fuel depot" : planetName(id));
       say(r.msg, r.ok); refresh();
     };
+    // The camera follows a ship while zoomed in past ZOOM_FOLLOW. Stops once that ship is no longer selected.
+    const shipFollow = (id) => () => {
+      if (s0.selected !== id) return null;
+      const f = st.current.fleet.find((x) => x.id === id), P2 = positions();
+      return f && P2 ? shipPosition(f, P2) : null;
+    };
+    // Double-click a ship or world: glide the camera onto it and zoom to ZOOM_FOCUS.
+    const onDbl = (e) => {
+      const P = positions(); if (!P) return;
+      const w = toWorld(e);
+      const zb = scene.sim.c[4] * scene.base;
+      const ship = st.current.fleet.find((f) => { const q = shipPosition(f, P); return Math.hypot(q.x - w.x, q.y - w.y) <= 16 / zb; });
+      if (ship) {
+        s0.selected = ship.id; scene.setFollow(shipFollow(ship.id)); scene.zoomTo(ZOOM_FOCUS);
+        say(`${SHIPS[ship.type].name} centred.`); refresh(); return;
+      }
+      const id = hitBody(st.current, P, w);
+      if (id && isPlanet(id)) {
+        scene.setFollow(() => positions()?.[id] ?? null); scene.zoomTo(ZOOM_FOCUS);
+        say(`${planetName(id)} centred.`); refresh();
+      }
+    };
     const onWheel = (e) => { e.preventDefault(); scene.zoomBy(e.deltaY < 0 ? 1.12 : 1 / 1.12); };
     ov.addEventListener("contextmenu", onCtx);
     ov.addEventListener("wheel", onWheel, {passive: false});
+    ov.addEventListener("dblclick", onDbl);
     ov.addEventListener("pointerdown", onDown);
     ov.addEventListener("pointermove", onMove);
     ov.addEventListener("pointerup", onUp);
@@ -446,7 +469,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       // ships: vector hulls flying the map; the selected ship gets a ring and a nav vector to its target
       if (s.fleet.length) {
         const tt = now / 1000;
-        const closeUp = scene.zoomUser >= 2;
+        const closeUp = scene.zoomUser >= ZOOM_DETAIL;
         const dtP = Math.min(0.05, Math.max(0, (now - plumeT) / 1000)); plumeT = now;
         const sunW = P.sun ?? {x: 0, y: 0};
         updatePlumes(plumeBank, dtP, new Set(s.fleet.map((f) => f.id)));
@@ -455,7 +478,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           const q = toS(world);
           const heading = f.theta ?? f.heading ?? 0;   // banked along the velocity vector
           const length = closeUp ? FLIGHT_LENGTH[f.type] * scene.zoomUser / 2 : 0;
-          if (closeUp) drawPseudo3DShip(ctx, f.type, q.x, q.y, heading, {length, roll: f.roll ?? 0, sunDir: sunLocal(world.x, world.y, heading, sunW)});
+          if (closeUp) drawPseudo3DShip(ctx, f.type, q.x, q.y, heading, {length, roll: f.roll ?? 0, thrust: f.thrust ?? 0, sunDir: sunLocal(world.x, world.y, heading, sunW)});
           else drawChevron(ctx, q.x, q.y, heading, {thrust: f.thrust ?? 0, t: tt});
           // detached ion plumes: emitted at the stern, left behind to drift
           const tail = closeUp ? length * 0.5 : 3;
@@ -723,6 +746,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       window.removeEventListener("focus", onFocus);
       ov.removeEventListener("contextmenu", onCtx);
       ov.removeEventListener("wheel", onWheel);
+      ov.removeEventListener("dblclick", onDbl);
       ov.removeEventListener("pointerdown", onDown);
       ov.removeEventListener("pointermove", onMove);
       ov.removeEventListener("pointerup", onUp);
