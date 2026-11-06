@@ -352,10 +352,10 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           s0.lastShipTap = null; s0.selected = picked.id; s0.inspect = true; applySpeed();
           // open the panel after the second tap's release, so that release can't land on a button that just appeared
           setTimeout(() => { s0.panelHidden = false; refresh(); }, 150);
-          scene.setFollow(shipFollow(picked.id)); scene.zoomTo(ZOOM_FOCUS); refresh(); return;
+          refresh(); return; // the camera stays where the player is looking
         }
       }
-      if (picked && s0.selected === picked.id) { s0.selected = null; s0.inspect = false; applySpeed(); scene.setFollow(null); say("Ship deselected."); refresh(); return; }
+      if (picked && s0.selected === picked.id) { s0.selected = null; s0.inspect = false; applySpeed(); say("Ship deselected."); refresh(); return; }
       if (picked) { s0.selected = picked.id; s0.panelHidden = true; say(`${SHIPS[picked.type].name} selected. Right-click a world to send it, click empty space to send it there, or tap twice on a phone.`); refresh(); return; }
       const id = hitBody(st.current, P, p);
       if (id) s0.drag = {from: id, cur: p, start: p};
@@ -444,15 +444,15 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       const f = st.current.fleet.find((x) => x.id === id), P2 = positions();
       return f && P2 ? shipPosition(f, P2) : null;
     };
-    // Double-click a ship or world: glide the camera onto it and zoom to ZOOM_FOCUS.
+    // Double-click a ship: open its panel and freeze the clock, leaving the camera alone. Double-click a world: glide and zoom to it.
     const onDbl = (e) => {
       const P = positions(); if (!P) return;
       const w = toWorld(e);
       const zb = scene.sim.c[4] * scene.base;
       const ship = st.current.fleet.find((f) => { const q = shipPosition(f, P); return Math.hypot(q.x - w.x, q.y - w.y) <= 16 / zb; });
       if (ship) {
-        s0.selected = ship.id; s0.panelHidden = false; s0.inspect = true; applySpeed(); scene.setFollow(shipFollow(ship.id)); scene.zoomTo(ZOOM_FOCUS); refresh();
-        say(`${SHIPS[ship.type].name} centred.`); refresh(); return;
+        s0.selected = ship.id; s0.panelHidden = false; s0.inspect = true; applySpeed(); refresh(); // camera stays put
+        say(`${SHIPS[ship.type].name} opened. Pause is on; resume when you are ready.`); refresh(); return;
       }
       const id = hitBody(st.current, P, w);
       if (id && isPlanet(id)) {
