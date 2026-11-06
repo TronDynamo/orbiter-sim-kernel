@@ -17,6 +17,7 @@ import {saveGame, loadGame} from "./saveManager.js";
 import "./system.css";
 import {CommsTerminal} from "./CommsTerminal.jsx";
 import {applyChoice, openComms} from "./comms.js";
+import {FACTIONS} from "./factions.js";
 import {GovernorPanel} from "./GovernorPanel.jsx";
 import {INFRA, infraOf, buildInfra, absorbStrike, costOf} from "./colony.js";
 import {TECHS, researchTech, perks} from "./tech.js";
@@ -1217,7 +1218,11 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
   function keepPlaying() { st.current.victoryAck = true; refresh(); }
   function toggleComms() {
     u.current.comms = !u.current.comms;
-    if (u.current.comms) openComms(st.current, st.current.comms.selected); // first visit shows the leader's opener
+    if (u.current.comms) {
+      // never open a channel to the player's own commander: fall back to the first rival
+      if (st.current.comms.selected === st.current.commander) st.current.comms.selected = FACTIONS.find((x) => x.id !== st.current.commander)?.id ?? st.current.comms.selected;
+      openComms(st.current, st.current.comms.selected); // first visit shows the leader's opener
+    }
     refresh();
   }
   function govBuild(key) { const r = buildInfra(st.current, u.current.governor, key); u.current.msg = r.msg; refresh(); }

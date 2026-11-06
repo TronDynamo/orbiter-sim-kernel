@@ -8,9 +8,11 @@ import "./comms.css";
 import {LeaderPortrait} from "./LeaderPortrait.jsx";
 
 export function CommsTerminal({s, onOpen, onChoose, onClose}) {
-  const f = factionById(s.comms.selected);
+  // the player's own commander is not a rival to talk to, so the roster leaves them out
+  const others = FACTIONS.filter((x) => x.id !== s.commander);
+  const f = factionById(s.comms.selected) && s.comms.selected !== s.commander ? factionById(s.comms.selected) : others[0];
   const [bloc, setBloc] = useState(f.blocId);
-  const roster = FACTIONS.filter((x) => bloc === "ALL" || x.blocId === bloc);
+  const roster = others.filter((x) => bloc === "ALL" || x.blocId === bloc);
   const op = opinionOf(s, f.id);
   const log = s.comms.log.filter((m) => m.faction === f.id);
   const logRef = useRef(null);
