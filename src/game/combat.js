@@ -257,6 +257,15 @@ export function stepCombat(state, env) {
     }
   }
 
+  // allied aid: each wave fights the nearest raider until its time on station runs out. Ally kills pay no bounty.
+  state.aid = (state.aid ?? []).filter((a) => (a.ttl -= dt) > 0);
+  for (const a of state.aid) {
+    if (!state.raiders.length) break;
+    const target = state.raiders.reduce((best, r) => (dist(r, {x: 0, y: 0}) < dist(best, {x: 0, y: 0}) ? r : best));
+    target.bounty = 0;
+    target.hp -= a.n * a.dps * dt;
+  }
+
   // mounts: a ready mount with a target starts its spool (lances) or fires (everything else)
   const alive = new Set();
   // allied mounts follow the player's Tech Web; raider mounts are always armed

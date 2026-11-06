@@ -1,6 +1,6 @@
 // Diplomacy: opinion per faction (-100..100) and the four tactical replies.
 // Opinion deltas and costs are PLACEHOLDER balance values until the design spec is available.
-import {factionById} from "./factions.js";
+import {factionById, FACTIONS} from "./factions.js";
 
 export const OPINION_MIN = -100, OPINION_MAX = 100;
 export const CHOICES = [
@@ -83,4 +83,37 @@ export function applyRaiderChoice(state, key, wave) {
     return {ok: true, depart: true, msg: `The raiders stand down and offer their help. Respect +${shift}.`};
   }
   return {ok: false, msg: "No reply."};
+}
+
+// Ally conflicts: an allied faction present while raiders fight in your system can be asked to join the fight or stand down.
+// Helping raises that faction's alliance strain (its trust with its own allies falls). Past ALLY_STRAIN_LIMIT it refuses.
+// Balance values are placeholders.
+export const ALLY_STRAIN_LIMIT = 3;
+export const ALLY_CHOICES = [
+  {key: "help", label: "Ask them to help", line: "Our enemies are yours. Stand with us against these raiders."},
+  {key: "stand", label: "Ask them to stand down", line: "Keep out of this. We will handle it ourselves."},
+];
+export const AID = {n: 2, ttl: 60, dps: 4};   // an aid wave: ships, seconds on station, damage per ship per second
+export const strainOf = (state, id) => state.strain?.[id] ?? 0;
+
+// The first allied faction (not the player's commander) that can be asked about this conflict, or null.
+export function allyForConflict(state, asked = new Set()) {
+  return FACTIONS.find((f) => f.id !== state.commander && !asked.has(f.id) && opinionOf(state, f.id) >= ALLY_RESPECT)?.id ?? null;
+}
+
+// Resolves an ally choice. Returns {ok, msg, aid}: aid is an aid wave to add to combat, or null.
+export function applyAllyChoice(state, factionId, key) {
+  const f = factionById(factionId), c = ALLY_CHOICES.find((x) => x.key === key);
+  if (!f || !c) return {ok: false, msg: "No reply.", aid: null};
+  const before = opinionOf(state, factionId);
+  if (key === "stand") {
+    state.opinion[factionId] = clampOpinion(before + 2);
+    return {ok: true, msg: `${f.name} stands down. Respect +2.`, aid: null};
+  }
+  if (strainOf(state, factionId) >= ALLY_STRAIN_LIMIT) {
+    return {ok: true, msg: `${f.name} will not risk their other alliances again.`, aid: null};
+  }
+  state.strain = {...(state.strain ?? {}), [factionId]: strainOf(state, factionId) + 1};
+  state.opinion[factionId] = clampOpinion(before + 5);
+  return {ok: true, msg: `${f.name} joins the fight. Respect +5, but their other allies notice.`, aid: {id: factionId, ...AID}};
 }

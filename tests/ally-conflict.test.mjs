@@ -1,0 +1,54 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {allyForConflict, applyAllyChoice, ALLY_STRAIN_LIMIT, opinionOf, ALLY_RESPECT} from "../src/game/comms.js";
+import {stepCombat, newCombat} from "../src/game/combat.js";
+import {FACTIONS} from "../src/game/factions.js";
+
+const base = () => ({opinion: Object.fromEntries(FACTIONS.map((f) => [f.id, 0])), strain: {}, commander: "nobody", comms: {log: [], selected: null}, credits: 0, compute: 0});
+const ally = FACTIONS[0].id;
+
+test("only a faction at ally respect, other than the commander, is asked", () => {
+  const s = base();
+  s.opinion[ally] = ALLY_RESPECT - 1;
+  assert.equal(allyForConflict(s), null);
+  s.opinion[ally] = ALLY_RESPECT;
+  assert.equal(allyForConflict(s), ally);
+  assert.notEqual(allyForConflict({...s, commander: ally}), ally);
+  assert.notEqual(allyForConflict(s, new Set([ally])), ally);
+});
+
+test("asking for help puts an aid wave on station and raises alliance strain", () => {
+  const s = base(); s.opinion[ally] = 30;
+  const r = applyAllyChoice(s, ally, "help");
+  assert.ok(r.aid && r.aid.id === ally);
+  assert.equal(s.strain[ally], 1);
+  assert.equal(opinionOf(s, ally), 35);
+});
+
+test("a faction past the strain limit refuses to help", () => {
+  const s = base(); s.opinion[ally] = 30; s.strain[ally] = ALLY_STRAIN_LIMIT;
+  const r = applyAllyChoice(s, ally, "help");
+  assert.equal(r.aid, null);
+  assert.equal(s.strain[ally], ALLY_STRAIN_LIMIT);
+});
+
+test("standing down raises respect and sends no aid", () => {
+  const s = base(); s.opinion[ally] = 30;
+  const r = applyAllyChoice(s, ally, "stand");
+  assert.equal(r.aid, null);
+  assert.equal(opinionOf(s, ally), 32);
+  assert.equal(s.strain[ally] ?? 0, 0);
+});
+
+test("aid wave destroys raiders without paying a bounty", () => {
+  const c = newCombat();
+  c.raiders.push({id: 1, x: 300, y: 0, vx: 0, vy: 0, hp: 2, maxHp: 2, mounts: [], bounty: 50});
+  c.aid = [{id: ally, n: 2, dps: 4, ttl: 10}];
+  let kills = [];
+  for (let i = 0; i < 40 && c.raiders.length; i++) {
+    const ev = stepCombat(c, {dt: 0.05, fleet: [], planets: [], core: {x: 0, y: 0}, pos: () => null, tech: {}, rand: () => 0.5, bodies: []});
+    kills.push(...ev.filter((e) => e.kind === "kill"));
+  }
+  assert.equal(c.raiders.length, 0);
+  assert.ok(kills.every((k) => k.bounty === 0));
+});
