@@ -59,8 +59,8 @@ export const BIOMES = [
   {key: 'precursor',        name: 'Precursor Megastructure',     band: 4, color: '#facc15', yield: 'Dark Matter Cells',      multiplier: 1.5, hazard: 'Dormant defences'},
 ];
 
-const PREFIXES = ['Aureus', 'Thalassa', 'Ferrum', 'Kryos', 'Aeros', 'Zephyr', 'Titan', 'Tartarus', 'Elysium', 'Valhalla', 'Selene', 'Apex', 'Gorgon', 'Chimera', 'Boreas', 'Promethium'];
-const DESIGNATIONS = ['Major', 'Minor', 'Prime', 'Secundus', 'VII', 'B', 'Core', 'Shoals', 'Reach', 'Vault', 'Shroud', 'Ridge', 'Abyss'];
+export const PREFIXES = ['Aureus', 'Thalassa', 'Ferrum', 'Kryos', 'Aeros', 'Zephyr', 'Titan', 'Tartarus', 'Elysium', 'Valhalla', 'Selene', 'Apex', 'Gorgon', 'Chimera', 'Boreas', 'Promethium'];
+export const DESIGNATIONS = ['Major', 'Minor', 'Prime', 'Secundus', 'VII', 'B', 'Core', 'Shoals', 'Reach', 'Vault', 'Shroud', 'Ridge', 'Abyss'];
 const SYSTEM_ROOTS = ['Regulus', 'Gliese', 'Ouroboros', 'Cygnus', 'Fenris', 'Kepler', 'Obsidian', 'Tigris', 'Hyperion', 'Vega', 'Chronos', 'Sol'];
 const SYSTEM_TAILS = ['Prime', 'Voss', 'IX', 'Omega', 'Rift', '734', 'Deep', 'Reach', 'Vanguard', 'Null', 'Analytics', 'Cradle'];
 

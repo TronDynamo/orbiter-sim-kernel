@@ -4,7 +4,7 @@ import {useEffect, useRef, useState} from "react";
 import {OrbitScene, ZOOM_DETAIL, ZOOM_FOCUS} from "../orbit/scene.js";
 import {BODY_STRIDE} from "../orbit/engine.js";
 import {ARK_POS} from "./galaxy.js";
-import {bootSystem, systemFromSector, kernelSystemFromSector, systemState, rehomeFleet, resourceFor, extraDestinations, RESOURCE_LABEL} from "./currentSystem.js";
+import {bootSystem, homeSystem, systemFromSector, kernelSystemFromSector, systemState, rehomeFleet, resourceFor, extraDestinations, RESOURCE_LABEL} from "./currentSystem.js";
 import {loadOrbiterKernel, TICKS_PER_SECOND, WEAPON, WORLD, CONDUIT_ERR, CONDUIT_RULES} from "./kernel/orbiterKernel.js";
 import {ARMORY, drawCage, drawMagma, drawIrradiated, drawBlackHole, drawSupernova} from "./armory.js";
 import {STAR_COLLAPSE, VORTEX, DRILL_CRACK_DISTANCE, PLANETS as PLANET_DEFS, STAR as STAR_DEF} from "../../config/planets.js";
@@ -97,9 +97,14 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
   const canvasRef = useRef(null), overlayRef = useRef(null), appRef = useRef(null);
   // The star system the game is playing in: the boot system, or the sector a jump brought us to (see currentSystem.js).
   const sysRef = useRef(null);
+  const commanderRef = useRef(null); // the commander whose home galaxy this campaign plays in, or null
   if (sysRef.current === null) {
     const saved = session.save?.state?.jumpGate?.currentSector;
-    sysRef.current = saved ? systemFromSector(saved) : bootSystem();
+    // The commander's home galaxy is the start system. The audit URL (?audit=1&commander=<id>) can set one for testing.
+    const qs = new URLSearchParams(window.location.search);
+    const commander = session.commander ?? session.save?.state?.commander ?? (qs.has("audit") ? qs.get("commander") : null);
+    sysRef.current = saved ? systemFromSector(saved) : commander ? homeSystem(commander) : bootSystem();
+    commanderRef.current = commander;
   }
   const isPlanet = (id) => sysRef.current.planets.some((p) => p.id === id);
   // Planets move 40-80 units per second at 1x, so a drop that is held still can land just past the
@@ -122,6 +127,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
   // Starter worlds read config/planets.js; generated worlds carry the yield of their biome class (currentSystem.js).
   const yieldOf = (id) => PLANET_DEFS.find((d) => d.key === id)?.yield ?? sysRef.current.planets.find((p) => p.id === id)?.yield ?? DEFAULT_YIELD;
   const st = useRef(newState());
+  if (commanderRef.current && st.current.commander == null) st.current.commander = commanderRef.current; // saved with the campaign
   const combatRef = useRef(newCombat());   // raiders, shots and debris; hulls and mounts live on the fleet
   const pipRef = useRef(null);             // tactical action picture-in-picture
   const u = useRef({drag: null, mode: null, msg: START_MSG, msgWin: false, paused: false, speed: 1, tick: 0, shipyard: false, armory: false, comms: false, governor: null, tech: false, senate: false, arm: null, hover: null, pointer: null, menu: false, confirm: null, autosaveAt: -1e9, fps: 0, selected: null, briefing: !!session.tutorial, depotPlace: false});

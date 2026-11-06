@@ -1,3 +1,6 @@
+import {makeRng, makePlanets} from "./sectorGenerator.js";
+import {PREFIXES, DESIGNATIONS} from "./galaxyGenerator.js";
+import {applyHomeLook} from "./homeLook.js";
 // currentSystem.js — the star system the game layer is currently playing in.
 // Boot uses the four starter worlds from galaxy.js. After a Jump Gate transit,
 // the arriving sector's planets become the current system. Everything that
@@ -12,7 +15,7 @@ import {sectorFromCode} from "./sectorGenerator.js";
 import {STAR_TYPE} from "./kernel/orbiterKernel.js";
 
 export const MIN_SYSTEM_PLANETS = 3;
-export const MAX_SYSTEM_PLANETS = 6;
+export const MAX_SYSTEM_PLANETS = 8;
 
 // Palette and size cycle for generated worlds, so they stay visually distinct.
 const WORLD_COLORS = ["#7fd3ff", "#d6a84f", "#8a6a5a", "#c9ecff", "#9be38a", "#c58cff"];
@@ -192,4 +195,23 @@ function romanOrdinal(n) {
   let out = "";
   for (const [v, s] of table) while (n >= v) { out += s; n -= v; }
   return out;
+}
+
+// A commander's home system: a generated system with 3 to 8 planets (random per commander, stable for that commander),
+// given the commander's own sun colour, planet colours and planet sizes. Built the same way as any other sector.
+export function homeSystem(commanderId) {
+  const id = `HOME-${commanderId}`.toUpperCase();
+  const rng = makeRng(`home:${commanderId}`);
+  const planetCount = 3 + Math.floor(rng() * (MAX_SYSTEM_PLANETS - 2));   // 3 to 8, random per commander
+  const sector = {id, name: id, starType: "Yellow Sol", anchorType: "sol", planets: makePlanets(id, planetCount, rng)};
+  const sys = systemFromSector(sector);
+  // Real world names from the same word lists as the generated sectors, unique within this home.
+  const used = new Set();
+  for (const p of sys.planets) {
+    let name;
+    do { name = `${PREFIXES[Math.floor(rng() * PREFIXES.length)]} ${DESIGNATIONS[Math.floor(rng() * DESIGNATIONS.length)]}`; } while (used.has(name));
+    used.add(name);
+    p.name = name;
+  }
+  return applyHomeLook(sys, commanderId);
 }
