@@ -4,7 +4,7 @@ import {useEffect, useRef, useState} from "react";
 import {OrbitScene, ZOOM_DETAIL, ZOOM_FOCUS} from "../orbit/scene.js";
 import {BODY_STRIDE} from "../orbit/engine.js";
 import {ARK_POS} from "./galaxy.js";
-import {bootSystem, homeSystem, homeBuild, systemFromSector, kernelSystemFromSector, systemState, rehomeFleet, resourceFor, extraDestinations, RESOURCE_LABEL} from "./currentSystem.js";
+import {bootSystem, homeSystem, homeBuild, legacyCommander, systemFromSector, kernelSystemFromSector, systemState, rehomeFleet, resourceFor, extraDestinations, RESOURCE_LABEL} from "./currentSystem.js";
 import {loadOrbiterKernel, TICKS_PER_SECOND, WEAPON, WORLD, CONDUIT_ERR, CONDUIT_RULES} from "./kernel/orbiterKernel.js";
 import {ARMORY, drawCage, drawMagma, drawIrradiated, drawBlackHole, drawSupernova} from "./armory.js";
 import {STAR_COLLAPSE, VORTEX, DRILL_CRACK_DISTANCE, PLANETS as PLANET_DEFS, STAR as STAR_DEF} from "../../config/planets.js";
@@ -104,8 +104,10 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
     const saved = session.save?.state?.jumpGate?.currentSector;
     // The commander's home galaxy is the start system. The audit URL (?audit=1&commander=<id>) can set one for testing.
     const qs = new URLSearchParams(window.location.search);
-    const commander = session.commander ?? session.save?.state?.commander ?? (qs.has("audit") ? qs.get("commander") : null);
-    sysRef.current = saved ? systemFromSector(saved) : commander ? homeSystem(commander) : bootSystem();
+    // A loaded save keeps the galaxy it was played in; its commander is the saved one, or a stable one for older saves.
+    const savedCommander = session.save?.state?.commander ?? null;
+    const commander = session.save ? (savedCommander ?? legacyCommander(session.save.seed)) : (session.commander ?? (qs.has("audit") ? qs.get("commander") : null));
+    sysRef.current = saved ? systemFromSector(saved) : session.save ? (savedCommander ? homeSystem(savedCommander) : bootSystem()) : commander ? homeSystem(commander) : bootSystem();
     commanderRef.current = commander;
   }
   const isPlanet = (id) => sysRef.current.planets.some((p) => p.id === id);
@@ -155,6 +157,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       const r = kernel.importState(session.save.kernel);
       if (!r.ok) console.warn("Save restored with planet drift", r.drift);
       st.current = {...newState(), ...session.save.state};
+      st.current.commander = commanderRef.current;   // older saves get their commander here
     } else {
       kernel.beginAt(seedOffset(session.seed));
       // A new campaign's home galaxy: the kernel must simulate the same worlds the scene draws (after beginAt resets it).

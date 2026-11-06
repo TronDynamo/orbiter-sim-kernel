@@ -1,4 +1,5 @@
 import {makeRng, makePlanets} from "./sectorGenerator.js";
+import {LEADERS} from "./roster_data.js";
 import {PREFIXES, DESIGNATIONS} from "./galaxyGenerator.js";
 import {applyHomeLook} from "./homeLook.js";
 // currentSystem.js — the star system the game layer is currently playing in.
@@ -200,6 +201,12 @@ function romanOrdinal(n) {
 // A commander's home system: a generated system with 3 to 8 planets (random per commander, stable for that commander),
 // given the commander's own sun colour, planet colours and planet sizes. Built the same way as any other sector.
 const HOME_ORBIT_START = 180, HOME_ORBIT_STEP = 80;
+// Saves made before commanders existed have none. Such a save gets a stable commander from its seed, so it always
+// shows the same ships and keeps them when it is saved again.
+export function legacyCommander(seed) {
+  const r = makeRng(`legacy:${seed}`);
+  return LEADERS[Math.floor(r() * LEADERS.length)].id;
+}
 // The commander's home sector and the system built from it (same result every time for the same commander).
 export function homeBuild(commanderId) {
   const id = `HOME-${commanderId}`.toUpperCase();
