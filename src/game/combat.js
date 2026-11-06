@@ -3,6 +3,7 @@
 // seconds of game time. Allied ships and raiders fire mounted weapons at the nearest enemy in range. Hits throw
 // sparks and jagged shards with real velocity vectors. A destroyed raider pays a bounty; a destroyed ship is lost.
 import {SHIPS} from "./ships.js";
+import {EMERGENCY} from "./emergency.js";
 
 export const RAID_INTERVAL = 90;     // seconds of game time between raids
 export const RAID_MIN = 1, RAID_MAX = 3;
@@ -79,6 +80,21 @@ function nearest(list, p, range) {
   let best = null, bd = range;
   for (const e of list) { const d = dist(e, p); if (d <= bd) { bd = d; best = e; } }
   return best;
+}
+
+// Radar occlusion: a body (world or star) blocks the line between two craft when the line passes through its disc.
+// A craft sitting inside a body's disc is not blocked by that body, so a ship in low orbit still shows on radar.
+export function occluded(a, b, bodies) {
+  for (const o of bodies) {
+    if (dist(a, o) <= o.r || dist(b, o) <= o.r) continue;
+    if (segDist(o, a, b) < o.r) return true;
+  }
+  return false;
+}
+
+// True when a ship at p is in a fight: a raider is inside engagement range, or a shot or hit landed recently.
+export function engaged(state, p) {
+  return state.activeT > 0 || state.raiders.some((r) => dist(r, p) <= ENGAGE_RANGE);
 }
 
 // Spawns a raid of 1-3 corvette raiders on a ring just outside the outermost world.
@@ -168,13 +184,18 @@ function fire(state, key, mount, from, target, side, rand) {
 }
 
 const allies0 = (fleet, env) => fleet.map((f) => ({f, p: env.pos(f)})).filter((a) => a.p);
-const evasionOf = (e) => (e._f ? EVASION[e._f.type] ?? 0.2 : EVASION.corvette);
+const evasionOf = (e) => (e._f
+  ? (EVASION[e._f.type] ?? 0.2) + (e._f.emergency?.left > 0 ? EMERGENCY.evasion : 0)
+  : EVASION.corvette);
 
 // Advances combat by dt seconds. env: {dt, fleet, planets, core, pos(f) -> {x,y}, tech, rand, edgeR, raidNow}.
 // Mutates state and env.fleet (destroyed ships are removed). Returns events for the HUD.
 export function stepCombat(state, env) {
   const {dt, fleet, planets, core, tech, rand = Math.random} = env;
   const events = [];
+  // radar: a craft behind a body is out of lock, so each side only picks targets it can see
+  const bodies = env.bodies ?? [];
+  const seen = (from, list) => (bodies.length ? list.filter((e) => !occluded(from, e, bodies)) : list);
 
   // dev trigger: one raid now, without touching the ambient timer
   if (env.raidNow) {
@@ -206,7 +227,7 @@ export function stepCombat(state, env) {
 
   // raiders steer toward the nearest ship in range, else hover near the nearest world
   for (const r of state.raiders) {
-    const target = nearest(allies, r, ENGAGE_RANGE);
+    const target = nearest(seen(r, allies), r, ENGAGE_RANGE);
     let goal = null;
     if (target) goal = target;
     else if (planets.length) goal = nearest(planets, r, Infinity);
@@ -245,10 +266,10 @@ export function stepCombat(state, env) {
     else fire(state, key, kind, from, t, side, rand);
   };
   for (const a of allies) {
-    mountsOf(a._f).forEach((kind, i) => trigger(`a${a._f.id}:${i}`, kind, a, state.raiders, "ally", true));
+    mountsOf(a._f).forEach((kind, i) => trigger(`a${a._f.id}:${i}`, kind, a, seen(a, state.raiders), "ally", true));
   }
   for (const r of state.raiders) {
-    r.mounts.forEach((kind, i) => trigger(`r${r.id}:${i}`, kind, r, allies, "raider", false));
+    r.mounts.forEach((kind, i) => trigger(`r${r.id}:${i}`, kind, r, seen(r, allies), "raider", false));
   }
   // a spool whose shooter is gone is dropped, so a dead ship's lance does not fire from nowhere
   for (const k of Object.keys(state.charging)) if (!alive.has(k)) delete state.charging[k];

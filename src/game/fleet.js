@@ -6,6 +6,7 @@ import {PLANETS} from "../../config/planets.js";
 import {SHIPS} from "./ships.js";
 import {bankShip} from "./pseudo3d.js";
 import {RULES} from "./rules.js";
+import {EMERGENCY} from "./emergency.js";
 
 export const SHIP_ORBIT = 26;             // low-orbit radius around a world (world units)
 export const ORBIT_RATE = 0.02;           // radians per tick around a world
@@ -75,6 +76,8 @@ export function stepFleet(s, P, ticks, ctx) {
     if (!f.mode) { f.mode = 'orbit'; f.planet = homeOf(s); f.ang = f.phase ?? 0; } // hulls saved before flight existed
     const max = SHIPS[f.type]?.hull ?? 100;
     if (f.hp === undefined) f.hp = max;
+    // Emergency Burn window runs down in kernel time, whatever the ship is doing
+    if (f.emergency) { f.emergency.left -= ticks / EMERGENCY.tps; if (f.emergency.left <= 0) f.emergency = null; }
     if (f.mode === 'docked') {
       // refuel the shared tanks and mend the hull while moored at the depot
       s.propellant = Math.min(MAX_PROPELLANT, s.propellant + REFUEL_PER_TICK * ticks);
@@ -84,7 +87,7 @@ export function stepFleet(s, P, ticks, ctx) {
     }
     const boost = f.overclock ? OVERCLOCK.speed : 1;
     const burn = f.overclock ? OVERCLOCK.burn : 1;
-    const speed = (IMPULSE[f.type] ?? 1.5) * boost;
+    const speed = (IMPULSE[f.type] ?? 1.5) * boost * (f.emergency ? 1 + EMERGENCY.thrust : 1);
     if (isOrbiting(f)) {
       f.ang += ORBIT_RATE * ticks;
       if (f.mode === 'survey') {
@@ -216,6 +219,15 @@ export function deploySatellite(s, f, P) {
 }
 
 // Send a ship to an empty point in space. It burns there, then holds position until ordered elsewhere.
+// Emergency Burn: an engaged ship given a reroute ignites for EMERGENCY.cost propellant. With the tank empty it
+// burns dirty at standard speed, with no boost and no chaff.
+export function emergencyBurn(s, f) {
+  if (s.propellant < EMERGENCY.cost) { f.emergency = null; return {ok: false, msg: "Propellant empty: burning dirty at standard speed."}; }
+  s.propellant = Math.max(0, s.propellant - EMERGENCY.cost);
+  f.emergency = {left: EMERGENCY.seconds};
+  return {ok: true, msg: "EMERGENCY BURN: thrusters at full, chaff out."};
+}
+
 export function sendShipToPoint(s, f, pt, P) {
   const name = SHIPS[f.type]?.name ?? 'Ship';
   const q = shipPosition(f, P);

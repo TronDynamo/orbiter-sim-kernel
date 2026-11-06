@@ -35,5 +35,16 @@ export function createAudio() {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 1.4);
     osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(now + 1.5);
   };
-  return {start, warp, applyLevels};
+  // Low two-tone alert klaxon: square wave 220 Hz / 165 Hz alternating every 0.3 s, about 1.2 s in all.
+  const klaxon = () => {
+    if (!ctx) start();
+    if (!ctx) return;
+    const now = ctx.currentTime, osc = ctx.createOscillator(), gain = ctx.createGain(), peak = Math.max(0.0002, levels().sfx);
+    osc.type = "square";
+    for (let i = 0; i < 4; i++) osc.frequency.setValueAtTime(i % 2 ? 165 : 220, now + i * 0.3);
+    gain.gain.setValueAtTime(peak, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 1.3);
+    osc.connect(gain); gain.connect(ctx.destination); osc.start(now); osc.stop(now + 1.3);
+  };
+  return {start, warp, klaxon, applyLevels};
 }

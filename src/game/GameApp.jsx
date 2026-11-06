@@ -7,7 +7,7 @@ import {ARK_POS} from "./galaxy.js";
 import {bootSystem, systemFromSector, kernelSystemFromSector, systemState, rehomeFleet, resourceFor, extraDestinations, RESOURCE_LABEL} from "./currentSystem.js";
 import {loadOrbiterKernel, TICKS_PER_SECOND, WEAPON, WORLD, CONDUIT_ERR, CONDUIT_RULES} from "./kernel/orbiterKernel.js";
 import {ARMORY, drawCage, drawMagma, drawIrradiated, drawBlackHole, drawSupernova} from "./armory.js";
-import {STAR_COLLAPSE, VORTEX, DRILL_CRACK_DISTANCE, PLANETS as PLANET_DEFS} from "../../config/planets.js";
+import {STAR_COLLAPSE, VORTEX, DRILL_CRACK_DISTANCE, PLANETS as PLANET_DEFS, STAR as STAR_DEF} from "../../config/planets.js";
 import {IntroScreen} from "./IntroScreen.jsx";
 import {PauseMenu} from "./PauseMenu.jsx";
 import {DIFFICULTIES, seedOffset} from "./campaign.js";
@@ -26,13 +26,18 @@ import {SenateChamber} from "./SenateChamber.jsx";
 import {VictoryModal} from "./VictoryModal.jsx";
 import {RULES, newState, snapTethers, network, tick, tryTether, checkTether, cut, tetherAt, tensionOf, tensionColor, build, hitBody, distToTether, orderShip, shortfall, fireWeapon} from "./rules.js";
 import {SHIPS, SHIP_ORDER, COST_LABEL, drawShip, drawChevron, fleetPower, FLIGHT_LENGTH, DEPOT_COST} from "./ships.js";
-import {stepFleet, sendShip, sendShipToPoint, shipPosition, interceptAt, depotPos, MAX_PROPELLANT, deploySatellite, SURVEY_TICKS, CARGO_CAP, IMPULSE, OVERCLOCK} from "./fleet.js";
+import {stepFleet, sendShip, sendShipToPoint, emergencyBurn, shipPosition, interceptAt, depotPos, MAX_PROPELLANT, deploySatellite, SURVEY_TICKS, CARGO_CAP, IMPULSE, OVERCLOCK} from "./fleet.js";
 import {Icon, drawArk, drawRelay} from "./icons.jsx";
 import {Academy} from "./Academy.jsx";
 import {drawPseudo3DShip, sunLocal, emitPlume, updatePlumes, drawPlumes} from "./pseudo3d.js";
 import {shadowAt, drawUmbra, drawLensing, drawDebrisBelt} from "./stellarFx.js";
 import {drawCombatFx, drawHullDamage} from "./combatFx.js";
-import {newCombat, stepCombat, weldSparks, mountsOf, MOUNTS, SWAP_COST, nextMount} from "./combat.js";
+import {newCombat, stepCombat, weldSparks, mountsOf, MOUNTS, SWAP_COST, nextMount, engaged} from "./combat.js";
+import {createAudio} from "./audio.js";
+
+// Alert klaxon: one shared synth, made on first use (by then the player has already clicked, so audio is allowed).
+let alertAudio = null;
+const klaxon = () => { try { if (!alertAudio) alertAudio = createAudio(); alertAudio.klaxon(); } catch (e) { /* audio blocked: stay silent */ } };
 // Tactical PIP: a close-up of the fight, drawn at this magnification in a 300x190 viewport.
 const PIP_W = 300, PIP_H = 190, PIP_ZOOM = 3.2;
 import {JUMP_GATE_COST, JUMP_GATE_BEACON_ORBIT_RADIUS, openStarchart, initiateJump, advanceWarp} from "./jumpGate.js";
@@ -251,7 +256,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           const dest = hit.startsWith("depot") ? "the fuel depot" : planetName(hit);
           if (s0.pendingSend === hit) {
             s0.pendingSend = null;
-            const r = sendShip(st.current, ship, hit, P, liveConduits(), dest);
+            const r = orderBurn(ship, P, sendShip(st.current, ship, hit, P, liveConduits(), dest));
             say(r.msg, r.ok); refresh(); return;
           }
           s0.pendingSend = hit;
@@ -369,6 +374,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       if (s0.drag) s0.drag.cur = toWorld(e);
       const r = ov.getBoundingClientRect();
       s0.pointer = {x: e.clientX - r.left, y: e.clientY - r.top};
+      s0.pointerWorld = toWorld(e); // the Arrival Ghost Pip previews the world under the pointer
       if (s0.arm) { const P = positions(); s0.hover = P ? hitBody(st.current, P, toWorld(e)) : null; }
     };
     const onUp = (e) => {
@@ -382,7 +388,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         // A tap on empty space sends the selected ship to that point. Dragging still pans.
         const ship = s0.selected != null ? st.current.fleet.find((f) => f.id === s0.selected) : null;
         const P = positions();
-        if (!s0.pan.moved && ship && P) { const r = sendShipToPoint(st.current, ship, toWorld(e), P); say(r.msg, r.ok); refresh(); }
+        if (!s0.pan.moved && ship && P) { const r = orderBurn(ship, P, sendShipToPoint(st.current, ship, toWorld(e), P)); say(r.msg, r.ok); refresh(); }
         s0.pan = null;
         return;
       }
@@ -404,14 +410,21 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       if (kernel) for (let c = 0; c < kernel.conduitCount; c++) out.push({a: sysRef.current.planets[kernel.conduits.source[c]].id, b: sysRef.current.planets[kernel.conduits.target[c]].id, snapped: !!kernel.conduits.snapped[c]});
       return out;
     };
+    // An engaged ship given a reroute ignites an Emergency Burn: boost, chaff, a trail, a shake and the klaxon.
+    const orderBurn = (ship, P, r) => {
+      if (!r.ok || !P || !engaged(combatRef.current, shipPosition(ship, P))) return r;
+      const b = emergencyBurn(st.current, ship);
+      if (b.ok) { scene.kick(4, 0.5); klaxon(); }
+      return {...r, msg: `${r.msg} ${b.msg}`};
+    };
     const onCtx = (e) => {
       e.preventDefault();
       const P = positions(); if (!P || s0.selected == null) return;
       const ship = st.current.fleet.find((f) => f.id === s0.selected);
       if (!ship) { s0.selected = null; refresh(); return; }
       const id = hitBody(st.current, P, toWorld(e));
-      if (!id || !(isPlanet(id) || id.startsWith("depot"))) { const r = sendShipToPoint(st.current, ship, toWorld(e), P); say(r.msg, r.ok); refresh(); return; }
-      const r = sendShip(st.current, ship, id, P, liveConduits(), id.startsWith("depot") ? "the fuel depot" : planetName(id));
+      if (!id || !(isPlanet(id) || id.startsWith("depot"))) { const r = orderBurn(ship, P, sendShipToPoint(st.current, ship, toWorld(e), P)); say(r.msg, r.ok); refresh(); return; }
+      const r = orderBurn(ship, P, sendShip(st.current, ship, id, P, liveConduits(), id.startsWith("depot") ? "the fuel depot" : planetName(id)));
       say(r.msg, r.ok); refresh();
     };
     // The camera follows a ship while zoomed in past ZOOM_FOLLOW. Stops once that ship is no longer selected.
@@ -678,6 +691,12 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
             ctx.fillStyle = "rgba(2,6,23,0.8)"; ctx.fillRect(q.x - 12, q.y + 10, 24, 3);
             ctx.fillStyle = "#fbbf24"; ctx.fillRect(q.x - 12, q.y + 10, 24 * (f.cargo / CARGO_CAP), 3);
           }
+          if (f.emergency) {
+            // Emergency Burn trail: a hot streak thrown out behind the hull
+            const back = f.heading + Math.PI, L = closeUp ? 26 : 14;
+            ctx.strokeStyle = "rgba(251,146,60,0.85)"; ctx.lineWidth = closeUp ? 3 : 2;
+            ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(q.x + Math.cos(back) * L, q.y + Math.sin(back) * L); ctx.stroke();
+          }
           if (f.id === s0.selected) {
             ctx.strokeStyle = "#38bdf8"; ctx.lineWidth = 1.2; ctx.setLineDash([3, 4]);
             ctx.beginPath(); ctx.arc(q.x, q.y, closeUp ? 18 : 8, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
@@ -700,6 +719,18 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
               // open-space burn: route straight to the chosen point
               const dq = toS(f.dest); ctx.strokeStyle = "rgba(56,189,248,0.6)"; ctx.lineWidth = 1;
               ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(dq.x, dq.y); ctx.stroke();
+            }
+            // Arrival Ghost Pip: hover a moving world with this ship selected, and the transfer shows where that world will be on arrival
+            const hv = s0.pointerWorld && f.mode !== "transit" ? hitBody(s, P, s0.pointerWorld) : null;
+            if (hv && isPlanet(hv) && P[hv]) {
+              const qs = shipPosition(f, P), speed = (IMPULSE[f.type] ?? 1.5) * (f.overclock ? OVERCLOCK.speed : 1);
+              const v = lastVel[hv] ?? {x: 0, y: 0}, W = P[hv];
+              const tau = Math.hypot(W.x - qs.x, W.y - qs.y) / speed;
+              const g = toS({x: W.x + v.x * tau, y: W.y + v.y * tau});
+              ctx.setLineDash([5, 5]); ctx.strokeStyle = "rgba(56,189,248,0.4)"; ctx.lineWidth = 1;
+              ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(g.x, g.y); ctx.stroke();
+              ctx.strokeStyle = "rgba(56,189,248,0.85)";
+              ctx.beginPath(); ctx.arc(g.x, g.y, closeUp ? 9 : 5, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
             }
           }
         }
@@ -759,7 +790,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
     };
 
-    let fleetTick = -1, prevP = {}, lastVel = {};
+    let fleetTick = -1, prevP = {}, lastVel = {}, alarmed = new Set();
     let warpT = performance.now();
     let frames = 0, fpsT = performance.now(), prevStatus = null, lastAutosave = performance.now(), combatT = performance.now();
     const loop = (now) => {
@@ -899,6 +930,13 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         }
         if (s.won || s.lost) scene.speed = 0;
         // warship combat: raids in generated sectors, mounts firing, debris, bounties on kill. Scaled by game speed.
+        scene.tickShake(Math.min(0.05, Math.max(0, (now - combatT) / 1000)));
+        // Conduit alarm: a tether crossing 90% of its snap limit sounds the klaxon and jolts the camera, once per crossing
+        for (const t of s.tethers ?? []) {
+          const key = `${t.a}-${t.b}`, ratio = tensionOf(t, P);
+          if (ratio >= 0.9 && !alarmed.has(key)) { alarmed.add(key); klaxon(); scene.kick(3, 0.3); }
+          else if (ratio < 0.85) alarmed.delete(key);
+        }
         const cdt = Math.min(0.05, Math.max(0, (now - combatT) / 1000)) * (s0.paused ? 0 : (scene.speed || 0));
         combatT = now;
         if (!s.won && !s.lost) {
@@ -906,7 +944,9 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           const edgeR = sys.type === "sector" ? Math.max(...sys.planets.map((p) => p.orbit)) : null;
           const planets = sys.planets.filter((p) => P[p.id]).map((p) => P[p.id]);
           const raidNow = !!s0.raidNow; s0.raidNow = false;
-          for (const ev of stepCombat(combatRef.current, {dt: cdt, fleet: s.fleet, planets, core: P.core, pos: (f) => shipPosition(f, P), tech: s.tech, edgeR, raidNow})) {
+          // radar bodies: the star and every world on the map block line of sight
+          const bodies = [{x: P.core.x, y: P.core.y, r: STAR_DEF.radius}, ...sys.planets.filter((p) => P[p.id]).map((p) => ({x: P[p.id].x, y: P[p.id].y, r: PLANET_DEFS.find((d) => d.key === p.id)?.r ?? 10}))];
+          for (const ev of stepCombat(combatRef.current, {dt: cdt, fleet: s.fleet, planets, core: P.core, pos: (f) => shipPosition(f, P), tech: s.tech, edgeR, raidNow, bodies})) {
             if (ev.kind === "kill") s.credits += ev.bounty;
             say(ev.msg, ev.kind === "kill");
           }
@@ -983,7 +1023,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
   function applySpeed() {
     const sc = window.__relic?.scene; if (!sc) return;
     const cur = u.current, over = st.current.won || st.current.lost;
-    sc.speed = cur.paused || cur.menu || cur.briefing || over ? 0 : cur.speed;
+    sc.speed = cur.paused || cur.menu || cur.briefing || cur.senate || over ? 0 : cur.speed;
   }
   function dismissBriefing() { u.current.briefing = false; applySpeed(); refresh(); }
   function openMenu() { if (u.current.menu) return; u.current.menu = true; applySpeed(); refresh(); }
@@ -1056,8 +1096,9 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
     u.current.toastTimer = setTimeout(() => { u.current.senateToast = null; refresh(); }, 6000);
     refresh();
   }
-  function openSenate() { st.current.senate.dismissed = true; u.current.senate = true; refresh(); }
-  function closeSenate() { u.current.senate = false; refresh(); }
+  // The Senate chamber holds the clock while it is open, the same as the briefing.
+  function openSenate() { st.current.senate.dismissed = true; u.current.senate = true; applySpeed(); refresh(); }
+  function closeSenate() { u.current.senate = false; applySpeed(); refresh(); }
   function keepPlaying() { st.current.victoryAck = true; refresh(); }
   function toggleComms() {
     u.current.comms = !u.current.comms;

@@ -236,9 +236,23 @@ export class OrbitScene {
   // camera state lives in the engine: [ax, ay, fx, fy, z]
   get cam() { const c = this.sim.c; return { ax: c[0], ay: c[1], fx: c[2], fy: c[3], z: c[4] }; }
 
+  // Camera micro-shake: kick() sets an amplitude in screen pixels that decays over a short time.
+  kick(amp = 5, seconds = 0.35) {
+    this.kickAmp = Math.max(this.kickAmp ?? 0, amp);
+    this.kickLeft = Math.max(this.kickLeft ?? 0, seconds);
+  }
+  // Runs the shake down by real seconds and sets the offset for this frame.
+  tickShake(rdt) {
+    if (!(this.kickLeft > 0)) { this.kickX = 0; this.kickY = 0; return; }
+    this.kickLeft = Math.max(0, this.kickLeft - rdt);
+    const k = (this.kickAmp ?? 0) * (this.kickLeft / 0.35);
+    this.kickX = (Math.random() * 2 - 1) * k; this.kickY = (Math.random() * 2 - 1) * k;
+    if (this.kickLeft === 0) this.kickAmp = 0;
+  }
+
   toScreen(wx, wy) {
     const c = this.sim.c, zb = c[4] * this.base;
-    return { x: c[0] + (wx - c[2]) * zb, y: c[1] + (wy - c[3]) * zb * (this.pitch ?? 1) };
+    return { x: c[0] + (wx - c[2]) * zb + (this.kickX ?? 0), y: c[1] + (wy - c[3]) * zb * (this.pitch ?? 1) + (this.kickY ?? 0) };
   }
 
   // Place planets at the external positions for this frame: world coords (read by game logic)
