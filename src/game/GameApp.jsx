@@ -1064,7 +1064,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         }
         // an ally in the system asks whether to join the fight while raiders are here and no aid is on station
         if (combatRef.current.raiders.length && !u.current.hail && !u.current.allyHail && !(combatRef.current.aid ?? []).length) {
-          const ally = allyForConflict(s0, u.current.allyAsked ?? new Set());
+          const ally = allyForConflict(st.current, u.current.allyAsked ?? new Set());
           if (ally) { u.current.allyHail = ally; refresh(); }
         }
         drawOverlay(P, now);
@@ -1243,19 +1243,26 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
   function govBuild(key) { const r = buildInfra(st.current, u.current.governor, key); u.current.msg = r.msg; refresh(); }
   function closeGovernor() { u.current.governor = null; refresh(); }
   function commsOpen(id) { openComms(st.current, id); refresh(); }
+  // X on a hail: dismiss without a choice. Raiders keep attacking; an ally is not asked again for this wave.
+  function raiderClose() { u.current.hail = null; u.current.hailNote = null; refresh(); }
+  function allyClose() {
+    const id = u.current.allyHail;
+    if (id) u.current.allyAsked = new Set([...(u.current.allyAsked ?? []), id]);
+    u.current.allyHail = null; u.current.hailNote = null; refresh();
+  }
   function allyChoose(key) {
     const id = u.current.allyHail; if (!id) return;
     const r = applyAllyChoice(st.current, id, key);
     if (r.aid) combatRef.current.aid = [...(combatRef.current.aid ?? []), r.aid];
     u.current.allyAsked = new Set([...(u.current.allyAsked ?? []), id]);
-    u.current.allyHail = null; st.current.msg = r.msg; st.current.msgWin = false; refresh();
+    u.current.allyHail = null; u.current.hailNote = null; st.current.msg = r.msg; st.current.msgWin = false; refresh();
   }
   function raiderChoose(key) {
     const h = u.current.hail; if (!h) return;
     const r = applyRaiderChoice(st.current, key, {n: h.n, armed: st.current.fleet.length});
-    if (!r.ok) { u.current.msg = r.msg; refresh(); return; }
+    if (!r.ok) { u.current.hailNote = r.msg; refresh(); return; }
     if (r.depart) combatRef.current.raiders = combatRef.current.raiders.filter((x) => !h.ids.includes(x.id));
-    u.current.hail = null; st.current.msg = r.msg; st.current.msgWin = false; refresh();
+    u.current.hail = null; u.current.hailNote = null; st.current.msg = r.msg; st.current.msgWin = false; refresh();
   }
   function commsChoose(key) { const r = applyChoice(st.current, st.current.comms.selected, key); u.current.msg = r.msg; refresh(); if (r.ok) closeSoon("comms"); }
   // Why a strategic weapon cannot be armed right now, or null.
@@ -1506,8 +1513,8 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       ) : null}
 
       {u.current.comms ? <CommsTerminal s={s} onOpen={commsOpen} onChoose={commsChoose} onClose={toggleComms} /> : null}
-      {u.current.hail ? <RaiderHail s={st.current} hail={u.current.hail} onChoose={raiderChoose} /> : null}
-      {u.current.allyHail && !u.current.hail ? <AllyConflict s={st.current} factionId={u.current.allyHail} onChoose={allyChoose} /> : null}
+      {u.current.hail ? <RaiderHail s={st.current} hail={u.current.hail} note={u.current.hailNote} onChoose={raiderChoose} onClose={raiderClose} /> : null}
+      {u.current.allyHail && !u.current.hail ? <AllyConflict s={st.current} factionId={u.current.allyHail} note={u.current.hailNote} onChoose={allyChoose} onClose={allyClose} /> : null}
 
       {u.current.armory ? (
         <aside className="glass" style={{position: "absolute", right: 16, top: 84, bottom: 96, overflowY: "auto", width: 320, padding: 14, zIndex: 8, borderRadius: 12}}>

@@ -1,0 +1,17 @@
+/* Hail panels (raider hails and ally conflicts): a compact centred card, its own layout, never the comms grid. */
+.hail {
+  position: absolute; top: 96px; left: 50%; transform: translateX(-50%); z-index: 10;
+  width: min(400px, calc(100% - 32px)); display: flex; flex-direction: column; gap: 12px;
+  padding: 0 0 14px; border-radius: 12px; overflow: hidden;
+}
+.hail-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,0.08); font-size: 12px; letter-spacing: 0.04em; }
+.hail-close { background: none; border: 0; color: inherit; font-size: 18px; line-height: 1; padding: 2px 6px; cursor: pointer; opacity: 0.8; }
+.hail-close:hover { opacity: 1; }
+.hail-body { display: flex; gap: 12px; align-items: center; padding: 0 14px; }
+.hail-portrait { width: 84px; height: 84px; flex: none; border-radius: 8px; object-fit: cover; }
+.hail-name { font-weight: 800; font-size: 15px; }
+.hail-sub { font-size: 12px; opacity: 0.8; }
+.hail-choices { display: flex; flex-direction: column; gap: 6px; padding: 0 14px; }
+.hail-choices button { width: 100%; text-align: left; }
+.hail-choices button:disabled { opacity: 0.45; cursor: not-allowed; }
+.hail-note { margin: 0 14px; font-size: 12px; color: #fbbf24; min-height: 16px; }
