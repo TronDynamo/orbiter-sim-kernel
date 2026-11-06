@@ -3,7 +3,7 @@
 // live conduit at SURF_MULT times impulse speed, no propellant), docked (refuelling and repairing at a fuel depot),
 // survey (probe scanning an uncharted world), siphon (freighter filling its hold from a charted world).
 import {PLANETS} from "../../config/planets.js";
-import {SHIPS} from "./ships.js";
+import {SHIPS, hullMax} from "./ships.js";
 import {bankShip} from "./pseudo3d.js";
 import {RULES} from "./rules.js";
 import {EMERGENCY} from "./emergency.js";
@@ -74,7 +74,7 @@ export function stepFleet(s, P, ticks, ctx) {
   const before = s.fleet.map((f) => shipPosition(f, P));
   for (const f of s.fleet) {
     if (!f.mode) { f.mode = 'orbit'; f.planet = homeOf(s); f.ang = f.phase ?? 0; } // hulls saved before flight existed
-    const max = SHIPS[f.type]?.hull ?? 100;
+    const max = hullMax(f) || 100;
     if (f.hp === undefined) f.hp = max;
     // Emergency Burn window runs down in kernel time, whatever the ship is doing
     if (f.emergency) { f.emergency.left -= ticks / EMERGENCY.tps; if (f.emergency.left <= 0) f.emergency = null; }

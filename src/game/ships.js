@@ -186,3 +186,12 @@ export function drawChevron(ctx, x, y, heading, opts = {}) {
   ctx.beginPath(); ctx.moveTo(2.5, 0); ctx.lineTo(-1.5, -1.8); ctx.lineTo(-0.6, 0); ctx.lineTo(-1.5, 1.8); ctx.closePath(); ctx.fill();
   ctx.restore();
 }
+
+// Armor plating: hull modifications bought with Alloys from the ship panel. Phase Plating needs its Tech Web node.
+export const ARMOR = [
+  {name: "Stock hull", hull: 0, cost: {}, tech: null},
+  {name: "Ablative Plate", hull: 15, cost: {alloys: 60}, tech: null},
+  {name: "Phase Plating", hull: 35, cost: {alloys: 140, compute: 40}, tech: "plating"},
+];
+// Maximum hull for a ship: its hull plus the armor it carries.
+export const hullMax = (f) => (SHIPS[f.type]?.hull ?? 0) + (ARMOR[f.armor ?? 0]?.hull ?? 0);

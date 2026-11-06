@@ -25,7 +25,7 @@ import {TechWeb} from "./TechWeb.jsx";
 import {SenateChamber} from "./SenateChamber.jsx";
 import {VictoryModal} from "./VictoryModal.jsx";
 import {RULES, newState, snapTethers, network, tick, tryTether, checkTether, cut, tetherAt, tensionOf, tensionColor, build, hitBody, distToTether, orderShip, shortfall, fireWeapon} from "./rules.js";
-import {SHIPS, SHIP_ORDER, COST_LABEL, drawShip, drawChevron, fleetPower, FLIGHT_LENGTH, DEPOT_COST} from "./ships.js";
+import {SHIPS, SHIP_ORDER, COST_LABEL, drawShip, drawChevron, fleetPower, FLIGHT_LENGTH, DEPOT_COST, ARMOR, hullMax} from "./ships.js";
 import {stepFleet, sendShip, sendShipToPoint, emergencyBurn, shipPosition, interceptAt, depotPos, MAX_PROPELLANT, deploySatellite, SURVEY_TICKS, CARGO_CAP, IMPULSE, OVERCLOCK, predictOrbit} from "./fleet.js";
 import {Icon, drawArk, drawRelay} from "./icons.jsx";
 import {Academy} from "./Academy.jsx";
@@ -344,8 +344,19 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       }
       const zb = scene.sim.c[4] * scene.base;
       const picked = st.current.fleet.find((f) => { const q = shipPosition(f, P); return Math.hypot(q.x - p.x, q.y - p.y) <= 16 / zb; });
+      if (picked && e.pointerType === "touch") {
+        // double tap on a ship: select it, zoom in, and open its modification panel
+        const last = s0.lastShipTap, now = performance.now();
+        s0.lastShipTap = {id: picked.id, t: now};
+        if (last && last.id === picked.id && now - last.t < 350) {
+          s0.lastShipTap = null; s0.selected = picked.id;
+          // open the panel after the second tap's release, so that release can't land on a button that just appeared
+          setTimeout(() => { s0.panelHidden = false; refresh(); }, 150);
+          scene.setFollow(shipFollow(picked.id)); scene.zoomTo(ZOOM_FOCUS); refresh(); return;
+        }
+      }
       if (picked && s0.selected === picked.id) { s0.selected = null; scene.setFollow(null); say("Ship deselected."); refresh(); return; }
-      if (picked) { s0.selected = picked.id; s0.panelHidden = false; scene.setFollow(shipFollow(picked.id)); say(`${SHIPS[picked.type].name} selected. Right-click a world to send it, click empty space to send it there, or tap twice on a phone.`); refresh(); return; }
+      if (picked) { s0.selected = picked.id; s0.panelHidden = true; scene.setFollow(shipFollow(picked.id)); say(`${SHIPS[picked.type].name} selected. Right-click a world to send it, click empty space to send it there, or tap twice on a phone.`); refresh(); return; }
       const id = hitBody(st.current, P, p);
       if (id) s0.drag = {from: id, cur: p, start: p};
       else s0.pan = {x: e.clientX, y: e.clientY, moved: false}; // empty space: a drag pans the map, a tap deselects
@@ -440,7 +451,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       const zb = scene.sim.c[4] * scene.base;
       const ship = st.current.fleet.find((f) => { const q = shipPosition(f, P); return Math.hypot(q.x - w.x, q.y - w.y) <= 16 / zb; });
       if (ship) {
-        s0.selected = ship.id; scene.setFollow(shipFollow(ship.id)); scene.zoomTo(ZOOM_FOCUS);
+        s0.selected = ship.id; s0.panelHidden = false; scene.setFollow(shipFollow(ship.id)); scene.zoomTo(ZOOM_FOCUS); refresh();
         say(`${SHIPS[ship.type].name} centred.`); refresh(); return;
       }
       const id = hitBody(st.current, P, w);
@@ -476,7 +487,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       for (const sh of s.fleet) {
         const q = T(shipPosition(sh, P));
         drawPseudo3DShip(c, sh.type, q.x, q.y, sh.theta ?? sh.heading ?? 0, {length: FLIGHT_LENGTH[sh.type] * 1.6, thrust: sh.thrust ?? 0});
-        const max = SHIPS[sh.type].hull, hp = sh.hp ?? max;
+        const max = hullMax(sh), hp = sh.hp ?? max;
         if (hp < max) { c.fillStyle = `rgba(15,10,5,${(0.3 + 0.4 * (1 - hp / max)).toFixed(3)})`; c.beginPath(); c.arc(q.x + 4, q.y - 3, 4, 0, Math.PI * 2); c.fill(); }
       }
       // raiders, weapon discharge, impacts and debris: the same renderer as the map, at PIP scale
@@ -604,7 +615,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         const cb = combatRef.current, k = Math.max(0.6, Math.min(2, scene.zoomUser));
         drawCombatFx(ctx, toS, cb, k, now / 1000);
         for (const f of s.fleet) {
-          const max = SHIPS[f.type].hull, hp = f.hp ?? max;
+          const max = hullMax(f), hp = f.hp ?? max;
           if (hp >= max) continue;
           drawHullDamage(ctx, toS(shipPosition(f, P)), hp / max, k, now / 1000);
         }
@@ -1041,7 +1052,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
   function flash(text, win = false) { u.current.msg = text; u.current.msgWin = win; }
   function patchBulkhead() {
     const f = st.current.fleet.find((x) => x.id === u.current.selected); if (!f) return;
-    const max = SHIPS[f.type].hull, hp = f.hp ?? max;
+    const max = hullMax(f), hp = f.hp ?? max;
     if (hp >= max) flash("Bulkhead already intact.");
     else if (st.current.alloys < 10) flash("Patching a bulkhead needs 10 Alloys.");
     else {
@@ -1052,6 +1063,19 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
     refresh();
   }
   // Swaps one mount slot to the next weapon type the Tech Web has unlocked, paying Alloys for it.
+  function buyArmor(id, tier) {
+    const f = st.current.fleet.find((x) => x.id === id); if (!f || (f.armor ?? 0) >= tier) return;
+    const A = ARMOR[tier], s = st.current;
+    if (A.tech && !s.tech?.[A.tech]) { flash(`${A.name} needs its Tech Web node first.`); return; }
+    const short = shortfall(s, A.cost);
+    if (short) { flash(`${A.name} needs ${short}.`); return; }
+    for (const [k, v] of Object.entries(A.cost)) s[k] -= v;
+    const before = hullMax(f);
+    f.armor = tier;
+    f.hp = Math.min(hullMax(f), (f.hp ?? before) + (hullMax(f) - before));
+    flash(`${A.name} fitted: +${A.hull} hull.`, true);
+    refresh();
+  }
   function swapMount(id, slot) {
     const f = st.current.fleet.find((x) => x.id === id); if (!f) return;
     const mounts = mountsOf(f).slice();
@@ -1176,7 +1200,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
   const radiationLabel = ["Low", "Rising", "High", "Severe", "Critical"][Math.min(4, Math.max(0, s.radiation))];
   const hullPct = Math.max(0, Math.round(s.hull));
   const selShip = u.current.selected != null ? s.fleet.find((f) => f.id === u.current.selected) : null;
-  const selMax = selShip ? SHIPS[selShip.type].hull : 1;
+  const selMax = selShip ? hullMax(selShip) : 1;
   const selHp = selShip ? Math.max(0, Math.round(selShip.hp ?? selMax)) : 0;
   const selPct = Math.round((selHp / selMax) * 100);
   const hullColor = hullPct > 60 ? "#22c55e" : hullPct > 30 ? "#eab308" : "#ef4444";
@@ -1298,6 +1322,15 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
               })}
             </div>
           ) : null}
+          <div className="hud-sockets" aria-label="Armor plating">
+            <div className="hud-fleet mono"><span>ARMOR</span><span>HULL {hullMax(selShip)}</span></div>
+            {ARMOR.map((A, i) => i === 0 ? null : (
+              <button key={i} className="hud-btn" disabled={(selShip.armor ?? 0) >= i || (!!A.tech && !s.tech?.[A.tech]) || !!shortfall(s, A.cost)}
+                title={A.tech && !s.tech?.[A.tech] ? "Research Phase Plating in the Tech Web first." : ""} onClick={() => buyArmor(selShip.id, i)}>
+                {(selShip.armor ?? 0) >= i ? `${A.name} fitted` : `${A.name} · +${A.hull} hull · ${Object.entries(A.cost).map(([k, v]) => `${v} ${COST_LABEL[k]}`).join(" · ")}`}
+              </button>
+            ))}
+          </div>
           <button className={"hud-btn" + (selShip.overclock ? " on" : "")} onClick={toggleOverclock}><Icon name="power" size={14} /> Overclock thrusters</button>
           {selShip.type === "tender" ? <button className="hud-btn" onClick={() => { u.current.deployRelay = true; }}><Icon name="relay" size={14} /> Deploy relay · {selShip.sats ?? 3} left</button> : null}
           {selShip.type === "freighter" ? <div className="hud-fleet mono"><span>HOLD {Math.floor(selShip.cargo ?? 0)}/{CARGO_CAP}</span><span>{selShip.res ? selShip.res.toUpperCase() : "EMPTY"}</span></div> : null}

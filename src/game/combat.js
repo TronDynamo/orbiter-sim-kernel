@@ -2,7 +2,7 @@
 // damage and mounts. Raiders (corvette-class) spawn at the system edge in generated sectors, every RAID_INTERVAL
 // seconds of game time. Allied ships and raiders fire mounted weapons at the nearest enemy in range. Hits throw
 // sparks and jagged shards with real velocity vectors. A destroyed raider pays a bounty; a destroyed ship is lost.
-import {SHIPS} from "./ships.js";
+import {SHIPS, hullMax} from "./ships.js";
 import {EMERGENCY} from "./emergency.js";
 
 export const RAID_INTERVAL = 90;     // seconds of game time between raids
@@ -47,7 +47,7 @@ export const MOUNT_UNLOCK = {coilgun: null, flak: "flak", lance: "lance"};
 
 export const defaultMounts = (type) => [...(LOADOUT[type] ?? [])];
 export const mountsOf = (f) => f.mounts ?? defaultMounts(f.type);
-export const maxHullOf = (f) => SHIPS[f.type]?.hull ?? 0;
+export const maxHullOf = (f) => hullMax(f);
 export const hullOf = (f) => Math.max(0, f.hp ?? maxHullOf(f));
 export const mountUnlocked = (tech, kind) => MOUNT_UNLOCK[kind] == null || !!tech?.[MOUNT_UNLOCK[kind]];
 // The next weapon a socket swaps to: the following unlocked type in cycle order, or null if none.
