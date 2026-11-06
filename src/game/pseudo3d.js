@@ -1,3 +1,4 @@
+import {drawThrusters} from "./thrusters.js";
 // Pseudo-3D ship rendering: heading buckets, roll banking, Sol Core lighting and detached ion plumes.
 // No pre-rendered 32-angle sprite strips are shipped yet, so frames are drawn procedurally; directionBucket() is the
 // index a strip would be sampled with once the art exists.
@@ -61,6 +62,7 @@ export function drawPseudo3DShip(ctx, type, x, y, heading, opts = {}) {
   if (opts.sprite) {
     const w = length, h = w * opts.sprite.naturalHeight / opts.sprite.naturalWidth;
     ctx.drawImage(opts.sprite, -w / 2, -h / 2, w, h);
+    if (opts.thrust > 0.01) drawThrusters(ctx, w, h, opts.engines, opts.thrust);
     ctx.restore();
     return;
   }

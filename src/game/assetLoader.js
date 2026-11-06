@@ -1,6 +1,7 @@
 // Preloads the art shipped under public/assets/. Each image is optional: when a file is missing or fails to load,
 // the renderer falls back to its procedural vector drawing, so the game never blocks on art.
 const BASE = "/assets";
+export const ASSET_BASE = BASE;
 
 export const ASSET_SRC = {
   ships: {

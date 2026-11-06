@@ -1,7 +1,8 @@
 // A shipyard card's preview bay: the hull drawn large, idling with a slow float and a small thrust plume.
 import {useEffect, useRef} from "react";
 import {drawShip} from "./ships.js";
-import {commanderSprite} from "./assetLoader.js";
+import {commanderSprite, ASSET_BASE} from "./assetLoader.js";
+import {enginesFor, drawThrusters} from "./thrusters.js";
 
 const PREVIEW_FIT = {corvette: 0.8, destroyer: 0.9, cruiser: 0.95};
 
@@ -31,6 +32,7 @@ export function ShipPreview({type, commander}) {
       if (art) {
         const dw = length, dh = dw * art.naturalHeight / art.naturalWidth;
         ctx.drawImage(art, w / 2 - dw / 2, h / 2 + float - dh / 2, dw, dh);
+        ctx.save(); ctx.translate(w / 2, h / 2 + float); drawThrusters(ctx, dw, dh, enginesFor(commander, type, ASSET_BASE), 0.55, t); ctx.restore();
       } else {
         drawShip(ctx, type, w / 2, h / 2 + float, 0, {thrust: 0.55, t, length});
       }

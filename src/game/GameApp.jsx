@@ -32,7 +32,8 @@ import {arkState, sendArkToPoint, stepArk, arkRadiation, stepFleet, stepRetreat,
 import {Icon, drawArk, drawRelay} from "./icons.jsx";
 import {Academy} from "./Academy.jsx";
 import {drawPseudo3DShip, sunLocal, emitPlume, updatePlumes, drawPlumes} from "./pseudo3d.js";
-import {commanderSprite} from "./assetLoader.js";
+import {commanderSprite, ASSET_BASE} from "./assetLoader.js";
+import {enginesFor} from "./thrusters.js";
 import {shadowAt, drawUmbra, drawLensing, drawDebrisBelt} from "./stellarFx.js";
 import {drawCombatFx, drawHullDamage} from "./combatFx.js";
 import {newCombat, stepCombat, weldSparks, mountsOf, MOUNTS, SWAP_COST, nextMount, engaged} from "./combat.js";
@@ -740,7 +741,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           const heading = f.theta ?? f.heading ?? 0;   // banked along the velocity vector
           const length = closeUp ? FLIGHT_LENGTH[f.type] * scene.zoomUser / 2 : 0;
           ctx.globalAlpha = 1 - 0.5 * shadowAt(world, star, bodies);   // planetary shadow dims the hull
-          if (closeUp) drawPseudo3DShip(ctx, f.type, q.x, q.y, heading, {length, roll: f.roll ?? 0, thrust: f.thrust ?? 0, sunDir: sunLocal(world.x, world.y, heading, sunW), sprite: commanderSprite(st.current.commander, f.type)});
+          if (closeUp) drawPseudo3DShip(ctx, f.type, q.x, q.y, heading, {length, roll: f.roll ?? 0, thrust: f.thrust ?? 0, sunDir: sunLocal(world.x, world.y, heading, sunW), sprite: commanderSprite(st.current.commander, f.type), engines: enginesFor(st.current.commander, f.type, ASSET_BASE)});
           else drawChevron(ctx, q.x, q.y, heading, {thrust: f.thrust ?? 0, t: tt, color: commanderColor});
           if (f.attack != null) {   // the attack line to its raider
             const rd = combatRef.current.raiders.find((x) => x.id === f.attack);
