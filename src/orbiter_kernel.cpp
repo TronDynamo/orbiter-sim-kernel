@@ -200,13 +200,18 @@ void OrbiterSimulationEngine::UpdateProjectiles() {
             state.planet_status[p_idx] = WorldStatus::CRACKING_STAGE1;
         }
 
-        if (dist <= hit_radius) {
+        // Swept test: the whole step from the old position to the new one is checked against the target,
+        // so a fast round cannot jump across a world between two ticks.
+        double inv = dist > 0.0 ? 1.0 / dist : 0.0;
+        double nx = state.missile_x[m] + dx * inv * state.missile_speed[m];
+        double ny = state.missile_y[m] + dy * inv * state.missile_speed[m];
+        if (dist <= hit_radius || CheckCircleSegmentIntersection(state.missile_x[m], state.missile_y[m], nx, ny,
+                                                                  target_x, target_y, hit_radius)) {
             ExecuteImpact(m, p_idx);
             state.missile_active[m] = false;
         } else {
-            double inv = 1.0 / dist;
-            state.missile_x[m] += dx * inv * state.missile_speed[m];
-            state.missile_y[m] += dy * inv * state.missile_speed[m];
+            state.missile_x[m] = nx;
+            state.missile_y[m] = ny;
         }
     }
 }

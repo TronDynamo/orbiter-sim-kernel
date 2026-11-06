@@ -13,7 +13,7 @@
     "build:engine": "scripts/build-orbit-engine.sh",
     "gen": "node scripts/gen-config.mjs",
     "build": "npm run gen && mkdir -p build && g++ -std=c++17 -O2 -Wall -Wextra -Isrc src/orbiter_kernel.cpp src/main.cpp -o build/orbiter_kernel",
-    "test": "node --test tests/world_states.test.mjs tests/wasm_smoke.test.mjs && npm run build && g++ -std=c++17 -O2 -Wall -Wextra -Isrc src/orbiter_kernel.cpp tests/kernel_test.cpp -o build/kernel_test && ./build/kernel_test",
+    "test": "node --test tests/world_states.test.mjs tests/wasm_smoke.test.mjs && npm run build && g++ -std=c++17 -O2 -Wall -Wextra -Isrc src/orbiter_kernel.cpp tests/kernel_test.cpp -o build/kernel_test && ./build/kernel_test && g++ -std=c++17 -O2 -Wall -Wextra -Isrc src/orbiter_kernel.cpp tests/tick_guarantees_test.cpp -o build/tick_guarantees && ./build/tick_guarantees",
     "run": "npm run build && ./build/orbiter_kernel",
     "build:wasm": "scripts/build-wasm.sh && mkdir -p public/engine && cp build/wasm/orbiter_kernel.mjs build/wasm/orbiter_kernel.wasm public/engine/"
   },
