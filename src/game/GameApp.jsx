@@ -241,6 +241,24 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       if (open.shipyard || open.armory || open.comms || open.senate) { open.shipyard = false; open.armory = false; open.comms = false; open.senate = false; refresh(); return; }
       const P = positions(); if (!P) return;
       const p = toWorld(e);
+      // Phones have no right-click: with a ship selected, tap a world once to choose it, then again to send.
+      if (e.pointerType === "touch") {
+        const ship = s0.selected != null ? st.current.fleet.find((f) => f.id === s0.selected) : null;
+        // Worlds keep moving, so the second tap may land a little off. Accept the world already chosen, or the nearest one.
+        const chosen = s0.pendingSend && P[s0.pendingSend] && Math.hypot(P[s0.pendingSend].x - p.x, P[s0.pendingSend].y - p.y) <= PLANET_DROP_RADIUS ? s0.pendingSend : null;
+        const hit = ship ? (chosen ?? nearestPlanet(P, p) ?? hitBody(st.current, P, p)) : null;
+        if (hit && (isPlanet(hit) || hit.startsWith("depot"))) {
+          const dest = hit.startsWith("depot") ? "the fuel depot" : planetName(hit);
+          if (s0.pendingSend === hit) {
+            s0.pendingSend = null;
+            const r = sendShip(st.current, ship, hit, P, liveConduits(), dest);
+            say(r.msg, r.ok); refresh(); return;
+          }
+          s0.pendingSend = hit;
+          say(`Tap ${dest} again to send ${SHIPS[ship.type].name}.`, true); refresh(); return;
+        }
+        s0.pendingSend = null;
+      }
       if (st.current.jumpGate?.built && !s0.mode && !s0.depotPlace && Math.abs(Math.hypot(p.x, p.y) - JUMP_GATE_BEACON_ORBIT_RADIUS) < 14) {
         u.current.starchart = true; refresh(); return;
       }
@@ -321,7 +339,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       }
       const zb = scene.sim.c[4] * scene.base;
       const picked = st.current.fleet.find((f) => { const q = shipPosition(f, P); return Math.hypot(q.x - p.x, q.y - p.y) <= 16 / zb; });
-      if (picked) { s0.selected = picked.id; scene.setFollow(shipFollow(picked.id)); say(`${SHIPS[picked.type].name} selected. Right-click a world to send it.`); refresh(); return; }
+      if (picked) { s0.selected = picked.id; scene.setFollow(shipFollow(picked.id)); say(`${SHIPS[picked.type].name} selected. Right-click a world to send it, or tap it twice on a phone.`); refresh(); return; }
       const id = hitBody(st.current, P, p);
       if (id) s0.drag = {from: id, cur: p, start: p};
       else s0.pan = {x: e.clientX, y: e.clientY, moved: false}; // empty space: a drag pans the map, a tap deselects
@@ -916,6 +934,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
     window.addEventListener("blur", onBlur);
     window.addEventListener("focus", onFocus);
     window.__relic = {scene, u: s0, st, say, refresh, get kernel() { return kernel; }, resetKernel: () => { kernel.reset(); kBase = null; gainSeen.fill(0); creditSeen = 0; buildTick = 0; snapSeen.clear(); }};
+    applySpeed(); // a tutorial starts with the briefing open, so the clock must stop before the first frame
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", sizeOverlay);
