@@ -231,7 +231,7 @@ int main() {
         // A generated system replaces the old one: tethers and missiles go, and every world starts uncharted.
         OrbiterSimulationEngine e;
         e.AddConduit(0, 1);
-        PlanetConfig sys[3] = {{1, 120, 0.3, 0.01, 10, 5e6, 2.5}, {2, 180, 1.1, 0.008, 9, 2e6, 1.5}, {3, 260, 2.0, 0.005, 12, 9e6, 4.0}};
+        PlanetConfig sys[3] = {{1, 120, 0.3, 0.01, 10, 5e6, 2.5, 0.0}, {2, 180, 1.1, 0.008, 9, 2e6, 1.5, 0.0}, {3, 260, 2.0, 0.005, 12, 9e6, 4.0, 0.0}};
         CHECK(e.LoadSystem(STAR_PULSAR, 12.0, 3, sys), "a three-world system loads");
         const StellarSystemState& u = e.GetState();
         CHECK(u.planet_count == 3, "the new planet count is in place");
@@ -250,7 +250,7 @@ int main() {
     {
         // A void has no star, so its radius is zero and nothing is occluded.
         OrbiterSimulationEngine e;
-        PlanetConfig one[1] = {{1, 120, 0.0, 0.01, 10, 1e6, 1.0}};
+        PlanetConfig one[1] = {{1, 120, 0.0, 0.01, 10, 1e6, 1.0, 0.0}};
         CHECK(e.LoadSystem(STAR_VOID, 50.0, 1, one), "a void system loads");
         CHECK(e.GetState().star_radius == 0.0, "a void has no star radius");
     }

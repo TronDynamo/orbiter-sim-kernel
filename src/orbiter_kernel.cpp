@@ -6,6 +6,39 @@
 
 namespace orbiter {
 
+// Solves Kepler's equation M = E - e sin E for the eccentric anomaly E. A fixed number of Newton steps keeps
+// the result deterministic and the time per tick constant. For e up to 0.1 the error after three steps is below 1e-15.
+static double SolveKepler(double M, double e) {
+    double E = M + e * std::sin(M);
+    for (int k = 0; k < 3; ++k) E -= (E - e * std::sin(E) - M) / (1.0 - e * std::cos(E));
+    return E;
+}
+
+// Distance along a->b (0..1 of its length) where it first enters the circle, or -1 when it does not reach it.
+static double SegmentCircleEntry(double x1, double y1, double x2, double y2, double cx, double cy, double r) {
+    const double dx = x2 - x1, dy = y2 - y1, fx = x1 - cx, fy = y1 - cy;
+    const double A = dx * dx + dy * dy;
+    const double C = fx * fx + fy * fy - r * r;
+    if (C <= 0.0) return 0.0;               // starts inside the body
+    if (A == 0.0) return -1.0;
+    const double B = 2.0 * (fx * dx + fy * dy);
+    const double disc = B * B - 4.0 * A * C;
+    if (disc < 0.0) return -1.0;
+    const double t = (-B - std::sqrt(disc)) / (2.0 * A);
+    return (t >= 0.0 && t <= 1.0) ? t : -1.0;
+}
+
+// Places world i at its Kepler position for its current mean anomaly. Called on load and every tick,
+// so a fresh system never reports its worlds at the origin.
+static void PlaceWorld(StellarSystemState& s, size_t i) {
+    const double e = s.planet_eccentricity[i];
+    const double E = SolveKepler(s.planet_angle[i], e);
+    const double r = s.planet_orbit_radius[i] * (1.0 - e * std::cos(E));
+    const double nu = 2.0 * std::atan2(std::sqrt(1.0 + e) * std::sin(E / 2.0), std::sqrt(1.0 - e) * std::cos(E / 2.0));
+    s.planet_x[i] = s.star_x + r * std::cos(nu);
+    s.planet_y[i] = s.star_y + r * std::sin(nu);
+}
+
 OrbiterSimulationEngine::OrbiterSimulationEngine() { InitFromConfig(); }
 
 void OrbiterSimulationEngine::InitFromConfig() {
@@ -23,6 +56,8 @@ void OrbiterSimulationEngine::InitFromConfig() {
         state.planet_orbit_radius[i] = p.orbit_radius;
         state.planet_angle[i] = p.angle;
         state.planet_speed[i] = p.speed;
+        state.planet_eccentricity[i] = p.eccentricity;
+        PlaceWorld(state, i);
         state.planet_radius[i] = p.radius;
         state.planet_population[i] = p.population;
         state.planet_yield_rate[i] = p.yield_rate;
@@ -59,10 +94,11 @@ void OrbiterSimulationEngine::UpdateTick() {
             double floor = state.star_radius + state.planet_radius[i];
             state.planet_orbit_radius[i] = std::max(floor, state.planet_orbit_radius[i] - orbiter_config::STAR_PULL_PER_TICK);
         }
+        // Kepler orbit: planet_angle is the mean anomaly M, which advances at a constant rate. The eccentric
+        // anomaly E solves M = E - e sin E, and the true anomaly and distance follow from E. With e = 0 this is a circle.
         state.planet_angle[i] += state.planet_speed[i];
         if (state.planet_angle[i] >= TWO_PI) state.planet_angle[i] -= TWO_PI;
-        state.planet_x[i] = state.star_x + state.planet_orbit_radius[i] * std::cos(state.planet_angle[i]);
-        state.planet_y[i] = state.star_y + state.planet_orbit_radius[i] * std::sin(state.planet_angle[i]);
+        PlaceWorld(state, i);
     }
 
     // 2. Conduit stress, snapping and star occlusion
@@ -399,6 +435,21 @@ int32_t OrbiterSimulationEngine::RemoveConduit(uint32_t index) {
 }
 
 
+int32_t OrbiterSimulationEngine::FirstBodyOnSegment(double x1, double y1, double x2, double y2) const {
+    int32_t best = -1;
+    double best_t = 2.0;
+    for (size_t p = 0; p < state.planet_count; ++p) {
+        if (state.planet_status[p] == WorldStatus::FRACTURED_DEBRIS) continue;   // debris is not a solid body
+        double t = SegmentCircleEntry(x1, y1, x2, y2, state.planet_x[p], state.planet_y[p], state.planet_radius[p]);
+        if (t >= 0.0 && t < best_t) { best_t = t; best = static_cast<int32_t>(p); }
+    }
+    if (state.star_radius > 0.0) {
+        double t = SegmentCircleEntry(x1, y1, x2, y2, state.star_x, state.star_y, state.star_radius);
+        if (t >= 0.0 && t < best_t) { best_t = t; best = -2; }
+    }
+    return best;
+}
+
 bool OrbiterSimulationEngine::LoadSystem(int32_t star_type, double star_radius, size_t planet_count, const PlanetConfig* planets) {
     if (planet_count > MAX_PLANETS || (planet_count > 0 && planets == nullptr)) return false;
     // Tethers, missiles and debris belong to the old system: drop them before the planets change under them.
@@ -422,6 +473,8 @@ bool OrbiterSimulationEngine::LoadSystem(int32_t star_type, double star_radius, 
         state.planet_orbit_radius[i] = p.orbit_radius;
         state.planet_angle[i] = p.angle;
         state.planet_speed[i] = p.speed;
+        state.planet_eccentricity[i] = p.eccentricity;
+        PlaceWorld(state, i);
         state.planet_radius[i] = p.radius;
         state.planet_population[i] = p.population;
         state.planet_yield_rate[i] = 0.0;      // uncharted: no harvest until a probe scans the world

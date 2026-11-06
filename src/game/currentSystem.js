@@ -105,6 +105,8 @@ export function kernelSystemFromSector(sector, system = systemFromSector(sector)
         radius: p.r,
         population: Math.round(60 + 40 * mult),
         yieldRate: p.yield,
+        // A small, repeatable Kepler eccentricity per world (0.005 to 0.025): slightly oval, still close to its ring.
+        eccentricity: 0.005 + 0.02 * makeRng(`ecc:${system.id}:${i}`)(),
       };
     }),
   };

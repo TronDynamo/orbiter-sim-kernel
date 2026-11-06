@@ -21,7 +21,7 @@ EXPORTS=(
   orbiter_missile_target orbiter_star_blast_ticks
   orbiter_missile_x orbiter_missile_y orbiter_missile_active orbiter_missile_type
   orbiter_asteroid_x orbiter_asteroid_y
-  orbiter_load_buffer orbiter_load_system orbiter_survey_planet orbiter_planet_charted orbiter_star_type
+  orbiter_load_buffer orbiter_load_system orbiter_survey_planet orbiter_planet_charted orbiter_star_type orbiter_first_body
 )
 EXPORTED=$(printf "_%s," "${EXPORTS[@]}"); EXPORTED=${EXPORTED%,}
 emcc -std=c++17 -O2 -Isrc src/orbiter_kernel.cpp src/wasm_api.cpp \

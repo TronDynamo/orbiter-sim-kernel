@@ -1,5 +1,7 @@
 // Guarantees for the tick path: no heap allocation while the simulation runs, and swept hits that cannot skip a world.
 // Run with `npm test`. The global operator new below counts every heap allocation in the process.
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <new>
@@ -46,6 +48,33 @@ int main() {
           "a segment passing through a world's disc is a hit");
     CHECK(!CheckCircleSegmentIntersection(-100.0, 20.0, 100.0, 20.0, 0.0, 0.0, 5.0),
           "a segment passing beside a world is not a hit");
+
+    // Kepler orbit: over one full revolution a world with eccentricity e swings between a(1 - e) and a(1 + e).
+    {
+        OrbiterSimulationEngine k;
+        const auto& s = k.GetState();
+        const double a = s.planet_orbit_radius[0], ecc = s.planet_eccentricity[0];
+        double rmin = 1e9, rmax = 0.0;
+        for (int t = 0; t < 1400; ++t) {
+            k.UpdateTick();
+            const double r = std::hypot(s.planet_x[0], s.planet_y[0]);
+            rmin = std::min(rmin, r);
+            rmax = std::max(rmax, r);
+        }
+        CHECK(ecc > 0.0 && std::fabs(rmin - a * (1.0 - ecc)) < 0.5, "perihelion matches a(1 - e)");
+        CHECK(std::fabs(rmax - a * (1.0 + ecc)) < 0.5, "aphelion matches a(1 + e)");
+    }
+
+    // Raycast: a line that starts inside a world hits it; a line through the star's centre hits the star;
+    // a line well clear of every body hits nothing.
+    {
+        OrbiterSimulationEngine r;
+        const auto& s = r.GetState();
+        const double px = s.planet_x[0], py = s.planet_y[0];
+        CHECK(r.FirstBodyOnSegment(px, py, px + 1.0, py) == 0, "a line starting inside a world hits that world");
+        CHECK(r.FirstBodyOnSegment(0.0, -1.0, 0.0, 1.0) == -2, "a line through the star's centre hits the star");
+        CHECK(r.FirstBodyOnSegment(0.0, 5000.0, 10.0, 5000.0) == -1, "a line clear of every body hits nothing");
+    }
 
     std::printf(failures ? "FAILED: %d\n" : "all tick guarantees hold\n", failures);
     return failures ? 1 : 0;

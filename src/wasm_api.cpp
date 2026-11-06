@@ -82,6 +82,7 @@ int32_t orbiter_load_system(int32_t star_type, double star_radius, uint32_t coun
     return g_engine.LoadSystem(star_type, star_radius, count, planets) ? 0 : -1;
 }
 int32_t orbiter_survey_planet(uint32_t idx) { return g_engine.SurveyPlanet(idx) ? 0 : -1; }
+int32_t orbiter_first_body(double x1, double y1, double x2, double y2) { return g_engine.FirstBodyOnSegment(x1, y1, x2, y2); }
 const uint8_t* orbiter_planet_charted() {
     return reinterpret_cast<const uint8_t*>(g_engine.GetState().planet_charted);
 }

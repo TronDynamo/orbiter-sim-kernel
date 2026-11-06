@@ -74,7 +74,7 @@ export class OrbiterKernel {
       target: new Int32Array(m.HEAPU8.buffer, m._orbiter_missile_target(), MAX.missiles),
     };
     this.loadPtr = m._orbiter_load_buffer();
-    this.loadBuf = f64(this.loadPtr, MAX.planets * 7);
+    this.loadBuf = f64(this.loadPtr, MAX.planets * 8);
     this.charted = u8(m._orbiter_planet_charted(), MAX.planets);
     this.asteroids = {
       x: f64(m._orbiter_asteroid_x(), MAX.asteroids),
@@ -123,7 +123,7 @@ export class OrbiterKernel {
   // replaced. Each world is {orbitRadius, angle, speed, radius, population, yieldRate}; all start uncharted.
   // Recorded in the log, so a save replays the swap at the same tick.
   loadSystem(system) {
-    const op = { op: "load", starType: system.starType, starRadius: system.starRadius, planets: system.planets.map((p) => ({ orbitRadius: p.orbitRadius, angle: p.angle, speed: p.speed, radius: p.radius, population: p.population, yieldRate: p.yieldRate })) };
+    const op = { op: "load", starType: system.starType, starRadius: system.starRadius, planets: system.planets.map((p) => ({ orbitRadius: p.orbitRadius, angle: p.angle, speed: p.speed, radius: p.radius, population: p.population, yieldRate: p.yieldRate, eccentricity: p.eccentricity ?? 0 })) };
     if (op.planets.length > MAX.planets) return -1;
     this._record(op);
     return this._applyLoad(op);
@@ -131,9 +131,9 @@ export class OrbiterKernel {
   _applyLoad(op) {
     const n = op.planets.length;
     op.planets.forEach((p, i) => {
-      const b = this.loadBuf, o = i * 7;
+      const b = this.loadBuf, o = i * 8;
       b[o] = i; b[o + 1] = p.orbitRadius; b[o + 2] = p.angle; b[o + 3] = p.speed;
-      b[o + 4] = p.radius; b[o + 5] = p.population; b[o + 6] = p.yieldRate;
+      b[o + 4] = p.radius; b[o + 5] = p.population; b[o + 6] = p.yieldRate; b[o + 7] = p.eccentricity ?? 0;
     });
     return this.m._orbiter_load_system(op.starType, op.starRadius, n, this.loadPtr);
   }

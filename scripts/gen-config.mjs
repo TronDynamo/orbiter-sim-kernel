@@ -12,7 +12,7 @@ const indexOf = (key) => {
 
 const weaponRows = WEAPONS.map((w) => `    { ${lit(w.speed)} }, // ${w.name}`).join('\n');
 const planetRows = PLANETS.map((p) =>
-  `    { ${p.id}u, ${lit(p.orbit)}, ${lit(p.angle)}, ${lit(p.speed)}, ${lit(p.r)}, ${lit(p.population)}, ${lit(p.yield)} }, // ${p.name}`
+  `    { ${p.id}u, ${lit(p.orbit)}, ${lit(p.angle)}, ${lit(p.speed)}, ${lit(p.r)}, ${lit(p.population)}, ${lit(p.yield)}, ${lit(p.ecc ?? 0)} }, // ${p.name}`
 ).join('\n');
 const conduitRows = CONDUITS.map((c) =>
   `    { ${indexOf(c.source)}u, ${indexOf(c.target)}u, ${lit(c.maxLength)}, ${lit(c.throughput)} },`
@@ -45,6 +45,7 @@ struct PlanetDef {
     double radius;
     double population;
     double yield_rate;
+    double eccentricity; // 0 = circular; Kepler orbit shape
 };
 
 struct WeaponDef {

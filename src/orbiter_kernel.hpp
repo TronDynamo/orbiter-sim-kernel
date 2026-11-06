@@ -58,6 +58,7 @@ struct PlanetConfig {
     double radius;
     double population;
     double yield_rate;     // harvest per second once the world is surveyed; 0 until then
+    double eccentricity;   // Kepler orbit shape: 0 is a circle
 };
 
 struct StellarSystemState {
@@ -76,6 +77,7 @@ struct StellarSystemState {
     double planet_orbit_radius[MAX_PLANETS];
     double planet_angle[MAX_PLANETS];
     double planet_speed[MAX_PLANETS];
+    double planet_eccentricity[MAX_PLANETS];   // Kepler orbit shape per world (0 = circle)
     double planet_x[MAX_PLANETS];
     double planet_y[MAX_PLANETS];
     double planet_radius[MAX_PLANETS];
@@ -166,6 +168,8 @@ public:
     // the planet arrays. Every world starts uncharted with zero harvest. Returns false, changing nothing, if
     // planet_count exceeds MAX_PLANETS.
     bool LoadSystem(int32_t star_type, double star_radius, size_t planet_count, const PlanetConfig* planets);
+    // The first solid body (planet index, or -2 for the star) a straight line from (x1,y1) to (x2,y2) runs into, or -1 for none.
+    int32_t FirstBodyOnSegment(double x1, double y1, double x2, double y2) const;
     // Charts an uncharted world and starts its harvest. Returns false for an unknown or already charted world.
     bool SurveyPlanet(uint32_t idx);
 

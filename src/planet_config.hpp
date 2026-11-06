@@ -25,6 +25,7 @@ struct PlanetDef {
     double radius;
     double population;
     double yield_rate;
+    double eccentricity; // 0 = circular; Kepler orbit shape
 };
 
 struct WeaponDef {
@@ -47,10 +48,10 @@ constexpr double CREDITS_PER_CONDUIT = 5.0;
 constexpr size_t WEAPON_COUNT = 4;
 
 inline constexpr PlanetDef PLANETS[PLANET_COUNT] = {
-    { 101u, 300.0, 0.0, 0.005233333333333334, 10.0, 12500000.0, 15.0 }, // Thalassa
-    { 102u, 255.0, 2.0, 0.003266666666666667, 11.0, 45000000.0, 12.0 }, // Aeros
-    { 103u, 335.0, 3.5, 0.0023333333333333335, 10.0, 8200000.0, 10.0 }, // Ferrum
-    { 104u, 420.0, 1.0, 0.00175, 12.0, 2100000.0, 8.0 }, // Kryos
+    { 101u, 300.0, 0.0, 0.005233333333333334, 10.0, 12500000.0, 15.0, 0.02 }, // Thalassa
+    { 102u, 255.0, 2.0, 0.003266666666666667, 11.0, 45000000.0, 12.0, 0.03 }, // Aeros
+    { 103u, 335.0, 3.5, 0.0023333333333333335, 10.0, 8200000.0, 10.0, 0.015 }, // Ferrum
+    { 104u, 420.0, 1.0, 0.00175, 12.0, 2100000.0, 8.0, 0.025 }, // Kryos
 };
 
 inline constexpr WeaponDef WEAPONS[WEAPON_COUNT] = {
