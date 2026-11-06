@@ -129,9 +129,24 @@ export function stepFleet(s, P, ticks, ctx) {
       if (d > 1e-6) { const step = Math.min(d, speed * ticks); f.x += (dx / d) * step; f.y += (dy / d) * step; }
       f.heading = Math.atan2(dy, dx); f.thrust = 1;
       s.propellant = Math.max(0, s.propellant - PROPELLANT_PER_TICK * burn * ticks);
+      // a manual lead locks into orbit the moment the ship reaches its world, even before the aimed spot
+      if (f.leadTo && P[f.leadTo] && Math.hypot(P[f.leadTo].x - f.x, P[f.leadTo].y - f.y) <= radiusOf(f.leadTo) + ARRIVE_PAD) {
+        const L = f.leadTo; f.leadTo = null; f.dest = null; f.thrust = 0;
+        settleInOrbit(f, P, L);
+        msgs.push(`${SHIPS[f.type]?.name ?? 'Ship'} locks into orbit around ${s.planetNames?.[L] ?? PLANET_NAME[L] ?? L}.`);
+        continue;
+      }
       if (Math.hypot(D.x - f.x, D.y - f.y) <= 1.5) {
-        f.x = D.x; f.y = D.y; f.mode = 'hold'; f.dest = null; f.thrust = 0;
-        msgs.push(`${SHIPS[f.type]?.name ?? 'Ship'} holds position in open space.`);
+        const L = f.leadTo; f.leadTo = null; f.dest = null; f.thrust = 0;
+        f.x = D.x; f.y = D.y;
+        // a manual lead locks into orbit when its world is at the spot the ship reached
+        if (L && P[L] && Math.hypot(P[L].x - D.x, P[L].y - D.y) <= radiusOf(L) + ARRIVE_PAD) {
+          settleInOrbit(f, P, L);
+          msgs.push(`${SHIPS[f.type]?.name ?? 'Ship'} locks into orbit around ${s.planetNames?.[L] ?? PLANET_NAME[L] ?? L}.`);
+        } else {
+          f.mode = 'hold';
+          msgs.push(`${SHIPS[f.type]?.name ?? 'Ship'} holds position in open space.`);
+        }
       }
       continue;
     }
@@ -183,16 +198,47 @@ export function stepFleet(s, P, ticks, ctx) {
 
 // Issues a flight order to a world or a fuel depot. Returns {ok, msg}. A ship in orbit surfs when a live conduit joins
 // its world to the target; otherwise it burns for the target, provided it has the propellant for the trip.
-// lead: 'auto' (default) steers at where the world will be on arrival; 'manual' flies to where the world is right now
-// and holds there, so the player times the meeting themselves. Depots always dock, so they stay on auto.
-export function sendShip(s, f, targetId, P, conduits, targetName, lead = 'auto') {
+// Where a world will be after tau ticks, turning around the core at its current angular speed (worlds ride circular orbits).
+export function predictOrbit(T, v, core, tau) {
+  const dx = T.x - core.x, dy = T.y - core.y, r2 = dx * dx + dy * dy;
+  if (r2 < 1e-9) return {x: T.x + v.x * tau, y: T.y + v.y * tau};
+  const w = (dx * v.y - dy * v.x) / r2, c = Math.cos(w * tau), sn = Math.sin(w * tau);
+  return {x: core.x + dx * c - dy * sn, y: core.y + dx * sn + dy * c};
+}
+
+// Time for a ship at speed s to meet a target that starts at offset D and moves at v (per tick): the smallest positive
+// root of |D + v t| = s t. Falls back to a stationary estimate if the target outruns the ship.
+export function interceptTime(D, v, s) {
+  const a = v.x * v.x + v.y * v.y - s * s, b = 2 * (D.x * v.x + D.y * v.y), c = D.x * D.x + D.y * D.y;
+  let roots = [];
+  if (Math.abs(a) < 1e-12) { if (b !== 0) roots = [-c / b]; }
+  else {
+    const disc = b * b - 4 * a * c;
+    if (disc >= 0) { const sq = Math.sqrt(disc); roots = [(-b - sq) / (2 * a), (-b + sq) / (2 * a)]; }
+  }
+  const pos = roots.filter((r) => r > 0);
+  return pos.length ? Math.min(...pos) : Math.hypot(D.x, D.y) / s;
+}
+
+// lead: 'auto' (default) follows the world and locks into its orbit on arrival. 'manual' aims at where the world will be
+// on arrival (the ghost pip), flies there, and locks into orbit if the world is at that spot when the ship arrives.
+// vel: each world's speed per tick, used to aim the manual lead. Depots always dock, so they stay on auto.
+export function sendShip(s, f, targetId, P, conduits, targetName, lead = 'auto', vel = {}) {
   const name = SHIPS[f.type]?.name ?? 'Ship';
   if (f.mode === 'orbit' && f.planet === targetId) return {ok: false, msg: `${name} is already in orbit around ${targetName}.`};
   const T = P[targetId];
   if (!T) return {ok: false, msg: 'That target is out of reach.'};
   if (lead === 'manual' && !String(targetId).startsWith('depot')) {
-    const r = sendShipToPoint(s, f, {x: T.x, y: T.y}, P);
-    return r.ok ? {ok: true, msg: `${name} burns for where ${targetName} is now (manual lead).`} : r;
+    const q = shipPosition(f, P), v = vel[targetId] ?? {x: 0, y: 0};
+    const speed = (IMPULSE[f.type] ?? 1.5) * (f.overclock ? OVERCLOCK.speed : 1);
+    // solve for the arrival time against the world's orbit, not a straight line: it turns around the star as it goes
+    const core = P.core ?? {x: 0, y: 0};
+    let tau = Math.hypot(T.x - q.x, T.y - q.y) / speed;
+    for (let i = 0; i < 60; i++) tau = Math.hypot(predictOrbit(T, v, core, tau).x - q.x, predictOrbit(T, v, core, tau).y - q.y) / speed;
+    const r = sendShipToPoint(s, f, predictOrbit(T, v, core, tau), P);
+    if (!r.ok) return r;
+    f.leadTo = targetId;
+    return {ok: true, msg: `${name} burns to lead ${targetName}.`};
   }
   if (f.type === 'freighter' && resOf(s, targetId) && targetId !== homeOf(s) && !(s.surveyed ?? CHARTED_AT_START)[targetId]) {
     return {ok: false, msg: `Scan ${targetName} with a Survey Probe before siphoning it.`};
@@ -240,7 +286,7 @@ export function sendShipToPoint(s, f, pt, P) {
   const burn = f.overclock ? OVERCLOCK.burn : 1;
   const cost = (Math.hypot(pt.x - q.x, pt.y - q.y) / (IMPULSE[f.type] ?? 1.5)) * PROPELLANT_PER_TICK * burn;
   if (s.propellant < cost) return {ok: false, msg: `Not enough propellant for that burn (needs ${Math.ceil(cost)}).`};
-  f.mode = 'transit'; f.to = null; f.from = null; f.dest = {x: pt.x, y: pt.y}; f.x = q.x; f.y = q.y; f.thrust = 1;
+  f.mode = 'transit'; f.to = null; f.from = null; f.leadTo = null; f.dest = {x: pt.x, y: pt.y}; f.x = q.x; f.y = q.y; f.thrust = 1;
   return {ok: true, msg: `${name} burns for open space.`};
 }
 

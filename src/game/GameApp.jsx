@@ -26,7 +26,7 @@ import {SenateChamber} from "./SenateChamber.jsx";
 import {VictoryModal} from "./VictoryModal.jsx";
 import {RULES, newState, snapTethers, network, tick, tryTether, checkTether, cut, tetherAt, tensionOf, tensionColor, build, hitBody, distToTether, orderShip, shortfall, fireWeapon} from "./rules.js";
 import {SHIPS, SHIP_ORDER, COST_LABEL, drawShip, drawChevron, fleetPower, FLIGHT_LENGTH, DEPOT_COST} from "./ships.js";
-import {stepFleet, sendShip, sendShipToPoint, emergencyBurn, shipPosition, interceptAt, depotPos, MAX_PROPELLANT, deploySatellite, SURVEY_TICKS, CARGO_CAP, IMPULSE, OVERCLOCK} from "./fleet.js";
+import {stepFleet, sendShip, sendShipToPoint, emergencyBurn, shipPosition, interceptAt, depotPos, MAX_PROPELLANT, deploySatellite, SURVEY_TICKS, CARGO_CAP, IMPULSE, OVERCLOCK, predictOrbit} from "./fleet.js";
 import {Icon, drawArk, drawRelay} from "./icons.jsx";
 import {Academy} from "./Academy.jsx";
 import {drawPseudo3DShip, sunLocal, emitPlume, updatePlumes, drawPlumes} from "./pseudo3d.js";
@@ -256,7 +256,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           const dest = hit.startsWith("depot") ? "the fuel depot" : planetName(hit);
           if (s0.pendingSend === hit) {
             s0.pendingSend = null;
-            const r = orderBurn(ship, P, sendShip(st.current, ship, hit, P, liveConduits(), dest, u.current.lead ?? "auto"));
+            const r = orderBurn(ship, P, sendShip(st.current, ship, hit, P, liveConduits(), dest, u.current.lead ?? "auto", lastVel));
             say(r.msg, r.ok); refresh(); return;
           }
           s0.pendingSend = hit;
@@ -424,7 +424,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       if (!ship) { s0.selected = null; refresh(); return; }
       const id = hitBody(st.current, P, toWorld(e));
       if (!id || !(isPlanet(id) || id.startsWith("depot"))) { const r = orderBurn(ship, P, sendShipToPoint(st.current, ship, toWorld(e), P)); say(r.msg, r.ok); refresh(); return; }
-      const r = orderBurn(ship, P, sendShip(st.current, ship, id, P, liveConduits(), id.startsWith("depot") ? "the fuel depot" : planetName(id), u.current.lead ?? "auto"));
+      const r = orderBurn(ship, P, sendShip(st.current, ship, id, P, liveConduits(), id.startsWith("depot") ? "the fuel depot" : planetName(id), u.current.lead ?? "auto", lastVel));
       say(r.msg, r.ok); refresh();
     };
     // The camera follows a ship while zoomed in past ZOOM_FOLLOW. Stops once that ship is no longer selected.
@@ -707,7 +707,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
               const speed = (IMPULSE[f.type] ?? 1.5) * (f.overclock ? OVERCLOCK.speed : 1);
               const v = lastVel[f.to] ?? {x: 0, y: 0};
               const tau = Math.hypot(T.x - qw.x, T.y - qw.y) / speed;
-              const is = toS({x: T.x + v.x * tau, y: T.y + v.y * tau});
+              const is = toS(predictOrbit(T, v, P.core ?? {x: 0, y: 0}, tau));
               ctx.strokeStyle = "rgba(56,189,248,0.6)"; ctx.lineWidth = 1;
               ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(is.x, is.y); ctx.stroke();
               ctx.strokeStyle = "rgba(56,189,248,0.9)"; ctx.setLineDash([2, 3]);
@@ -726,7 +726,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
               const qs = shipPosition(f, P), speed = (IMPULSE[f.type] ?? 1.5) * (f.overclock ? OVERCLOCK.speed : 1);
               const v = lastVel[hv] ?? {x: 0, y: 0}, W = P[hv];
               const tau = Math.hypot(W.x - qs.x, W.y - qs.y) / speed;
-              const g = toS({x: W.x + v.x * tau, y: W.y + v.y * tau});
+              const g = toS(predictOrbit(W, v, P.core ?? {x: 0, y: 0}, tau));
               ctx.setLineDash([5, 5]); ctx.strokeStyle = "rgba(56,189,248,0.4)"; ctx.lineWidth = 1;
               ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(g.x, g.y); ctx.stroke();
               ctx.strokeStyle = "rgba(56,189,248,0.85)";
