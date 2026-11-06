@@ -33,6 +33,7 @@ const RAIDER_HULL = 40;
 const RAIDER_SPEED = 55;             // world units per second
 const ENGAGE_RANGE = 300;            // raiders go after ships within this distance
 const HOLD_RANGE = 170;              // raiders hover this far from the nearest world when no ship is in range
+const ENGAGE_HOLD = 60;              // a raider keeps chasing its ship until it is this much beyond ENGAGE_RANGE
 const HIT_RADIUS = 9;
 const FLAK_FUSE = 14;                // flak detonates within this distance of an enemy
 const DRAG = 0.8;
@@ -262,7 +263,12 @@ export function stepCombat(state, env) {
 
   // raiders steer toward the nearest ship in range, else hover near the nearest world
   for (const r of state.raiders) {
-    const target = nearest(seen(r, allies), r, ENGAGE_RANGE);
+    // The chase target is sticky and ignores line-of-sight: a body (the sun included) crossing between raider and
+    // ship must not flip the goal between that ship and a world every frame. It is dropped only once the ship
+    // leaves engagement range plus a hold margin. Firing still checks line of sight in trigger().
+    const held = r.engage != null ? allies.find((a) => a._f.id === r.engage) : null;
+    const target = held && dist(r, held) <= ENGAGE_RANGE + ENGAGE_HOLD ? held : nearest(allies, r, ENGAGE_RANGE);
+    r.engage = target ? target._f.id : null;
     let goal = null;
     if (target) goal = target;
     else if (planets.length) goal = nearest(planets, r, Infinity);
@@ -273,7 +279,10 @@ export function stepCombat(state, env) {
       const want = target ? MOUNTS.coilgun.range * 0.85 : HOLD_RANGE;
       if (d > want + 4) {
         r.vx = (goal.x - r.x) / d * RAIDER_SPEED; r.vy = (goal.y - r.y) / d * RAIDER_SPEED;
-      } else { r.vx *= 0.9; r.vy *= 0.9; }
+      } else {
+        // braking decays per second, not per frame, so a slow phone frame rate brakes the same as a fast desktop one
+        const brake = Math.pow(0.9, dt * 60); r.vx *= brake; r.vy *= brake;
+      }
     }
     r.x += r.vx * dt; r.y += r.vy * dt;
     // with no ship to fight, a raider over a world takes what it can carry off

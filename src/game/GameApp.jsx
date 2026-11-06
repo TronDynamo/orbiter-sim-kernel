@@ -1104,6 +1104,13 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           const want = CONDUIT_RULES.maxLength + perks(s).conduitBonus;
           for (let c = 0; c < kernel.conduitCount; c++) if (kernel.conduits.maxLength[c] !== want) kernel.setConduitMaxLength(c, want);
         }
+        // Survey sync: probes and the home world mark worlds surveyed in game state, but the kernel only pays
+        // output from worlds it has charted (an uncharted world's yield rate is 0). Chart each surveyed world in
+        // the kernel. surveyPlanet is idempotent, so this is safe every tick and survives system jumps.
+        if (kernel) sysRef.current.planets.forEach((p) => {
+          const idx = planetIndex(p.id);
+          if (idx >= 0 && s.surveyed?.[p.id] && !s.wrecked?.[p.id]) kernel.surveyPlanet(idx);
+        });
         // Colony structures pay their rate per second while their world is connected to a conduit
         if (kernel) {
           const dt = kernel.tickCount - buildTick;
