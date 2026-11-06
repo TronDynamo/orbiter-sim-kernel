@@ -1322,7 +1322,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
   const selectedWaves = () => (u.current.waveSel ?? []).map(waveById).filter(Boolean);
   function waveConvoy(on) {
     const ws = selectedWaves(); if (!ws.length) return;
-    for (const w of ws) { w.convoy = on; w.dest = null; }
+    for (const w of ws) { w.convoy = on; w.dest = null; if (!on) w.station = {x: w.x, y: w.y}; }   // leaving the convoy, the fleet holds where it is
     u.current.msg = on ? `${ws.length > 1 ? `${ws.length} fleets join` : `${factionById(ws[0].id)?.name} joins`} your convoy.` : `${ws.length > 1 ? `${ws.length} fleets leave` : `${factionById(ws[0].id)?.name} leaves`} the convoy.`; refresh();
   }
   function waveSendHome() {

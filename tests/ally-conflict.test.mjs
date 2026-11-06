@@ -42,8 +42,8 @@ test("standing down raises respect and sends no aid", () => {
 
 test("aid wave destroys raiders without paying a bounty", () => {
   const c = newCombat();
-  c.raiders.push({id: 1, x: 300, y: 0, vx: 0, vy: 0, hp: 2, maxHp: 2, mounts: [], bounty: 50});
-  c.aid = [{id: ally, n: 2, dps: 4, hull: 120}];
+  c.raiders.push({id: 1, x: 150, y: 0, vx: 0, vy: 0, hp: 2, maxHp: 2, mounts: [], bounty: 50});
+  c.aid = [{id: ally, n: 2, dps: 4, hull: 120, phase: "station", station: {x: 0, y: 0}, x: 0, y: 0}];
   let kills = [];
   for (let i = 0; i < 40 && c.raiders.length; i++) {
     const ev = stepCombat(c, {dt: 0.05, fleet: [], planets: [], core: {x: 0, y: 0}, pos: () => null, tech: {}, rand: () => 0.5, bodies: []});
@@ -69,7 +69,7 @@ test("an aid wave stays on station with no raiders until it is sent home or dest
 
 test("raiders wear an aid wave's hull down until it is lost", () => {
   const c = newCombat();
-  c.raiders.push({id: 1, x: 1e6, y: 0, vx: 0, vy: 0, hp: 1e9, maxHp: 1e9, mounts: [], bounty: 0});
+  c.raiders.push({id: 1, x: 150, y: 0, vx: 0, vy: 0, hp: 1e9, maxHp: 1e9, mounts: [], bounty: 0});
   c.aid = [{id: ally, n: 2, dps: 4, hull: 120}];
   let lost = [];
   for (let i = 0; i < 4000 && c.aid.length; i++) {
@@ -123,4 +123,18 @@ test("a convoy fleet under fire from a close raider sidesteps, weaving across th
   for (let i = 0; i < 120; i++) { stepCombat(c, env); ys.push(c.aid[0].y); }
   const span = Math.max(...ys.slice(60)) - Math.min(...ys.slice(60));
   assert.ok(span > 40, `weaving span ${span.toFixed(1)}`);
+});
+
+test("a stationed fleet sidesteps under fire and reforms on its station when the raiders are gone", () => {
+  const c = newCombat();
+  const station = {x: 0, y: 0};
+  c.aid = [{id: ally, n: 2, dps: 4, hull: 120, phase: "station", station, x: 0, y: 0, slot: 0}];
+  c.raiders.push({id: 99, x: 150, y: 0, vx: 0, vy: 0, hp: 1e9, maxHp: 1e9, mounts: [], bounty: 0});
+  const env = {dt: 0.05, fleet: [], planets: [], core: {x: 0, y: 0}, pos: () => null, tech: {}, rand: () => 0.5, bodies: [], ark: {x: 0, y: 0}};
+  const ys = [];
+  for (let i = 0; i < 120; i++) { stepCombat(c, env); ys.push(c.aid[0].y); }
+  assert.ok(Math.max(...ys.slice(60)) - Math.min(...ys.slice(60)) > 30, "sidesteps while under fire");
+  c.raiders.length = 0;
+  for (let i = 0; i < 200; i++) stepCombat(c, env);
+  assert.ok(Math.hypot(c.aid[0].x - station.x, c.aid[0].y - station.y) < 3, "back on station");
 });

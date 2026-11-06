@@ -335,11 +335,23 @@ export function stepCombat(state, env) {
     if (state.raiders.length) {
       const near = state.raiders.reduce((best, r) => (dist(r, a) < dist(best, a) ? r : best));
       const d = dist(near, a);
-      if (d > AID_HOLD) {
+      a.weave = (a.weave ?? 0) + dt;
+      if (d < DODGE_RANGE && a.station) {
+        // under fire at its station: sidestep across the line toward the threat, then fall back to station
+        const L = d || 1, px = -(near.y - a.y) / L, py = (near.x - a.x) / L;
+        const w = Math.sin(a.weave * 3.2 + (a.slot ?? 0)) * DODGE_AMPLITUDE;
+        const tx = a.station.x + px * w, ty = a.station.y + py * w;
+        const dd = Math.hypot(tx - a.x, ty - a.y), st = Math.min(dd, AID_SPEED * dt * 2);
+        if (dd > 0) { a.x += (tx - a.x) / dd * st; a.y += (ty - a.y) / dd * st; }
+      } else if (d > AID_HOLD) {
         const step = Math.min(d - AID_HOLD, AID_SPEED * dt);
         a.x += (near.x - a.x) / d * step; a.y += (near.y - a.y) / d * step;
       }
       a.heading = Math.atan2(near.y - a.y, near.x - a.x);
+    } else if (a.station) {
+      // no raiders left: reform on the station
+      const dd = Math.hypot(a.station.x - a.x, a.station.y - a.y), st = Math.min(dd, AID_SPEED * dt);
+      if (dd > 0) { a.x += (a.station.x - a.x) / dd * st; a.y += (a.station.y - a.y) / dd * st; }
     }
   }
   // formation: allied waves keep a minimum spacing, so a convoy spreads out instead of stacking
@@ -352,11 +364,13 @@ export function stepCombat(state, env) {
     A.x -= dx / d * push; A.y -= dy / d * push; B.x += dx / d * push; B.y += dy / d * push;
   }
   for (const a of state.aid) {
-    if (!state.raiders.length) break;
-    const target = state.raiders.reduce((best, r) => (dist(r, {x: 0, y: 0}) < dist(best, {x: 0, y: 0}) ? r : best));
+    // a wave fires on the nearest raider within its reach, and only raiders within reach wear its hull down
+    const inReach = state.raiders.filter((r) => dist(r, a) <= DODGE_RANGE);
+    if (!inReach.length) continue;
+    const target = inReach.reduce((best, r) => (dist(r, a) < dist(best, a) ? r : best));
     target.bounty = 0;
     target.hp -= a.n * a.dps * dt;
-    a.hull = (a.hull ?? a.hullMax ?? 0) - state.raiders.length * RAIDER_DPS_AGAINST_AID * dt;
+    a.hull = (a.hull ?? a.hullMax ?? 0) - inReach.length * RAIDER_DPS_AGAINST_AID * dt;
   }
   for (const a of state.aid.filter((x) => (x.hull ?? 1) <= 0)) events.push({kind: "aidLost", id: a.id, msg: `Allied wave lost in the fight.`});
   state.aid = state.aid.filter((a) => (a.hull ?? 1) > 0);
