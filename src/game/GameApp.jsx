@@ -345,7 +345,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       const zb = scene.sim.c[4] * scene.base;
       const picked = st.current.fleet.find((f) => { const q = shipPosition(f, P); return Math.hypot(q.x - p.x, q.y - p.y) <= 16 / zb; });
       if (picked && s0.selected === picked.id) { s0.selected = null; scene.setFollow(null); say("Ship deselected."); refresh(); return; }
-      if (picked) { s0.selected = picked.id; scene.setFollow(shipFollow(picked.id)); say(`${SHIPS[picked.type].name} selected. Right-click a world to send it, click empty space to send it there, or tap twice on a phone.`); refresh(); return; }
+      if (picked) { s0.selected = picked.id; s0.panelHidden = false; scene.setFollow(shipFollow(picked.id)); say(`${SHIPS[picked.type].name} selected. Right-click a world to send it, click empty space to send it there, or tap twice on a phone.`); refresh(); return; }
       const id = hitBody(st.current, P, p);
       if (id) s0.drag = {from: id, cur: p, start: p};
       else s0.pan = {x: e.clientX, y: e.clientY, moved: false}; // empty space: a drag pans the map, a tap deselects
@@ -1270,9 +1270,13 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       <div className="hud-pip-frame" aria-hidden="true">
         <canvas ref={pipRef} className="hud-pip" width={PIP_W * 2} height={PIP_H * 2} style={{width: PIP_W, height: PIP_H}} />
       </div>
-      {selShip ? (
+      {selShip && !u.current.panelHidden ? (
         <aside className="hud-panel hud-engineering" aria-label="Vessel engineering">
-          <div className="hud-kicker mono">VESSEL ENGINEERING · {SHIPS[selShip.type].name.toUpperCase()} #{selShip.id}</div>
+          <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8}}>
+            <div className="hud-kicker mono">VESSEL ENGINEERING · {SHIPS[selShip.type].name.toUpperCase()} #{selShip.id}</div>
+            <button className="pill zelo" aria-label="Close ship panel" title="Close ship panel" style={{padding: "4px 10px", minWidth: 36, minHeight: 36}}
+              onClick={() => { u.current.panelHidden = true; refresh(); }}>✕</button>
+          </div>
           <HudMeter label="Hull" pct={selPct} color={selPct > 60 ? "#22c55e" : selPct > 30 ? "#eab308" : "#ef4444"} value={`${selHp}/${selMax}`} warn={selPct <= 30} />
           <div className="hud-fleet mono"><span>PROPELLANT {Math.floor(s.propellant)}/{MAX_PROPELLANT}</span><span>{String(selShip.mode ?? "orbit").toUpperCase()}</span></div>
           <button className="hud-btn" onClick={patchBulkhead}><Icon name="repair" size={14} /> Patch bulkhead · 10 Alloys</button>
@@ -1299,6 +1303,13 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           {selShip.type === "freighter" ? <div className="hud-fleet mono"><span>HOLD {Math.floor(selShip.cargo ?? 0)}/{CARGO_CAP}</span><span>{selShip.res ? selShip.res.toUpperCase() : "EMPTY"}</span></div> : null}
           {selShip.type === "probe" ? <div className="hud-fleet mono"><span>SCAN</span><span>{selShip.mode === "survey" ? `${Math.round((1 - (selShip.surveyLeft ?? SURVEY_TICKS) / SURVEY_TICKS) * 100)}%` : "IDLE"}</span></div> : null}
         </aside>
+      ) : null}
+      {/* Panel hidden but ship still selected: the map stays clear for leading, and one tap brings the panel back */}
+      {selShip && u.current.panelHidden ? (
+        <div className="glass" style={{position: "absolute", right: 12, top: 120, zIndex: 9, display: "flex", gap: 6, padding: 6, borderRadius: 10}}>
+          <button className="pill zelo" onClick={() => { u.current.panelHidden = false; refresh(); }}>Ship #{selShip.id} · Show</button>
+          <button className="pill zelo" aria-label="Deselect ship" title="Deselect ship" onClick={() => { u.current.selected = null; u.current.panelHidden = false; refresh(); }}>✕</button>
+        </div>
       ) : null}
       {u.current.governor ? (() => {
         const id = u.current.governor, idx = planetIndex(id), def = {yield: yieldOf(id)};
