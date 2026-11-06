@@ -202,8 +202,10 @@ export function tick(state, P) {
   state.queue = state.queue.filter((q) => {
     q.left -= 1;
     if (q.left > 0) return true;
-    state.fleet.push({id: q.id, type: q.type, mode: 'orbit', planet: state.homePlanet ?? 'ferrum', ang: state.fleet.length * 2.4, heading: 0, thrust: 0, hp: SHIPS[q.type].hull});
-    events.push({msg: `${SHIPS[q.type].name} launched. It holds orbit around ${nm(state, state.homePlanet ?? 'ferrum')}.`});
+    // every new hull launches from the Ark Endeavor and holds position beside it until ordered
+    const ark = state.ark ?? ARK_POS;
+    state.fleet.push({id: q.id, type: q.type, mode: 'hold', x: ark.x, y: ark.y, heading: 0, thrust: 0, hp: SHIPS[q.type].hull});
+    events.push({msg: `${SHIPS[q.type].name} launched from the Ark Endeavor.`});
     return false;
   });
   for (const id of ['thalassa', 'aeros']) if (net.has(id)) state.hull -= 0.03 * rad;
