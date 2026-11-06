@@ -2,7 +2,24 @@
 // damage and mounts. Raiders (corvette-class) spawn at the system edge in generated sectors, every RAID_INTERVAL
 // seconds of game time. Allied ships and raiders fire mounted weapons at the nearest enemy in range. Hits throw
 // sparks and jagged shards with real velocity vectors. A destroyed raider pays a bounty; a destroyed ship is lost.
-import {SHIPS, hullMax} from "./ships.js";
+import {SHIPS, hullMax, FLIGHT_LENGTH, DESIGN} from "./ships.js";
+
+// Gun points of each hull, in its design space (nose along +x, DESIGN units long), read from the hull outline in
+// ships.js: the nose tip and the two wing tips. Shots leave from these points, so they come off the ship itself.
+const MUZZLE = {
+  corvette: {nose: [50, 0], wings: [[-34, -30], [-34, 30]]},
+  destroyer: {nose: [50, 0], wings: [[42, -14], [42, 14]]},
+  cruiser: {nose: [50, 0], wings: [[-38, -30], [-38, 30]]},
+};
+// Where a mount fires from: the nose tip first, then the wing tips in turn. heading turns the hull's own axes.
+export function muzzleOf(ship, type, mountIndex, heading) {
+  const m = MUZZLE[type] ?? MUZZLE.corvette;
+  const pts = [m.nose, ...m.wings];
+  const [dx, dy] = pts[mountIndex % pts.length];
+  const k = (FLIGHT_LENGTH[type] ?? 18) / DESIGN, c = Math.cos(heading ?? 0), sn = Math.sin(heading ?? 0);
+  const x = dx * k, y = dy * k;
+  return {x: ship.x + x * c - y * sn, y: ship.y + x * sn + y * c};
+}
 import {EMERGENCY} from "./emergency.js";
 
 export const RAID_INTERVAL = 90;     // seconds of game time before the first raid (later gaps are random)
@@ -382,32 +399,34 @@ export function stepCombat(state, env) {
   // mounts: a ready mount with a target starts its spool (lances) or fires (everything else)
   const alive = new Set();
   // allied mounts follow the player's Tech Web; raider mounts are always armed
-  const trigger = (key, kind, from, targets, side, gated) => {
+  // from is the ship's centre; a mount fires from its own gun point on that hull (see muzzleOf)
+  const trigger = (key, kind, from, targets, side, gated, mountIndex, type, heading) => {
     alive.add(key);
     const def = MOUNTS[kind];
     const ch = state.charging[key];
+    const gun = muzzleOf(from, type, mountIndex, heading);
     if (ch) {
-      ch.x = from.x; ch.y = from.y; ch.t -= dt;
+      ch.x = gun.x; ch.y = gun.y; ch.t -= dt;
       if (ch.t > 0) return;
       delete state.charging[key];
       const t = nearest(targets, from, def.range);
-      if (t) fire(state, key, kind, from, t, side, rand);
+      if (t) fire(state, key, kind, gun, t, side, rand);
       return;
     }
     state.cool[key] = Math.max(0, (state.cool[key] ?? 0) - dt);
     if (state.cool[key] > 0 || (gated && !mountUnlocked(tech, kind))) return;
     const t = nearest(targets, from, def.range);
     if (!t) return;
-    if (def.charge > 0) state.charging[key] = {t: def.charge, total: def.charge, x: from.x, y: from.y, color: def.color};
-    else fire(state, key, kind, from, t, side, rand);
+    if (def.charge > 0) state.charging[key] = {t: def.charge, total: def.charge, x: gun.x, y: gun.y, color: def.color};
+    else fire(state, key, kind, gun, t, side, rand);
   };
   for (const a of allies) {
     // a ship on an attack order fires only at its raider; otherwise at any raider in range
     const pool = a._f.attack != null ? state.raiders.filter((r) => r.id === a._f.attack) : state.raiders;
-    mountsOf(a._f).forEach((kind, i) => trigger(`a${a._f.id}:${i}`, kind, a, seen(a, pool), "ally", true));
+    mountsOf(a._f).forEach((kind, i) => trigger(`a${a._f.id}:${i}`, kind, a, seen(a, pool), "ally", true, i, a._f.type, a._f.heading ?? a._f.theta ?? 0));
   }
   for (const r of state.raiders) {
-    r.mounts.forEach((kind, i) => trigger(`r${r.id}:${i}`, kind, r, seen(r, allies), "raider", false));
+    r.mounts.forEach((kind, i) => trigger(`r${r.id}:${i}`, kind, r, seen(r, allies), "raider", false, i, r.type ?? "corvette", Math.atan2(r.vy, r.vx)));
   }
   // a spool whose shooter is gone is dropped, so a dead ship's lance does not fire from nowhere
   for (const k of Object.keys(state.charging)) if (!alive.has(k)) delete state.charging[k];

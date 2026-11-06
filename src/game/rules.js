@@ -13,6 +13,7 @@ export const RULES = {
   WHIPLASH_RELAY: 15,     // relay damage within WHIPLASH_R of the snap
   WHIPLASH_R: 40,
   RELAY_HP: 30,
+  RELAY_ORBIT_W: 0.04,     // radians per game second: a relay drifts around the Sun far slower than the worlds
   RELAY_MIN: 60, RELAY_MAX: 440,
   TETHER_FUEL: 0.05,      // fuel per tether per tick
   LIFE_FUEL: 0.1,         // life support per tick
@@ -54,7 +55,7 @@ export const newState = () => ({
   opinion: {},   // diplomacy: per-faction opinion, -100..100
   comms: {selected: 'leon_11', log: []},
   tech: {},                 // researched tech keys
-  senate: {next: 300, count: 0, current: null, effects: {}, dismissed: true},
+  senate: {next: 300, count: 0, current: null, open: null, effects: {}, dismissed: true},
   elapsed: 0,               // game seconds since the session started
   victory: null,            // {key, title, blurb} once a victory condition is met
   victoryAck: false,        // the player chose to keep playing
@@ -158,7 +159,13 @@ export function tryTether(state, a, b, P) {
   const err = checkTether(state, a, b, P);
   if (err) return {ok: false, msg: err};
   state.alloys -= RULES.COST.tether.alloys;
-  state.tethers.push({a, b});
+  // A tether from the Ark remembers where the Ark sits relative to the world, so the Ark can float with it.
+  // A relay or the Ark that is tethered to a world keeps its offset from that world, so it follows the world.
+  const isFollower = (id) => id === 'ark' || String(id).startsWith('relay');
+  const follower = isFollower(a) ? a : isFollower(b) ? b : null;
+  const lead = follower ? (follower === a ? b : a) : null;
+  const off = follower && lead !== 'core' && P[lead] && P[follower] ? {x: P[follower].x - P[lead].x, y: P[follower].y - P[lead].y} : null;
+  state.tethers.push(off ? {a, b, off} : {a, b});
   return {ok: true, msg: `Tether established: ${nm(state, a)} to ${nm(state, b)}.`};
 }
 
@@ -198,6 +205,19 @@ export function arkOrbitSlot(fleet, skipId) {
 
 // Radius of the nova's radiation field around the star. Only a nova raises radiation, and only inside this zone.
 export const NOVA_RADIUS = 160;
+
+// A new relay satellite: it keeps the radius and angle it was placed at and drifts slowly around the Sun.
+export function newRelay(state, pt) {
+  return {id: 'relay' + (++state.relayN), x: pt.x, y: pt.y, hp: RULES.RELAY_HP, r: Math.hypot(pt.x, pt.y), a: Math.atan2(pt.y, pt.x)};
+}
+// Moves every free relay along its own slow orbit. A relay tethered to a world is moved by floatArk instead.
+export function advanceRelays(state, seconds) {
+  for (const r of state.relays) {
+    if (r.r == null) continue;   // relays saved before they had orbits stay where they are
+    r.a += RULES.RELAY_ORBIT_W * seconds;
+    r.x = r.r * Math.cos(r.a); r.y = r.r * Math.sin(r.a);
+  }
+}
 
 // One game second: production, upkeep, radiation, collapse, win/lose. Returns events.
 export function tick(state, P) {
@@ -293,7 +313,7 @@ export function build(state, what, pt, P) {
     if (d < RULES.RELAY_MIN || d > RULES.RELAY_MAX) return {ok: false, msg: 'Place relays between the core and the outer orbit.'};
     if (hitBody(state, P, pt)) return {ok: false, msg: 'Too close to a body.'};
     spend(state, cost);
-    state.relays.push({id: 'relay' + (++state.relayN), x: pt.x, y: pt.y, hp: RULES.RELAY_HP});
+    state.relays.push(newRelay(state, pt));
     return {ok: true, msg: 'Relay satellite deployed. It blocks no lines, but it bridges the core.'};
   }
   if (what === 'repair') {

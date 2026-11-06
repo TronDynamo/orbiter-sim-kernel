@@ -18,6 +18,25 @@ export const PROPELLANT_PER_TICK = 0.05;  // propellant per tick of impulse burn
 // The Ark Endeavor moves like a ship: a burn to any point in space, paid in propellant, at its own speed.
 export const ARK_IMPULSE = 1.5, ARK_SPEED = 30;   // world units per game second
 export function arkState(s) { if (!s.ark) s.ark = {x: ARK_POS.x, y: ARK_POS.y, dest: null}; return s.ark; }
+// A tether from the Ark to a world holds the Ark at its offset from that world, so the Ark floats with the world.
+export function floatArk(s, P) {
+  const a = arkState(s);
+  let moved = false;
+  for (const t of s.tethers) {
+    const followerId = t.a === 'ark' || String(t.a).startsWith('relay') ? t.a : t.b === 'ark' || String(t.b).startsWith('relay') ? t.b : null;
+    if (!followerId) continue;
+    const other = followerId === t.a ? t.b : t.a;
+    if (other === 'core' || !t.off || !P[other]) continue;
+    const pos = followerId === 'ark' ? a : s.relays.find((r) => r.id === followerId);
+    if (!pos) continue;
+    pos.x = P[other].x + t.off.x; pos.y = P[other].y + t.off.y;
+    if (followerId === 'ark') a.dest = null;
+    // a tethered relay is no longer on its free orbit: keep its radius and angle in step with where it is now
+    if (pos !== a) { pos.r = Math.hypot(pos.x, pos.y); pos.a = Math.atan2(pos.y, pos.x); }
+    moved = true;
+  }
+  return moved;
+}
 export function sendArkToPoint(s, pt) {
   const a = arkState(s);
   const cost = (Math.hypot(pt.x - a.x, pt.y - a.y) / ARK_IMPULSE) * PROPELLANT_PER_TICK;
@@ -300,7 +319,7 @@ export function deploySatellite(s, f, P) {
   if (Math.hypot(q.x, q.y) < RULES.COLLAPSE_R) return {ok: false, msg: 'Too deep in the collapse to hold a relay.'};
   f.sats = left - 1;
   const id = 'relay' + (++s.relayN);
-  s.relays.push({id, x: q.x, y: q.y, hp: RULES.RELAY_HP});
+  s.relays.push({id, x: q.x, y: q.y, hp: RULES.RELAY_HP, r: Math.hypot(q.x, q.y), a: Math.atan2(q.y, q.x)});
   return {ok: true, msg: `Relay satellite locked into orbit. ${f.sats} left aboard.`};
 }
 

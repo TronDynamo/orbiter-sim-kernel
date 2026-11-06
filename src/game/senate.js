@@ -1,9 +1,11 @@
-// Galactic Senate: a session every SESSION_SECONDS of game time. Each session puts one motion to all 20 leaders.
+// Galactic Senate: each session puts one motion to a vote. The vote runs five minutes of game time, the commander
+// votes on it, and then the final tally is made. Each session puts one motion to all 20 leaders.
 // Blocs lean toward or against the motion; a leader's own opinion of the player can overrule that lean.
 import {LEADERS, SENATE_BLOCS} from "./roster_data.js";
 import {opinionOf} from "./comms.js";
 
-export const SESSION_SECONDS = 300; // five minutes of game time
+export const SESSION_SECONDS = 300; // five minutes of game time between one decision and the next motion
+export const VOTE_SECONDS = 300;    // the five-minute timer from motion to final vote
 
 // stance: +1 for, -1 against, 0 no bloc lean. effect: applied for one session when the motion passes.
 export const RESOLUTIONS = [
@@ -17,10 +19,9 @@ export const RESOLUTIONS = [
     stance: {HAWK: -1, PRESERVATION: 1, CARTEL: 0, FORGE: 0, CONCLAVE: 1}, effect: {researchMult: 0.8}},
 ];
 
-// Runs session n: every leader votes, the motion passes on a majority, and a pass sets the effects.
-export function runSession(state, n) {
-  const r = RESOLUTIONS[n % RESOLUTIONS.length];
-  const votes = LEADERS.map((l) => {
+// Each leader's vote on the motion, from the bloc lean and their opinion of the player.
+export function leaderVotes(state, r) {
+  return LEADERS.map((l) => {
     const op = opinionOf(state, l.id), lean = r.stance[l.bloc] * 30;
     const score = lean + op * 0.5;
     const yes = score > 0;
@@ -28,8 +29,23 @@ export function runSession(state, n) {
       : (lean > 0) === yes ? `bloc ${yes ? "for" : "against"}` : `opinion (${op > 0 ? "+" : ""}${op}) overrules the bloc`;
     return {id: l.id, name: l.name, number: l.number, monogram: l.monogram, color: l.color, bloc: l.bloc, blocName: SENATE_BLOCS[l.bloc].name, yes, reason};
   });
-  const yes = votes.filter((v) => v.yes).length, no = votes.length - yes;
-  const passed = yes > votes.length / 2;
+}
+
+// Puts session n's motion to the Senate. The vote stays open for VOTE_SECONDS of game time and the
+// commander may vote on it until then. The leaders' votes are fixed now; the tally comes at the close.
+export function openSession(state, n) {
+  const r = RESOLUTIONS[n % RESOLUTIONS.length];
+  return {n, resolution: r, leaders: leaderVotes(state, r), playerVote: null, closesAt: state.elapsed + VOTE_SECONDS};
+}
+
+// The final vote: 20 leaders plus the commander's own vote. Abstaining counts for neither side, and a
+// motion passes only when yes votes beat no votes. A pass sets the effects until the next session.
+export function closeSession(state, open) {
+  const r = open.resolution;
+  const leadYes = open.leaders.filter((v) => v.yes).length, leadNo = open.leaders.length - leadYes;
+  const pv = open.playerVote;
+  const yes = leadYes + (pv === "yes" ? 1 : 0), no = leadNo + (pv === "no" ? 1 : 0);
+  const passed = yes > no;
   if (passed) state.senate.effects = {...r.effect}; // a failed motion leaves the current effects in place
-  return {n, resolution: r, votes, yes, no, passed};
+  return {n: open.n, resolution: r, votes: open.leaders, playerVote: pv, yes, no, passed};
 }

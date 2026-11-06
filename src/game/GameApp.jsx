@@ -25,14 +25,15 @@ import {FACTIONS, factionById} from "./factions.js";
 import {GovernorPanel} from "./GovernorPanel.jsx";
 import {INFRA, infraOf, buildInfra, absorbStrike, costOf} from "./colony.js";
 import {TECHS, researchTech, perks} from "./tech.js";
-import {SESSION_SECONDS, runSession} from "./senate.js";
+import {SESSION_SECONDS, openSession, closeSession} from "./senate.js";
 import {checkVictory, VICTORIES} from "./victory.js";
 import {TechWeb} from "./TechWeb.jsx";
 import {SenateChamber} from "./SenateChamber.jsx";
+import {ResourceGuide} from "./ResourceGuide.jsx";
 import {VictoryModal} from "./VictoryModal.jsx";
-import {RULES, newState, snapTethers, network, tick, tryTether, checkTether, cut, tetherAt, tensionOf, tensionColor, build, hitBody, distToTether, orderShip, shortfall, fireWeapon} from "./rules.js";
+import {RULES, newState, advanceRelays, snapTethers, network, tick, tryTether, checkTether, cut, tetherAt, tensionOf, tensionColor, build, hitBody, distToTether, orderShip, shortfall, fireWeapon} from "./rules.js";
 import {SHIPS, SHIP_ORDER, COST_LABEL, drawShip, drawChevron, fleetPower, FLIGHT_LENGTH, DEPOT_COST, ARMOR, hullMax} from "./ships.js";
-import {arkState, sendArkToPoint, stepArk, arkRadiation, stepFleet, stepRetreat, sendShip, sendShipToPoint, emergencyBurn, shipPosition, interceptAt, depotPos, MAX_PROPELLANT, deploySatellite, SURVEY_TICKS, CARGO_CAP, IMPULSE, OVERCLOCK, predictOrbit} from "./fleet.js";
+import {arkState, floatArk, sendArkToPoint, stepArk, arkRadiation, stepFleet, stepRetreat, sendShip, sendShipToPoint, emergencyBurn, shipPosition, interceptAt, depotPos, MAX_PROPELLANT, deploySatellite, SURVEY_TICKS, CARGO_CAP, IMPULSE, OVERCLOCK, predictOrbit} from "./fleet.js";
 import {Icon, drawArk, drawRelay} from "./icons.jsx";
 import {Academy} from "./Academy.jsx";
 import {drawPseudo3DShip, sunLocal, emitPlume, updatePlumes, drawPlumes} from "./pseudo3d.js";
@@ -180,6 +181,13 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       kernel.beginAt(seedOffset(session.seed));
       // A new campaign's home galaxy: the kernel must simulate the same worlds the scene draws (after beginAt resets it).
       if (commanderRef.current) kernel.loadSystem(kernelSystemFromSector(homeBuild(commanderRef.current).sector));
+      // The home galaxy's worlds, names and resources replace the starter map's, and its home world starts charted
+      // (as Ferrum does in the starter system). Without this, no world of the home galaxy yields anything.
+      if (commanderRef.current) {
+        Object.assign(st.current, systemState(sysRef.current));
+        const hi = sysRef.current.planets.findIndex((p) => p.id === st.current.homePlanet);
+        if (hi >= 0) { st.current.surveyed[st.current.homePlanet] = true; kernel.surveyPlanet(hi); }
+      }
     }
     scene.orbitScale = getSettings().orbitOpacity / 35;
     const syncKernel = () => {
@@ -466,7 +474,12 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       if (s0.arkDrag) {
         const d = s0.arkDrag, zu = scene.sim.c[4] * scene.base;
         s0.arkDrag = null;
-        if (Math.hypot(d.cur.x - d.start.x, d.cur.y - d.start.y) > 8 / zu) { const r = sendArkToPoint(st.current, d.cur); say(r.msg, r.ok); }
+        const Pk = positions(), hit = Pk ? (hitBody(st.current, Pk, d.cur) ?? nearestPlanet(Pk, d.cur)) : null;   // worlds move, so a release near one counts
+        if (hit && hit !== "ark" && hit !== "core" && Math.hypot(d.cur.x - d.start.x, d.cur.y - d.start.y) > 8 / zu) {
+          // released on a world or relay: the Ark tethers to it and floats with it
+          const r = tryTether(st.current, "ark", hit, Pk); say(r.msg, r.ok); refresh();
+        }
+        else if (Math.hypot(d.cur.x - d.start.x, d.cur.y - d.start.y) > 8 / zu) { const r = sendArkToPoint(st.current, d.cur); say(r.msg, r.ok); }
         else if (d.wasSel) { s0.arkSel = false; say("Ark Endeavor deselected."); }
         else say("Ark Endeavor selected. Drag from it to move it.");
         refresh(); return;
@@ -1001,6 +1014,8 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
               else { f.dest = null; f.thrust = 0; }
             }
             stepArk(s, dt);
+            advanceRelays(s, dt / TICKS_PER_SECOND);   // free relays drift slowly around the Sun
+            floatArk(s, P);   // a world tethered to the Ark or a relay carries it along
             for (const m of stepFleet(s, P, dt, {conduits: liveConduits(), velocity: vel})) say(m);
             if (s.jumpGate?.warp?.active) {
               advanceWarp(s.jumpGate, Math.max(0, (now - warpT) / 1000));
@@ -1043,6 +1058,8 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           const dt = kernel.tickCount - buildTick;
           buildTick = kernel.tickCount;
           const pz = perks(s), fpMult = s.senate?.effects?.freeportMult ?? 1;
+          // worlds tethered straight to the Ark deliver their output to it directly, without a conduit
+          const arkFed = new Set(s.tethers.filter((t) => t.a === "ark" || t.b === "ark").map((t) => (t.a === "ark" ? t.b : t.a)).filter((id) => id !== "core"));
           if (dt > 0) sysRef.current.planets.forEach((p) => {
             const idx = planetIndex(p.id);
             if (kernel.planets.flow[idx] > 0) {
@@ -1050,6 +1067,10 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
                 const d = INFRA.find((x) => x.key === key);
                 if (d.resource) s[d.resource] += d.rate * dt / TICKS_PER_SECOND * (key === "freeport" ? fpMult : 1) * difficulty.income;
               }
+            } else if (arkFed.has(p.id) && s.surveyed?.[p.id] && !s.wrecked?.[p.id]) {
+              const out = outputsOf().find((o) => o.planet === p.id);
+              s[out.resource] += yieldOf(p.id) * dt / TICKS_PER_SECOND * difficulty.income;
+              if (out.secondary) s[out.secondary.resource] += out.secondary.yield * dt / TICKS_PER_SECOND * difficulty.income;
             } else if (pz.occlusionShare > 0) {
               // Phase Plating: a world shadowed by the sun still earns part of its output
               let shadowed = false;
@@ -1084,7 +1105,8 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           s.lastTick += 1;
           s.elapsed += 1;
           s.novaFired = !!(kernel && (kernel.starSupernova || kernel.starCollapsed));
-          if (s.elapsed >= s.senate.next) convene();
+          if (s.senate.open) { if (s.elapsed >= s.senate.open.closesAt) decideSenate(); }
+          else if (s.elapsed >= s.senate.next) convene();
           for (const ev of tick(s, P)) say(ev.msg, !!ev.win);
         }
         // credits earned this match: only increases count, so spending does not reduce it
@@ -1241,7 +1263,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
   function applySpeed() {
     const sc = window.__relic?.scene; if (!sc) return;
     const cur = u.current, over = st.current.won || st.current.lost;
-    sc.speed = cur.paused || cur.menu || cur.briefing || cur.senate || cur.inspect || over ? 0 : cur.speed;
+    sc.speed = cur.paused || cur.menu || cur.briefing || cur.inspect || over ? 0 : cur.speed;
   }
   // Inspecting a ship freezes the clock so it stays under the camera; Pause/Resume lets the player choose.
   function toggleInspect() { u.current.inspect = !u.current.inspect; applySpeed(); refresh(); }
@@ -1318,19 +1340,38 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
   }
   function toggleTech() { u.current.tech = !u.current.tech; u.current.shipyard = false; u.current.armory = false; refresh(); }
   function researchNow(key) { const r = researchTech(st.current, key); u.current.msg = r.msg; refresh(); }
+  // A motion goes to the Senate and its five-minute vote opens. The commander can vote until the timer runs out.
   function convene() {
-    const s = st.current, sess = runSession(s, s.senate.count);
+    const s = st.current, open = openSession(s, s.senate.count);
     s.senate.count += 1;
-    s.senate.current = sess;
-    s.senate.next = s.elapsed + SESSION_SECONDS;
+    s.senate.open = open;
+    s.senate.next = null;
     s.senate.dismissed = false;
-    // a floating banner so the outcome shows even with the chamber closed
-    u.current.senateToast = {text: `Senate ${sess.passed ? "passed" : "rejected"}: ${sess.resolution.title}`, passed: sess.passed, id: s.senate.count};
+    senateNotice(`Senate motion: ${open.resolution.title}. Final vote in 5:00.`, null, s.senate.count);
+  }
+  // The timer ran out: the final tally is made, its effects take hold, and the next motion follows a pause.
+  function decideSenate() {
+    const s = st.current, sess = closeSession(s, s.senate.open);
+    s.senate.current = sess;
+    s.senate.open = null;
+    s.senate.next = s.elapsed + SESSION_SECONDS;
+    senateNotice(`Senate ${sess.passed ? "passed" : "rejected"}: ${sess.resolution.title}`, sess.passed, s.senate.count + 0.5);
+  }
+  // A floating banner so the outcome shows even with the chamber closed.
+  function senateNotice(text, passed, id) {
+    u.current.senateToast = {text, passed, id};
     clearTimeout(u.current.toastTimer);
     u.current.toastTimer = setTimeout(() => { u.current.senateToast = null; refresh(); }, 6000);
     refresh();
   }
-  // The Senate chamber holds the clock while it is open, the same as the briefing.
+  // The commander's vote on the open motion. Choosing again changes it until the timer runs out.
+  function castSenateVote(choice) {
+    const open = st.current.senate.open;
+    if (!open) return;
+    open.playerVote = choice;
+    refresh();
+  }
+  // The Senate chamber no longer holds the clock: the five-minute vote runs while the chamber is open.
   function openSenate() { st.current.senate.dismissed = true; u.current.senate = true; applySpeed(); refresh(); }
   function closeSenate() { u.current.senate = false; applySpeed(); refresh(); }
   function keepPlaying() { st.current.victoryAck = true; refresh(); }
@@ -1521,6 +1562,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           <button className={"hud-btn" + ((u.current.lead ?? "auto") === "manual" ? " on" : "")} onClick={toggleLead} title="Auto: ships lead a moving world. Manual: ships fly to where it is now.">{(u.current.lead ?? "auto") === "manual" ? "Lead: Manual" : "Lead: Auto"}</button>
           <button className={"hud-btn" + (u.current.armory ? " on" : "")} onClick={toggleArmory}><Icon name="armory" size={14} /> Armory</button>
           <button className={"hud-btn" + (u.current.comms ? " on" : "")} onClick={toggleComms}><Icon name="comms" size={14} /> Comms</button>
+          <button className={"hud-btn" + (u.current.guide ? " on" : "")} onClick={() => { u.current.guide = !u.current.guide; refresh(); }}>Resources</button>
           <button className={"hud-btn" + (s.senate.dismissed ? "" : " flash-alert")} onClick={openSenate}><Icon name="senate" size={14} /> Senate</button>
         </div>
       </footer>
@@ -1621,7 +1663,8 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       })() : null}
 
       {u.current.tech ? <TechWeb s={s} onResearch={researchNow} onClose={toggleTech} /> : null}
-      {u.current.senate && s.senate.current ? <SenateChamber s={s} onClose={closeSenate} /> : null}
+      {u.current.guide ? <ResourceGuide system={sysRef.current} s={s} flowing={(id) => !!kernel && kernel.planets.flow[planetIndex(id)] > 0} arkFed={(id) => s.tethers.some((t) => (t.a === "ark" && t.b === id) || (t.b === "ark" && t.a === id))} onClose={() => { u.current.guide = false; refresh(); }} /> : null}
+      {u.current.senate && (s.senate.open || s.senate.current) ? <SenateChamber s={s} onClose={closeSenate} onVote={castSenateVote} /> : null}
       {performance.now() - u.current.autosaveAt < 1500 ? <div className="autosave-tag mono">AUTOSAVING…</div> : null}
       {u.current.confirm ? (
         <div className="overlay" style={{zIndex: 35}}>
@@ -1644,7 +1687,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       ) : null}
       {s.victory && !s.victoryAck ? <VictoryModal s={s} onKeep={keepPlaying} onRestart={restart} /> : null}
       {u.current.senateToast ? (
-        <div key={u.current.senateToast.id} className={"senate-toast glass" + (u.current.senateToast.passed ? " passed" : " failed")}>
+        <div key={u.current.senateToast.id} className={"senate-toast glass" + (u.current.senateToast.passed === true ? " passed" : u.current.senateToast.passed === false ? " failed" : "")}>
           <Icon name="senate" /> {u.current.senateToast.text}
         </div>
       ) : null}

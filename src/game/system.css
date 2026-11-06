@@ -52,7 +52,7 @@ body { font-family: Inter, system-ui, sans-serif; }
   box-shadow: inset 0 0 12px rgba(56, 189, 248, 0.05), 0 4px 20px rgba(0, 0, 0, 0.6);
   clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
 }
-.hud-ribbon { position: absolute; top: 10px; left: 12px; right: 260px; z-index: 6; display: flex; flex-wrap: wrap; gap: 4px; padding: 6px 10px; }
+.hud-ribbon { position: absolute; top: 10px; left: 12px; right: 360px; z-index: 6; display: flex; flex-wrap: wrap; gap: 4px; padding: 6px 10px; }   /* clears the speed and menu controls */
 .hud-chip { display: flex; align-items: center; gap: 8px; padding: 4px 12px; border-left: 2px solid var(--c); color: var(--c); }
 .hud-chip-ico { color: var(--c); display: inline-flex; filter: drop-shadow(0 0 4px var(--c)); }
 .hud-chip-text { display: flex; flex-direction: column; line-height: 1.15; }
@@ -88,6 +88,12 @@ body { font-family: Inter, system-ui, sans-serif; }
 .hud-dock-group { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; padding: 6px; }
 .hud-dock-group + .hud-dock-group { border-left: 1px solid rgba(56,189,248,0.25); padding-left: 14px; }
 .hud-dock .hud-btn { border-color: rgba(56,189,248,0.2); }
+/* Laptop-width windows: the command dock sits to the right of the telemetry panel, so it no longer covers it. */
+@media (max-width: 1280px) and (min-width: 761px) {
+  .hud-dock { left: 280px; right: 12px; bottom: 12px; transform: none; justify-content: center; max-width: none; gap: 10px; }
+  .hud-dock .hud-btn { padding: 7px 8px; font-size: 10px; letter-spacing: 0.08em; }
+  .hud-dock-group { padding: 4px; gap: 5px; }
+}
 @media (max-width: 760px) {
   .hud-ribbon { right: 12px; top: 8px; }
   .hud-ark { top: auto; bottom: 74px; width: 220px; }

@@ -14,9 +14,39 @@ export const clampOpinion = (v) => Math.max(OPINION_MIN, Math.min(OPINION_MAX, v
 export const opinionOf = (state, id) => state.opinion[id] ?? factionById(id)?.defaultRep ?? 0;
 
 // Applies a reply to the selected leader. Returns {ok, msg}.
+// A trade offer gives more than alloys. Balance values are placeholders until the design spec is available.
+export const TRADE_GOODS = {alloys: 60, cryo: 30, compute: 20, biomass: 40};
+// Chance a leader accepts a trade: a low base, more with a good opinion of the commander and more with a bigger
+// warfleet (military respect). Capped so a trade is never certain.
+export function tradeChance(state, factionId) {
+  const warships = (state.fleet ?? []).filter((x) => x.type === "corvette" || x.type === "destroyer" || x.type === "cruiser").length;
+  const respect = Math.min(0.2, warships * 0.02);
+  return Math.max(0.05, Math.min(0.9, 0.15 + Math.max(0, opinionOf(state, factionId)) * 0.005 + respect));
+}
+// Trade: the 500 credits are spent only if the leader accepts. An accepted trade pays the goods and raises opinion.
+function applyTrade(state, factionId, f, c) {
+  if (state.credits < c.cost.credits) return {ok: false, msg: "Not enough credits for that offer."};
+  const chance = tradeChance(state, factionId);
+  state.comms.log.push({faction: factionId, from: "you", text: c.line, label: c.label});
+  if (Math.random() >= chance) {
+    state.comms.log.push({faction: factionId, from: "them", text: `${f.name} considers your offer, then declines.`, shift: 0});
+    return {ok: true, msg: `${f.name} declined the trade. Nothing was spent.`};
+  }
+  state.credits -= c.cost.credits;
+  for (const [k, v] of Object.entries(TRADE_GOODS)) state[k] += v;
+  const before = opinionOf(state, factionId), after = clampOpinion(before + c.delta);
+  state.opinion[factionId] = after;
+  const shift = after - before;
+  const goods = Object.entries(TRADE_GOODS).map(([k, v]) => `${v} ${COST_LABEL_FOR[k] ?? k}`).join(", ");
+  state.comms.log.push({faction: factionId, from: "them", text: `${f.name} accepts. Received ${goods}.`, shift});
+  return {ok: true, msg: `${f.name} accepted: ${goods}. ${shift >= 0 ? "+" : ""}${shift} opinion.`};
+}
+const COST_LABEL_FOR = {alloys: "Alloys", cryo: "Coolant", compute: "Compute", biomass: "Biomass"};
+
 export function applyChoice(state, factionId, key) {
   const f = factionById(factionId), c = CHOICES.find((x) => x.key === key);
   if (!f || !c) return {ok: false, msg: "No reply."};
+  if (key === "trade") return applyTrade(state, factionId, f, c);
   for (const [k, v] of Object.entries(c.cost)) if (state[k] < v) return {ok: false, msg: `Not enough ${k} for that offer.`};
   for (const [k, v] of Object.entries(c.cost)) state[k] -= v;
   for (const [k, v] of Object.entries(c.reward ?? {})) state[k] += v;
