@@ -16,7 +16,7 @@ import {getSettings} from "./settings.js";
 import {saveGame, loadGame} from "./saveManager.js";
 import "./system.css";
 import {CommsTerminal} from "./CommsTerminal.jsx";
-import {applyChoice, openComms, applyRaiderChoice, allyForConflict, applyAllyChoice} from "./comms.js";
+import {applyChoice, openComms, applyRaiderChoice, allyForConflict, applyAllyChoice, requestAid} from "./comms.js";
 import {AllyConflict} from "./AllyConflict.jsx";
 import {RaiderHail} from "./RaiderHail.jsx";
 import {FACTIONS} from "./factions.js";
@@ -1057,7 +1057,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           for (const ev of stepCombat(combatRef.current, {dt: cdt, fleet: s.fleet, planets, core: P.core, pos: (f) => shipPosition(f, P), tech: s.tech, edgeR, raidNow, bodies, danger: systemDanger(sys)})) {
             if (ev.kind === "kill") s.credits += ev.bounty;
             if (ev.kind === "theft") s.credits = Math.max(0, s.credits - ev.amount);
-            if (ev.kind === "raid" && !u.current.hail) u.current.hail = {ids: ev.ids, n: ev.n};
+            if (ev.kind === "raid" && !u.current.hail) { u.current.hail = {ids: ev.ids, n: ev.n}; u.current.comms = false; }   // a hail takes the screen; comms can be reopened
             if (ev.kind === "raid") u.current.allyAsked = new Set();   // a new wave may ask each ally again
             say(ev.msg, ev.kind === "kill");
           }
@@ -1065,7 +1065,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         // an ally in the system asks whether to join the fight while raiders are here and no aid is on station
         if (combatRef.current.raiders.length && !u.current.hail && !u.current.allyHail && !(combatRef.current.aid ?? []).length) {
           const ally = allyForConflict(st.current, u.current.allyAsked ?? new Set());
-          if (ally) { u.current.allyHail = ally; refresh(); }
+          if (ally) { u.current.allyHail = ally; u.current.comms = false; refresh(); }
         }
         drawOverlay(P, now);
         drawPip(P, now);
@@ -1263,6 +1263,12 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
     if (!r.ok) { u.current.hailNote = r.msg; refresh(); return; }
     if (r.depart) combatRef.current.raiders = combatRef.current.raiders.filter((x) => !h.ids.includes(x.id));
     u.current.hail = null; u.current.hailNote = null; st.current.msg = r.msg; st.current.msgWin = false; refresh();
+  }
+  function commsRequestAid() {
+    const raiding = combatRef.current.raiders.length > 0;
+    const r = requestAid(st.current, st.current.comms.selected, raiding);
+    if (r.aid) combatRef.current.aid = [...(combatRef.current.aid ?? []), r.aid];
+    u.current.msg = r.msg; refresh();
   }
   function commsChoose(key) { const r = applyChoice(st.current, st.current.comms.selected, key); u.current.msg = r.msg; refresh(); if (r.ok) closeSoon("comms"); }
   // Why a strategic weapon cannot be armed right now, or null.
@@ -1512,7 +1518,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         </div>
       ) : null}
 
-      {u.current.comms ? <CommsTerminal s={s} onOpen={commsOpen} onChoose={commsChoose} onClose={toggleComms} /> : null}
+      {u.current.comms ? <CommsTerminal s={s} onOpen={commsOpen} onChoose={commsChoose} onClose={toggleComms} raiding={combatRef.current.raiders.length > 0} onRequestAid={commsRequestAid} /> : null}
       {u.current.hail ? <RaiderHail s={st.current} hail={u.current.hail} note={u.current.hailNote} onChoose={raiderChoose} onClose={raiderClose} /> : null}
       {u.current.allyHail && !u.current.hail ? <AllyConflict s={st.current} factionId={u.current.allyHail} note={u.current.hailNote} onChoose={allyChoose} onClose={allyClose} /> : null}
 

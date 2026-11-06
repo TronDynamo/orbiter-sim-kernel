@@ -1,13 +1,13 @@
 // Diplomatic Holo-Comm: roster, leader portrait with CRT scanlines, opinion meter, tactical replies, and the message log.
 import {useEffect, useRef, useState} from "react";
 import {FACTIONS, BLOC_LIST, factionById} from "./factions.js";
-import {CHOICES, opinionOf} from "./comms.js";
+import {CHOICES, opinionOf, ALLY_RESPECT} from "./comms.js";
 import {shortfall} from "./rules.js";
 import {COST_LABEL} from "./ships.js";
 import "./comms.css";
 import {LeaderPortrait} from "./LeaderPortrait.jsx";
 
-export function CommsTerminal({s, onOpen, onChoose, onClose}) {
+export function CommsTerminal({s, onOpen, onChoose, onClose, raiding = false, onRequestAid}) {
   // the player's own commander is not a rival to talk to, so the roster leaves them out
   const others = FACTIONS.filter((x) => x.id !== s.commander);
   const f = factionById(s.comms.selected) && s.comms.selected !== s.commander ? factionById(s.comms.selected) : others[0];
@@ -64,6 +64,12 @@ export function CommsTerminal({s, onOpen, onChoose, onClose}) {
             ))}
           </div>
           <div className="comms-choices">
+            {f.id !== s.commander && op >= ALLY_RESPECT ? (
+              <button className="pill zelo" disabled={!raiding} title={raiding ? "Ask this ally to fight the raiders in your system" : "No raiders in your system"}
+                onClick={() => onRequestAid(f.id)}>
+                Request aid{raiding ? "" : " · no raiders"}
+              </button>
+            ) : null}
             {CHOICES.map((c) => {
               const short = shortfall(s, c.cost);
               return (

@@ -117,3 +117,10 @@ export function applyAllyChoice(state, factionId, key) {
   state.opinion[factionId] = clampOpinion(before + 5);
   return {ok: true, msg: `${f.name} joins the fight. Respect +5, but their other allies notice.`, aid: {id: factionId, ...AID}};
 }
+
+// Comms request: an ally at respect asks for aid against raiders in your system. Same rules as a conflict request.
+export function requestAid(state, factionId, raidersPresent) {
+  if (!raidersPresent) return {ok: false, msg: "No raiders in your system to fight.", aid: null};
+  if (opinionOf(state, factionId) < ALLY_RESPECT) return {ok: false, msg: `They will only fight beside you at respect ${ALLY_RESPECT}.`, aid: null};
+  return applyAllyChoice(state, factionId, "help");
+}
