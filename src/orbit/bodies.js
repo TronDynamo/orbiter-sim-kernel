@@ -53,14 +53,14 @@ void main(){
 
   if (uKind < 0.5) {
     // ---- STAR: the original boiling lava surface, turning as one solid sphere (q = rigid spin from uRot)
-    float t = uTime * 0.11;
+    float t = 0.0;   // the sun keeps its colours: its surface pattern does not move
     vec3 w = q * 1.15 + vec3(uSeed);
     vec3 warp = vec3(fbm(w + vec3(0.0, 0.0, t)),
                      fbm(w + vec3(5.2, 1.3, -t)),
                      fbm(w + vec3(2.1, 7.7, t * 0.7)));
     float f = fbm(w * 1.2 + warp * 1.7 + vec3(0.0, 0.0, t * 1.6));
-    float cells = snoise(q * 9.0 + warp * 0.8 + vec3(0.0, 0.0, uTime * 0.35)) * 0.5 + 0.5;  // granulation
-    float flare = pow(max(0.0, snoise(q * 4.0 + warp * 1.5 + vec3(0.0, uTime * 0.07, 0.0))), 3.0);
+    float cells = snoise(q * 9.0 + warp * 0.8) * 0.5 + 0.5;  // granulation
+    float flare = pow(max(0.0, snoise(q * 4.0 + warp * 1.5)), 3.0);
     float h = clamp(f * 0.95 + 0.55 + (cells - 0.5) * 0.12 + flare * 0.45, 0.0, 1.0);
     vec3 col = mix(uC0, uC1, smoothstep(0.05, 0.45, h));
     col = mix(col, uC2, smoothstep(0.42, 0.72, h));

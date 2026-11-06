@@ -414,7 +414,7 @@ export class OrbitScene {
     const s = this.toScreen(0, 0);
     const r = g.sun.radius * this.cam.z * this.base;
     // corona glow, gently flickering
-    const fl = 1 + 0.06 * Math.sin(this.real * 2.3) + 0.04 * Math.sin(this.real * 5.1 + 1.3);
+    const fl = 1;   // the corona is steady: the sun's colours never change during play
     const glow = ctx.createRadialGradient(s.x, s.y, r * 0.85, s.x, s.y, r * 3.4 * fl);
     glow.addColorStop(0, g.sun.glow + (0.6 * fl).toFixed(3) + ')');
     glow.addColorStop(0.3, g.sun.glow + '0.18)');
