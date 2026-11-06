@@ -270,7 +270,7 @@ export class OrbitScene {
     if (!this.camF) this.camF = {x: c[2], y: c[3]};
     // the camera sits off the body by the screen shift, so the body is drawn at centre + shift
     const zb = c[4] * this.base, sh = this.followShiftPx ?? {x: 0, y: 0};
-    const tx = p.x - sh.x / zb, ty = p.y - sh.y / zb;
+    const tx = p.x - sh.x / zb, ty = p.y - sh.y / (zb * (this.pitch ?? 1));   // toScreen scales y by the pitch too
     this.camF.x = easeToward(this.camF.x, tx, dt, FOCUS_GLIDE);
     this.camF.y = easeToward(this.camF.y, ty, dt, FOCUS_GLIDE);
     c[2] = this.camF.x; c[3] = this.camF.y;

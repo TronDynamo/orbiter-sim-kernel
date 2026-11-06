@@ -576,6 +576,22 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       const f = st.current.fleet.find((x) => x.id === id), P2 = positions();
       return f && P2 ? shipPosition(f, P2) : null;
     };
+    // Glide and zoom to a world (or the Ark) at world point w. Used by double-click and by a double-tap on touch screens.
+    const focusWorld = (w, touch = false) => {
+      const P = positions(); if (!P) return;
+      const id = hitBody(st.current, P, w) ?? (touch ? nearestPlanet(P, w) : null);
+      if (id && isPlanet(id)) {
+        // On a phone the info panel covers the lower half, so the world is drawn in the upper part of the view.
+        const narrow = ov.clientWidth < 700;
+        scene.setFollow(() => positions()?.[id] ?? null, narrow ? {x: 0, y: -0.19 * ov.clientHeight} : null);
+        scene.zoomTo(ZOOM_FOCUS);
+        say(`${planetName(id)} centred.`); refresh();
+      } else if (id === "ark") {
+        // The Ark centres the camera so its commander art can be seen up close.
+        scene.setFollow(() => arkState(st.current)); scene.zoomTo(ZOOM_FOCUS);
+        say("Ark Endeavor centred."); refresh();
+      }
+    };
     // Double-click a ship: open its panel and freeze the clock, leaving the camera alone. Double-click a world: glide and zoom to it.
     const onDbl = (e) => {
       const P = positions(); if (!P) return;
@@ -586,19 +602,21 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         s0.selected = ship.id; s0.panelHidden = false; s0.inspect = true; applySpeed(); refresh(); // camera stays put
         say(`${SHIPS[ship.type].name} opened. Pause is on; resume when you are ready.`); refresh(); return;
       }
-      const id = hitBody(st.current, P, w);
-      if (id && isPlanet(id)) {
-        // On a phone the info panel covers the lower half, so the world is drawn in the upper part of the view.
-        const narrow = ov.clientWidth < 700;
-        scene.setFollow(() => positions()?.[id] ?? null, narrow ? {x: 0, y: -0.25 * ov.clientHeight} : null);
-        scene.zoomTo(ZOOM_FOCUS);
-        say(`${planetName(id)} centred.`); refresh();
-      } else if (id === "ark") {
-        // The Ark centres the camera so its commander art can be seen up close.
-        scene.setFollow(() => arkState(st.current)); scene.zoomTo(ZOOM_FOCUS);
-        say("Ark Endeavor centred."); refresh();
-      }
+      focusWorld(w);
     };
+    // Phones rarely fire a dblclick, and the first tap opens the world's panel over it, so the second tap can land on the panel.
+    // Two quick taps on the same spot are therefore caught on the window, before any panel or the canvas sees them.
+    const onTapCapture = (e) => {
+      if (e.pointerType !== "touch" || e.button !== 0) return;
+      if (e.target?.closest?.("button, input, select, textarea, a, [role=button]")) { s0.lastTap = null; return; }
+      const now = performance.now(), last = s0.lastTap, w = toWorld(e), zb = scene.sim.c[4] * scene.base;
+      if (last && now - last.t < 350 && Math.hypot(w.x - last.w.x, w.y - last.w.y) <= 30 / zb) {
+        s0.lastTap = null; s0.pendingSend = null; e.stopPropagation();
+        focusWorld(w, true); return;
+      }
+      s0.lastTap = {t: now, w};
+    };
+    window.addEventListener("pointerdown", onTapCapture, true);
     const onWheel = (e) => { e.preventDefault(); scene.zoomBy(e.deltaY < 0 ? 1.12 : 1 / 1.12); };
     ov.addEventListener("contextmenu", onCtx);
     ov.addEventListener("wheel", onWheel, {passive: false});
@@ -1254,6 +1272,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       ov.removeEventListener("contextmenu", onCtx);
       ov.removeEventListener("wheel", onWheel);
       ov.removeEventListener("dblclick", onDbl);
+      window.removeEventListener("pointerdown", onTapCapture, true);
       ov.removeEventListener("pointerdown", onDown);
       ov.removeEventListener("pointermove", onMove);
       ov.removeEventListener("pointerup", onUp);
