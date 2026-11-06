@@ -370,11 +370,12 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       }
       if (picked && s0.selected === picked.id) { s0.selected = null; s0.inspect = false; applySpeed(); say("Ship deselected."); refresh(); return; }
       if (picked) { s0.selected = picked.id; s0.panelHidden = true; say(`${SHIPS[picked.type].name} selected. Right-click a world to send it, click empty space to send it there, or tap twice on a phone.`); refresh(); return; }
-      // The Ark: click to select (like a ship), then a tap on empty space or a right-click sends it.
+      // The Ark: press on it and drag a line to where it should go; release there to send it. A press without a drag selects it.
       const ark = arkState(st.current);
-      if (Math.hypot(ark.x - p.x, ark.y - p.y) <= 22 / zb) {
-        s0.arkSel = !s0.arkSel;
-        say(s0.arkSel ? "Ark Endeavor selected. Tap empty space or right-click to move it." : "Ark Endeavor deselected.");
+      if (Math.hypot(ark.x - p.x, ark.y - p.y) <= (e.pointerType === "touch" ? 40 : 22) / zb) {   // a fingertip needs a bigger target
+        // pressing selects the Ark; dragging from it draws the line, and releasing sends it
+        s0.arkDrag = {start: p, cur: p, wasSel: !!s0.arkSel};
+        s0.arkSel = true;
         refresh(); return;
       }
       const id = hitBody(st.current, P, p);
@@ -403,6 +404,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         return;
       }
       if (s0.drag) s0.drag.cur = toWorld(e);
+      if (s0.arkDrag) s0.arkDrag.cur = toWorld(e);
       const r = ov.getBoundingClientRect();
       s0.pointer = {x: e.clientX - r.left, y: e.clientY - r.top};
       s0.pointerWorld = toWorld(e); // the Arrival Ghost Pip previews the world under the pointer
@@ -410,6 +412,14 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
     };
     const onUp = (e) => {
       if (s0.pitchY != null) { s0.pitchY = null; return; }
+      if (s0.arkDrag) {
+        const d = s0.arkDrag, zu = scene.sim.c[4] * scene.base;
+        s0.arkDrag = null;
+        if (Math.hypot(d.cur.x - d.start.x, d.cur.y - d.start.y) > 8 / zu) { const r = sendArkToPoint(st.current, d.cur); say(r.msg, r.ok); }
+        else if (d.wasSel) { s0.arkSel = false; say("Ark Endeavor deselected."); }
+        else say("Ark Endeavor selected. Drag from it to move it.");
+        refresh(); return;
+      }
       if (e?.pointerType === "touch") {
         touches.delete(e.pointerId);
         if (touches.size < 2) pinch = null;
@@ -814,6 +824,11 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       if (arkW.dest) {   // the burn line, like a ship's
         const dq = toS(arkW.dest);
         ctx.save(); ctx.setLineDash([6, 6]); ctx.strokeStyle = "rgba(125,211,252,0.6)"; ctx.beginPath(); ctx.moveTo(ark.x, ark.y); ctx.lineTo(dq.x, dq.y); ctx.stroke(); ctx.restore();
+      }
+      if (s0.arkDrag) {   // the line being dragged out from the Ark
+        const dq = toS(s0.arkDrag.cur);
+        ctx.save(); ctx.setLineDash([4, 6]); ctx.strokeStyle = "rgba(125,211,252,0.9)"; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(ark.x, ark.y); ctx.lineTo(dq.x, dq.y); ctx.stroke(); ctx.restore();
       }
       drawArk(ctx, ark.x, ark.y);
       if (s0.arkSel) { ctx.strokeStyle = "#7dd3fc"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(ark.x, ark.y, 24, 0, Math.PI * 2); ctx.stroke(); }
