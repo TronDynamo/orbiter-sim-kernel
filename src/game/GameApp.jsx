@@ -349,13 +349,13 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         const last = s0.lastShipTap, now = performance.now();
         s0.lastShipTap = {id: picked.id, t: now};
         if (last && last.id === picked.id && now - last.t < 350) {
-          s0.lastShipTap = null; s0.selected = picked.id;
+          s0.lastShipTap = null; s0.selected = picked.id; s0.inspect = true; applySpeed();
           // open the panel after the second tap's release, so that release can't land on a button that just appeared
           setTimeout(() => { s0.panelHidden = false; refresh(); }, 150);
           scene.setFollow(shipFollow(picked.id)); scene.zoomTo(ZOOM_FOCUS); refresh(); return;
         }
       }
-      if (picked && s0.selected === picked.id) { s0.selected = null; scene.setFollow(null); say("Ship deselected."); refresh(); return; }
+      if (picked && s0.selected === picked.id) { s0.selected = null; s0.inspect = false; applySpeed(); scene.setFollow(null); say("Ship deselected."); refresh(); return; }
       if (picked) { s0.selected = picked.id; s0.panelHidden = true; scene.setFollow(shipFollow(picked.id)); say(`${SHIPS[picked.type].name} selected. Right-click a world to send it, click empty space to send it there, or tap twice on a phone.`); refresh(); return; }
       const id = hitBody(st.current, P, p);
       if (id) s0.drag = {from: id, cur: p, start: p};
@@ -432,7 +432,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       e.preventDefault();
       const P = positions(); if (!P || s0.selected == null) return;
       const ship = st.current.fleet.find((f) => f.id === s0.selected);
-      if (!ship) { s0.selected = null; refresh(); return; }
+      if (!ship) { s0.selected = null; s0.inspect = false; applySpeed(); refresh(); return; }
       const id = hitBody(st.current, P, toWorld(e));
       if (!id || !(isPlanet(id) || id.startsWith("depot"))) { const r = orderBurn(ship, P, sendShipToPoint(st.current, ship, toWorld(e), P)); say(r.msg, r.ok); refresh(); return; }
       const r = orderBurn(ship, P, sendShip(st.current, ship, id, P, liveConduits(), id.startsWith("depot") ? "the fuel depot" : planetName(id), u.current.lead ?? "auto", lastVel));
@@ -451,7 +451,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       const zb = scene.sim.c[4] * scene.base;
       const ship = st.current.fleet.find((f) => { const q = shipPosition(f, P); return Math.hypot(q.x - w.x, q.y - w.y) <= 16 / zb; });
       if (ship) {
-        s0.selected = ship.id; s0.panelHidden = false; scene.setFollow(shipFollow(ship.id)); scene.zoomTo(ZOOM_FOCUS); refresh();
+        s0.selected = ship.id; s0.panelHidden = false; s0.inspect = true; applySpeed(); scene.setFollow(shipFollow(ship.id)); scene.zoomTo(ZOOM_FOCUS); refresh();
         say(`${SHIPS[ship.type].name} centred.`); refresh(); return;
       }
       const id = hitBody(st.current, P, w);
@@ -1034,8 +1034,10 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
   function applySpeed() {
     const sc = window.__relic?.scene; if (!sc) return;
     const cur = u.current, over = st.current.won || st.current.lost;
-    sc.speed = cur.paused || cur.menu || cur.briefing || cur.senate || over ? 0 : cur.speed;
+    sc.speed = cur.paused || cur.menu || cur.briefing || cur.senate || cur.inspect || over ? 0 : cur.speed;
   }
+  // Inspecting a ship freezes the clock so it stays under the camera; Pause/Resume lets the player choose.
+  function toggleInspect() { u.current.inspect = !u.current.inspect; applySpeed(); refresh(); }
   function dismissBriefing() { u.current.briefing = false; applySpeed(); refresh(); }
   function openMenu() { if (u.current.menu) return; u.current.menu = true; applySpeed(); refresh(); }
   function closeMenu() { u.current.menu = false; applySpeed(); refresh(); }
@@ -1298,8 +1300,11 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         <aside className="hud-panel hud-engineering" aria-label="Vessel engineering">
           <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8}}>
             <div className="hud-kicker mono">VESSEL ENGINEERING · {SHIPS[selShip.type].name.toUpperCase()} #{selShip.id}</div>
+            <div style={{display: "flex", gap: 6}}>
+              <button className="pill zelo" onClick={toggleInspect} title={u.current.inspect ? "Resume the clock" : "Freeze the clock"} style={{padding: "4px 10px", minHeight: 36}}>{u.current.inspect ? "▶ Resume" : "❚❚ Pause"}</button>
             <button className="pill zelo" aria-label="Close ship panel" title="Close ship panel" style={{padding: "4px 10px", minWidth: 36, minHeight: 36}}
               onClick={() => { u.current.panelHidden = true; refresh(); }}>✕</button>
+            </div>
           </div>
           <HudMeter label="Hull" pct={selPct} color={selPct > 60 ? "#22c55e" : selPct > 30 ? "#eab308" : "#ef4444"} value={`${selHp}/${selMax}`} warn={selPct <= 30} />
           <div className="hud-fleet mono"><span>PROPELLANT {Math.floor(s.propellant)}/{MAX_PROPELLANT}</span><span>{String(selShip.mode ?? "orbit").toUpperCase()}</span></div>
@@ -1341,7 +1346,8 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       {selShip && u.current.panelHidden ? (
         <div className="glass" style={{position: "absolute", right: 12, top: 120, zIndex: 9, display: "flex", gap: 6, padding: 6, borderRadius: 10}}>
           <button className="pill zelo" onClick={() => { u.current.panelHidden = false; refresh(); }}>Ship #{selShip.id} · Show</button>
-          <button className="pill zelo" aria-label="Deselect ship" title="Deselect ship" onClick={() => { u.current.selected = null; u.current.panelHidden = false; refresh(); }}>✕</button>
+          <button className="pill zelo" onClick={toggleInspect}>{u.current.inspect ? "▶ Resume" : "❚❚ Pause"}</button>
+          <button className="pill zelo" aria-label="Deselect ship" title="Deselect ship" onClick={() => { u.current.selected = null; u.current.panelHidden = false; u.current.inspect = false; applySpeed(); refresh(); }}>✕</button>
         </div>
       ) : null}
       {u.current.governor ? (() => {
