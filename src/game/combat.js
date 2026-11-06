@@ -77,6 +77,7 @@ const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 const RAIDER_DPS_AGAINST_AID = 3;   // hull damage per raider per second against an allied wave
 const AID_SPEED = 90;                // world units per second an allied wave closes on a raider
 const AID_HOLD = 140;                // it holds this far from its target
+const AID_STATION = 120;             // the station an allied wave holds beside the Ark
 // Distance from point p to the segment a-b. Shots are swept along their path, so a fast round cannot skip a target.
 function segDist(p, a, b) {
   const vx = b.x - a.x, vy = b.y - a.y, len2 = vx * vx + vy * vy;
@@ -264,8 +265,22 @@ export function stepCombat(state, env) {
   // Ally kills pay no bounty.
   state.aid = state.aid ?? [];
   for (const a of state.aid) {
-    // a new wave launches from the Ark, then closes on the nearest raider and holds at gun range
-    if (a.x == null) { a.x = env.ark?.x ?? 0; a.y = env.ark?.y ?? 0; }
+    // a called-in wave enters at the system edge and flies to its station beside the Ark, then fights from there
+    if (a.phase == null) {
+      const ang = ((Number(a.id?.length) || 0) * 1.7 + (state.nextId % 7)) % (Math.PI * 2);
+      const edge = (env.edgeR ?? 300) * 1.25;
+      a.x = Math.cos(ang) * edge; a.y = Math.sin(ang) * edge;
+      const sl = (String(a.id).length * 2.3) % (Math.PI * 2);
+      a.station = {x: (env.ark?.x ?? 0) + Math.cos(sl) * AID_STATION, y: (env.ark?.y ?? 0) + Math.sin(sl) * AID_STATION};
+      a.phase = "arrive";
+    }
+    if (a.phase === "arrive") {
+      const d = Math.hypot(a.station.x - a.x, a.station.y - a.y);
+      const step = Math.min(d, AID_SPEED * dt);
+      if (d > 0) { a.x += (a.station.x - a.x) / d * step; a.y += (a.station.y - a.y) / d * step; a.heading = Math.atan2(a.station.y - a.y, a.station.x - a.x); }
+      if (d <= 2) a.phase = "station";
+      continue;
+    }
     if (state.raiders.length) {
       const near = state.raiders.reduce((best, r) => (dist(r, a) < dist(best, a) ? r : best));
       const d = dist(near, a);
@@ -381,7 +396,7 @@ export function stepCombat(state, env) {
     spawnSparks(state, r.x, r.y, 24, "#f97316", rand, 240, {x: r.vx * 0.5, y: r.vy * 0.5});
     shockwave(state, r.x, r.y, "#fca5a5", 30);
     vent(state, r.x, r.y, 6, rand);
-    events.push({kind: "kill", bounty: r.bounty, msg: `Raider destroyed. Bounty ${r.bounty} credits.`});
+    events.push({kind: "kill", bounty: r.bounty, msg: r.bounty > 0 ? `Raider destroyed. Bounty ${r.bounty} credits.` : "Raider destroyed by your allies."});
   }
   for (let i = fleet.length - 1; i >= 0; i--) {
     const f = fleet[i];

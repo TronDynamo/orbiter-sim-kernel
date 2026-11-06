@@ -19,7 +19,7 @@ import {CommsTerminal} from "./CommsTerminal.jsx";
 import {applyChoice, openComms, applyRaiderChoice, allyForConflict, applyAllyChoice, requestAid, sendAidHome} from "./comms.js";
 import {AllyConflict} from "./AllyConflict.jsx";
 import {RaiderHail} from "./RaiderHail.jsx";
-import {FACTIONS} from "./factions.js";
+import {FACTIONS, factionById} from "./factions.js";
 import {GovernorPanel} from "./GovernorPanel.jsx";
 import {INFRA, infraOf, buildInfra, absorbStrike, costOf} from "./colony.js";
 import {TECHS, researchTech, perks} from "./tech.js";
@@ -670,7 +670,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       {
         const cb = combatRef.current, k = Math.max(0.6, Math.min(2, scene.zoomUser));
         drawCombatFx(ctx, toS, cb, k, now / 1000, {detail: scene.zoomUser >= ZOOM_DETAIL, art: raiderArt});
-        drawAllyWaves(ctx, toS, cb.aid ?? [], k, (id, role) => commanderSprite(id, role));
+        drawAllyWaves(ctx, toS, cb.aid ?? [], k, (id, role) => commanderSprite(id, role), {detail: scene.zoomUser >= ZOOM_DETAIL, color: (id) => factionById(id)?.color});
         for (const f of s.fleet) {
           const max = hullMax(f), hp = f.hp ?? max;
           if (hp >= max) continue;
