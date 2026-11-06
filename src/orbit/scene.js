@@ -355,7 +355,11 @@ export class OrbitScene {
     const live = (i) => this.bodyLive ? !!this.bodyLive[i] : true;   // empty engine slots sit at the sun and would draw as a dark disc
     order.filter((i) => live(i) && b[i * BODY_STRIDE + 3] < 0).forEach((i) => this.drawPlanet(i));
     this.drawSun(g);
-    order.filter((i) => live(i) && b[i * BODY_STRIDE + 3] >= 0).forEach((i) => this.drawPlanet(i));
+    // A planet on the near half of its orbit that crosses the sun's disc is not drawn at all: it would
+    // appear over the sun and then vanish behind it. It stays hidden until it clears the disc.
+    const sunS = this.toScreen(0, 0), sunR = g.sun.radius * this.cam.z * this.base;
+    const overSun = (i) => Math.hypot(b[i * BODY_STRIDE] - sunS.x, b[i * BODY_STRIDE + 1] - sunS.y) < sunR + b[i * BODY_STRIDE + 2] * 0.5;
+    order.filter((i) => live(i) && b[i * BODY_STRIDE + 3] >= 0 && !overSun(i)).forEach((i) => this.drawPlanet(i));
     ctx.globalAlpha = 1;
     ctx.restore();
   }
