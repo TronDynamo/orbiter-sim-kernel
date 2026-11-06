@@ -16,7 +16,8 @@ import {getSettings} from "./settings.js";
 import {saveGame, loadGame} from "./saveManager.js";
 import "./system.css";
 import {CommsTerminal} from "./CommsTerminal.jsx";
-import {applyChoice, openComms, applyRaiderChoice, allyForConflict, applyAllyChoice, requestAid, sendAidHome} from "./comms.js";
+import {applyChoice, openComms, applyRaiderChoice, allyForConflict, applyAllyChoice, requestAid, sendAidHome, systemLost} from "./comms.js";
+import {generateSectors} from "./sectorGenerator.js";
 import {AllyConflict} from "./AllyConflict.jsx";
 import {WavePanel} from "./WavePanel.jsx";
 import {RaiderHail} from "./RaiderHail.jsx";
@@ -101,6 +102,17 @@ const DEFAULT_YIELD = 6;
 
 // The live session. The kernel is loaded once by GameApp and passed in; each session starts it from zero.
 // session: {key, seed, difficulty, save}. A save (a record from saveManager) restores the sector instead of starting it.
+// A fresh, unique solar system for a black hole's far side: a random seed every time, never one of the avatars' systems.
+function uncharteredSector() {
+  const seed = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const all = generateSectors(seed);
+  const base = all[Math.floor(Math.random() * all.length)];
+  const tag = seed.replace(/[^a-z0-9]/gi, "").slice(-8).toUpperCase();
+  return {...base, id: `UNCHARTED-${tag}`, name: `Uncharted system ${tag}`, description: "A system no one has charted.",
+    hazards: [...base.hazards], rewards: [...base.rewards],
+    planets: base.planets.map((p) => ({...p, id: `${tag}-${p.id}`}))};
+}
+
 function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
   const canvasRef = useRef(null), overlayRef = useRef(null), appRef = useRef(null);
   // The star system the game is playing in: the boot system, or the sector a jump brought us to (see currentSystem.js).
@@ -333,9 +345,20 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       if (s0.arm) {
         const W = ARMORY.find((a) => a.key === s0.arm);
         const id = hitBody(st.current, P, p);
-        const valid = id && (W.target === "core" ? id === "core" : isPlanet(id));
+        // a Titan-Buster can be aimed at the Ark Endeavor while raiders are fighting in the system
+        const zNow = scene.sim.c[4] * scene.base, ark0 = arkState(st.current);
+        const arkHit = W.key === "thermonuclear_icbm" && combatRef.current.raiders.length > 0 && Math.hypot(ark0.x - p.x, ark0.y - p.y) <= 26 / zNow;
+        const valid = arkHit || (id && (W.target === "core" ? id === "core" : isPlanet(id)));
         if (!valid) { say(`Click ${W.target === "core" ? "Sol Core" : "a world"} to target ${W.name}. Esc cancels.`); refresh(); return; }
         const doFire = () => {
+          if (arkHit) {
+            const r = fireWeapon(st.current, W.type);
+            if (!r.ok) { s0.arm = null; say(r.msg); refresh(); return; }
+            st.current.hull = 0;
+            st.current.lost = "The Ark Endeavor was destroyed by a Titan-Buster strike.";
+            s0.arm = null; say(st.current.lost, false); refresh();
+            return;
+          }
           const r = fireWeapon(st.current, W.type);
           if (!r.ok) { s0.arm = null; say(r.msg); refresh(); return; }
           if (W.target !== "core" && interceptAt(st.current, id)) {
@@ -748,6 +771,15 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         sysRef.current.planets.forEach((p, i) => {
           const tp = P[p.id]; if (!tp) return;
           const status = kernel.planets.status[i], q = toS(tp), R = pxAt(tp, 11);
+          if (st.current.wrecked?.[p.id]) {
+            // destroyed: only debris is left in orbit
+            ctx.fillStyle = "rgba(170,170,180,0.75)";
+            for (let k = 0; k < 14; k++) {
+              const a = k * 0.45 + 0.2, rr = R * (1.9 + 0.35 * Math.sin(k * 3.1));
+              ctx.beginPath(); ctx.arc(q.x + Math.cos(a) * rr, q.y + Math.sin(a) * rr, 1.6, 0, Math.PI * 2); ctx.fill();
+            }
+            return;
+          }
           if (status === WORLD.GLASSED) drawIrradiated(ctx, q.x, q.y, R, t);
           else if (status === WORLD.FRACTURED) {
             ctx.setLineDash([2, 4]); ctx.strokeStyle = "rgba(160,160,170,0.6)"; ctx.lineWidth = 1.5;
@@ -1033,6 +1065,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           });
         }
         if (kernel) outputsOf().forEach((o, i) => {
+          if (s.wrecked?.[o.planet]) return;   // a destroyed world produces nothing
           const idx = planetIndex(o.planet), total = kernel.planets.gainTotal[idx], d = total - gainSeen[i];
           if (d > 0) {
             s[o.resource] += d * difficulty.income;
@@ -1083,6 +1116,22 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
             appRef.current.classList.remove("shake"); void appRef.current.offsetWidth; appRef.current.classList.add("shake");
             setTimeout(() => appRef.current?.classList.remove("shake"), 450);
           }
+        }
+        // the Star-Killer's collapse opens a black hole: the star's system goes dark, the leaders hear of it,
+        // and every ship in the fleet is pulled through into a new, uncharted system (a fresh random one each time)
+        // a world the kernel has glassed, fractured or collapsed is destroyed for good
+        if (kernel) sysRef.current.planets.forEach((p, i) => {
+          const ps = kernel.planets.status[i];
+          if (ps === WORLD.GLASSED || ps === WORLD.FRACTURED || ps === WORLD.BLACK_HOLE) (s.wrecked ??= {})[p.id] = true;
+        });
+        if (kernel && kernel.starCollapsed && !s.blackHoleDone) {
+          s.blackHoleDone = true;
+          const name = sysRef.current.name ?? "Sol";
+          systemLost(s, {name, cause: "player"});
+          const sector = uncharteredSector();
+          s.jumpGate ??= {built: false, beacon: null, currentSector: null, warp: {active: false, phase: "idle", progress: 0, destination: null}};
+          s.jumpGate.warp = {active: true, phase: "blackhole", progress: 0.999, destination: sector};
+          say(`The black hole swallows ${name}. Your fleet is dragged through into an uncharted system.`, true);
         }
         // autosave on the Settings interval (0 turns it off)
         const cfg = getSettings();
@@ -1162,7 +1211,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
     const onFocus = () => { if (s0.blurPaused) { s0.blurPaused = false; s0.paused = false; applySpeed(); refresh(); } };
     window.addEventListener("blur", onBlur);
     window.addEventListener("focus", onFocus);
-    window.__relic = {maxTension: RULES.MAX_TENSION, scene, u: s0, st, combat: () => combatRef.current, say, refresh, positions: () => positions(), hitBody: (p) => hitBody(st.current, positions(), p), get kernel() { return kernel; }, resetKernel: () => { kernel.reset(); kBase = null; gainSeen.fill(0); creditSeen = 0; buildTick = 0; snapSeen.clear(); }};
+    window.__relic = {maxTension: RULES.MAX_TENSION, kernel, scene, u: s0, st, combat: () => combatRef.current, say, refresh, positions: () => positions(), hitBody: (p) => hitBody(st.current, positions(), p), get kernel() { return kernel; }, resetKernel: () => { kernel.reset(); kBase = null; gainSeen.fill(0); creditSeen = 0; buildTick = 0; snapSeen.clear(); }};
     applySpeed(); // a tutorial starts with the briefing open, so the clock must stop before the first frame
     return () => {
       cancelAnimationFrame(raf);

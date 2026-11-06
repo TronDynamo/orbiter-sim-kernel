@@ -131,3 +131,57 @@ export function sendAidHome(state, factionId) {
   const f = factionById(factionId);
   return {ok: true, msg: `${f ? f.name : "The ally"} withdraws to their own space.`};
 }
+
+// A destroyed solar system is talked about on the Senate channel. Each leader reacts in their own tone:
+// curiosity, frustration or sadness, shifted by how they already feel about the commander.
+export const LOSS_TONES = ["curiosity", "frustration", "sadness"];
+const LOSS_LINES = {
+  player: {
+    curiosity: [
+      "{sys} went dark. Did you do that, {cmdr}? What did you find out there before it burned?",
+      "Our sensors lost {sys} in one flash. {cmdr}, tell me that was not your doing. I need to know what I am dealing with.",
+      "Nothing comes out of {sys} now. Was it the needle, {cmdr}? I keep wondering what it looked like from the inside.",
+    ],
+    frustration: [
+      "{sys} is gone, {cmdr}. You burned it. Do you know what that costs the rest of us?",
+      "Three of my routes ran through {sys}, {cmdr}. Now they are dead space. Thank you for that.",
+      "You could have warned us, {cmdr}. Instead {sys} is a black hole and I am the one fielding questions.",
+    ],
+    sadness: [
+      "{sys} is dark now. Nothing lives there anymore. I hope whatever you gained was worth it.",
+      "I still remember the lights of {sys}. There are no lights left, {cmdr}.",
+      "They called {sys} home. Now there is only the dark. I am sorry it came to this.",
+    ],
+  },
+  enemy: {
+    curiosity: [
+      "{sys} went dark. Who would do that? Did anyone see it happen?",
+      "Our sensors lost {sys} in one flash. What could have done that? I want the data.",
+    ],
+    frustration: [
+      "{sys} is gone and nobody stopped it. Whoever did this is still out there.",
+      "We were too slow again. {sys} is dark, and our fleets were not in position.",
+    ],
+    sadness: [
+      "{sys} is dark. I hope the people there got out in time.",
+      "Another light gone. {sys} will not come back.",
+    ],
+  },
+};
+// A stable pick from a string, so the same leader always answers the same way about the same loss.
+const pickIndex = (str, n) => { let h = 0; for (const ch of str) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h % n; };
+
+// Records a destroyed system and posts each leader's reaction into the Senate channel. cause: "player" or "enemy".
+export function systemLost(state, {name, cause = "player"}) {
+  const cmdr = factionById(state.commander)?.name ?? "Commander";
+  state.news = [...(state.news ?? []), {name, cause}];
+  for (const f of FACTIONS) {
+    if (f.id === state.commander) continue;
+    const op = opinionOf(state, f.id);
+    // leaders who already dislike the commander lean toward frustration; the rest vary by leader
+    const tone = op < -30 ? "frustration" : LOSS_TONES[pickIndex(f.id + name, LOSS_TONES.length)];
+    const lines = LOSS_LINES[cause][tone];
+    const text = lines[pickIndex(f.id + name + tone, lines.length)].replace("{sys}", name).replace("{cmdr}", cmdr);
+    state.comms.log.push({faction: f.id, from: "them", text, label: "Heard on the channel", news: true, tone});
+  }
+}

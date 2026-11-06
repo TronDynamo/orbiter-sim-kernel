@@ -6,7 +6,7 @@ import {WEAPONS} from '../../config/planets.js';
 const DEFS = {
   thermonuclear_icbm: {
     type: 0, name: 'Titan-Buster ICBM', target: 'planet',
-    blurb: 'Glasses the target world: -85% population, -75% yield.',
+    blurb: 'Destroys the target world. While raiders attack, it can also be aimed at the Ark Endeavor.',
   },
   planet_cracker: {
     type: 1, name: 'World-Cracker Drill', target: 'planet',
