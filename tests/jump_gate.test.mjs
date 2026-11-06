@@ -4,12 +4,12 @@ import assert from "node:assert/strict";
 import {JUMP_GATE_COST, JUMP_GATE_BEACON_ORBIT_RADIUS, WARP_DURATION, canAfford, openStarchart, initiateJump, advanceWarp, makeInitialState, surveyPlanet} from "../src/game/jumpGate.js";
 import {anchorDescriptor, ANCHOR_TYPES} from "../src/game/anchors.js";
 
-const rich = () => ({credits: 1000, alloys: 500, compute: 300});
+const rich = () => ({credits: 2400, alloys: 1200, compute: 600});
 
-test("the gate costs 600 credits, 300 alloys, 150 compute and is refused when short", () => {
-  assert.deepEqual(JUMP_GATE_COST, {credits: 600, alloys: 300, compute: 150});
+test("the portal costs 2400 credits, 1200 alloys, 600 compute and is refused when short", () => {
+  assert.deepEqual(JUMP_GATE_COST, {credits: 2400, alloys: 1200, compute: 600});
   assert.equal(canAfford(rich()), true);
-  assert.equal(canAfford({credits: 599, alloys: 500, compute: 300}), false);
+  assert.equal(canAfford({credits: 2399, alloys: 1200, compute: 600}), false);
 });
 
 test("starchart is closed until the gate is built, then lists the three sectors", () => {

@@ -12,7 +12,7 @@
 //   }
 import { generateSectors, GENERATOR_SEED } from "./sectorGenerator.js";
 
-export const JUMP_GATE_COST = { credits: 600, alloys: 300, compute: 150 };
+export const JUMP_GATE_COST = { credits: 2400, alloys: 1200, compute: 600 };   // unlocking the portal is expensive
 export const JUMP_GATE_BEACON_ORBIT_RADIUS = 340;
 export const WARP_DURATION = 1.0; // slipstream phase, in seconds of game time
 

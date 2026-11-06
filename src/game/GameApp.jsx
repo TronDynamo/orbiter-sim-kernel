@@ -1478,18 +1478,23 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
 
       {u.current.starchart && st.current.jumpGate?.built ? (() => {
         const sectors = [...openStarchart(st.current.jumpGate).sectors, ...extraDestinations()];
+        const here = st.current.jumpGate.currentSector;
         return (
           <div style={{position: "absolute", inset: 0, zIndex: 12, display: "grid", placeItems: "center", background: "rgba(2,6,23,0.6)"}}>
             <div className="glass" style={{width: 560, maxWidth: "92vw", padding: 18, borderRadius: 14}}>
-              <div style={{display: "flex", justifyContent: "space-between", marginBottom: 8}}><b className="hud-label">Sector Starchart</b><button className="pill zelo" onClick={() => { u.current.starchart = false; refresh(); }}>Close</button></div>
-              {sectors.map((sec) => (
-                <div key={sec.id} style={{borderTop: "1px solid rgba(255,255,255,0.08)", padding: "10px 0"}}>
-                  <div style={{display: "flex", justifyContent: "space-between"}}><b className="mono">{sec.name}</b><span>{sec.planets.length} planets</span></div>
-                  <div style={{fontSize: 12, opacity: 0.85, margin: "3px 0"}}>{sec.starType} · {sec.description}</div>
-                  <div className="ship-badges mono"><span>{sec.hazards.join(" · ")}</span></div>
-                  <button className="pill zelo" style={{marginTop: 6}} onClick={() => jumpTo(sec)}>Initiate Jump</button>
-                </div>
-              ))}
+              <div style={{display: "flex", justifyContent: "space-between", marginBottom: 8}}><b className="hud-label">Stellar Portal</b><button className="pill zelo" onClick={() => { u.current.starchart = false; refresh(); }}>Close</button></div>
+              <div className="mono" style={{fontSize: 12, marginBottom: 6}}>You are in: <b>{here?.name ?? "Home system"}</b></div>
+              {sectors.map((sec) => {
+                const current = sec.id === here?.id;
+                return (
+                  <div key={sec.id} style={{borderTop: "1px solid rgba(255,255,255,0.08)", padding: "10px 0", opacity: current ? 0.6 : 1}}>
+                    <div style={{display: "flex", justifyContent: "space-between"}}><b className="mono">{sec.name}</b><span>{current ? "You are here" : `${sec.planets.length} planets`}</span></div>
+                    <div style={{fontSize: 12, opacity: 0.85, margin: "3px 0"}}>{sec.starType} · {sec.description}</div>
+                    <div className="ship-badges mono"><span>{sec.hazards.join(" · ")}</span></div>
+                    <button className="pill zelo" style={{marginTop: 6}} disabled={current} onClick={() => jumpTo(sec)}>{current ? "Current system" : "Go through the portal"}</button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         );
@@ -1653,9 +1658,9 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           </div>
           <div style={{borderTop: "1px solid rgba(255,255,255,0.08)", padding: "8px 0", marginTop: 6}}>
             <div style={{display: "flex", justifyContent: "space-between"}}><b>Stellar Jump Gate</b><span>{st.current.jumpGate?.built ? "Online" : "Offline"}</span></div>
-            <div style={{fontSize: 12, opacity: 0.8, margin: "2px 0 4px"}}>Folds space into a sector of your choice. Fleet, research and treasury come with you.</div>
-            <div className="ship-badges mono"><span>600 CREDITS</span><span>300 ALLOYS</span><span>150 COMPUTE</span></div>
-            <button className="pill zelo" disabled={!!st.current.jumpGate?.built || !!shortfall(s, JUMP_GATE_COST)} onClick={buildGate}>Build Jump Gate</button>
+            <div style={{fontSize: 12, opacity: 0.8, margin: "2px 0 4px"}}>A portal to other solar systems. Click it to choose where to go. Fleet, research and treasury come with you.</div>
+            <div className="ship-badges mono"><span>2400 CREDITS</span><span>1200 ALLOYS</span><span>600 COMPUTE</span></div>
+            <button className="pill zelo" disabled={!!st.current.jumpGate?.built || !!shortfall(s, JUMP_GATE_COST)} onClick={buildGate}>{st.current.jumpGate?.built ? "Portal unlocked" : "Unlock Portal"}</button>
           </div>
         </aside>
       ) : null}
