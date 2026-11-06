@@ -105,6 +105,7 @@ const WEDGE_FRONT = 110;             // the convoy wedge: lead fleet distance fr
 const WEDGE_ROW = 45;                // each rank falls back this far
 const WEDGE_WING = 60;               // each wing sits this far out to the side
 const DODGE_RANGE = 220;             // a raider this close makes a fleet dodge
+const DODGE_HOLD = 60;               // a dodging fleet keeps dodging until a raider is this far beyond DODGE_RANGE
 const DODGE_AMPLITUDE = 45;          // sidestep distance while dodging
 // Distance from point p to the segment a-b. Shots are swept along their path, so a fast round cannot skip a target.
 function segDist(p, a, b) {
@@ -321,7 +322,10 @@ export function stepCombat(state, env) {
         const lat = wing * rank * WEDGE_WING;
         // dodge: a fleet under fire from a raider in reach sidesteps, weaving across the line
         const near = Math.min(...state.raiders.map((r) => dist(r, a)));
-        const weave = near < DODGE_RANGE ? Math.sin(a.weave * 3.2 + k) * DODGE_AMPLITUDE : 0;
+        // the sidestep ramps in across the range edge rather than switching on at it, so a raider skirting the
+        // boundary cannot jerk the convoy sideways a full amplitude in one frame
+        const ramp = Math.max(0, Math.min(1, (DODGE_RANGE + DODGE_HOLD - near) / DODGE_HOLD));
+        const weave = Math.sin(a.weave * 3.2 + k) * DODGE_AMPLITUDE * ramp;
         if (near < DODGE_RANGE) speed = AID_SPEED * 2;
         tx = ark.x + ux * fwd + px * (lat + weave);
         ty = ark.y + uy * fwd + py * (lat + weave);
@@ -366,18 +370,27 @@ export function stepCombat(state, env) {
       const near = state.raiders.reduce((best, r) => (dist(r, a) < dist(best, a) ? r : best));
       const d = dist(near, a);
       a.weave = (a.weave ?? 0) + dt;
-      if (d < DODGE_RANGE && a.station) {
-        // under fire at its station: sidestep across the line toward the threat, then fall back to station
-        const L = d || 1, px = -(near.y - a.y) / L, py = (near.x - a.x) / L;
-        const w = Math.sin(a.weave * 3.2 + (a.slot ?? 0)) * DODGE_AMPLITUDE;
-        const tx = a.station.x + px * w, ty = a.station.y + py * w;
+      // Dodge state with hysteresis: a raider hovering at the edge of DODGE_RANGE must not flip the wave between
+      // dodging and chasing every frame. It enters inside DODGE_RANGE and leaves only beyond DODGE_RANGE + DODGE_HOLD.
+      a.dodging = a.dodging ? d < DODGE_RANGE + DODGE_HOLD : d < DODGE_RANGE;
+      if (a.dodging && a.station) {
+        // under fire at its station: weave sideways across the Ark's own lateral axis (a fixed side per wave),
+        // so the sidestep never reverses just because the raider swings past the wave's line of fire
+        const sc = a.side ?? (a.side = (a.slot ?? 0) % 2 ? 1 : -1);
+        // a station right on the Ark has no axis yet: weave along +x
+        let ax = a.station.x - (env.ark?.x ?? 0), ay = a.station.y - (env.ark?.y ?? 0), al = Math.hypot(ax, ay);
+        if (al < 1) { ax = 1; ay = 0; al = 1; }
+        const w = Math.sin(a.weave * 3.2 + (a.slot ?? 0)) * DODGE_AMPLITUDE * sc;
+        const tx = a.station.x - (ay / al) * w, ty = a.station.y + (ax / al) * w;
         const dd = Math.hypot(tx - a.x, ty - a.y), st = Math.min(dd, AID_SPEED * dt * 2);
         if (dd > 0) { a.x += (tx - a.x) / dd * st; a.y += (ty - a.y) / dd * st; }
       } else if (d > AID_HOLD) {
         const step = Math.min(d - AID_HOLD, AID_SPEED * dt);
         a.x += (near.x - a.x) / d * step; a.y += (near.y - a.y) / d * step;
       }
-      a.heading = Math.atan2(near.y - a.y, near.x - a.x);
+      // turn toward the raider at a limited rate, so the nose never snaps between two raiders
+      const want = Math.atan2(near.y - a.y, near.x - a.x), turn = Math.atan2(Math.sin(want - (a.heading ?? want)), Math.cos(want - (a.heading ?? want)));
+      a.heading = (a.heading ?? want) + turn * Math.min(1, dt * 4);
     } else if (a.station) {
       // no raiders left: reform on the station
       const dd = Math.hypot(a.station.x - a.x, a.station.y - a.y), st = Math.min(dd, AID_SPEED * dt);
