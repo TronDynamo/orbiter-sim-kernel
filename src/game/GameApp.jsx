@@ -1,7 +1,7 @@
 // Orbiter: Stellar Conquest screen. Reuses Orbit's solar-system scene (C++ WebAssembly orbit engine,
 // planets, dying star, starfield, styling). Tethers, the Ark and mission telemetry sit on top.
 import {useEffect, useRef, useState} from "react";
-import {OrbitScene, ZOOM_DETAIL, ZOOM_FOCUS, ZOOM_FOLLOW} from "../orbit/scene.js";
+import {OrbitScene, ZOOM_DETAIL, ZOOM_FOCUS, ZOOM_FOLLOW, ZOOM_CLOSE} from "../orbit/scene.js";
 import {BODY_STRIDE} from "../orbit/engine.js";
 import {ARK_POS} from "./galaxy.js";
 import {bootSystem, homeSystem, homeBuild, legacyCommander, systemDanger, systemFromSector, kernelSystemFromSector, systemState, rehomeFleet, resourceFor, extraDestinations, RESOURCE_LABEL} from "./currentSystem.js";
@@ -598,8 +598,14 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
     const focusWorld = (w, touch = false) => {
       const P = positions(); if (!P) return;
       const id = hitBody(st.current, P, w) ?? (touch ? nearestPlanet(P, w) : null);
-      const narrow = ov.clientWidth < 700;   // phones: closer out, centred in the pocket
-      const zoom = narrow ? 2.2 : ZOOM_FOCUS;
+      const narrow = ov.clientWidth < 700;   // phones: centred in the pocket
+      // Zoom so the world fills a set share of the screen (about the size of the red circle on a phone), within limits.
+      const def = scene.galaxies?.[scene.galaxyId]?.planets?.find((q) => q.id === id);
+      const rWorld = def?.r ?? 12, c4 = scene.sim?.c?.[4] || 1;
+      const want = (narrow ? 0.3 : 0.25) * Math.min(ov.clientWidth, ov.clientHeight);
+      const fit = want / (rWorld * c4 * scene.baseRaw);
+      const zoom = Math.max(narrow ? 2.2 : ZOOM_FOCUS, Math.min(ZOOM_CLOSE, fit));
+      scene.zoomCap = ZOOM_CLOSE;   // after a focus, pinch and wheel can close in this far
       const shift = narrow ? pocketShift : null;
       if (id && isPlanet(id)) {
         scene.setFollow(() => positions()?.[id] ?? null, shift);

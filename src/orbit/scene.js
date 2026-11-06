@@ -19,6 +19,7 @@ const ZOOM = 1.6;
 
 // Camera tuning. Zoom is a range from full-system view to close inspection.
 export const ZOOM_MIN = 0.3, ZOOM_MAX = 4.5;
+export const ZOOM_CLOSE = 40;     // close-up cap, unlocked once a world has been focused (fills the screen with a small world)
 export const ZOOM_DETAIL = 1.8;   // at or above this, ships draw as detailed hulls instead of chevrons
 export const ZOOM_FOLLOW = 2.0;   // at or above this, the camera centres on the followed body
 export const ZOOM_FOCUS = 3.5;    // double-click target zoom
@@ -192,7 +193,7 @@ export class OrbitScene {
     this.zoomTo(this.zoomTarget * f, snap);
   }
   zoomTo(z, snap = false) {
-    this.zoomTarget = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z));
+    this.zoomTarget = Math.max(ZOOM_MIN, Math.min(this.zoomCap ?? ZOOM_MAX, z));
     if (snap) { this.zoomUser = this.zoomTarget; this.base = this.baseRaw * this.zoomUser; }
   }
   // Camera follows fn() while zoomed in at or above ZOOM_FOLLOW. Pass null to release.
@@ -334,6 +335,8 @@ export class OrbitScene {
       this.sim.setView(this.w, this.h, this.base, this.panelWidth);
       this.sim.setParams(this.speed, this.density === 'dense' ? 700 : 260, ZOOM, SEL_SCALE, ORBIT_Y, SIN_E);
       this.sim.step(dt);
+      // refresh world positions first, so the follow lock uses this frame's planet position (not last frame's)
+      this.applyPositions();
       this.followCamera(dt);
       this.applyPositions();
       this.real = this.sim.c[6];
