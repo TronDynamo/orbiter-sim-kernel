@@ -6,6 +6,7 @@ import {PLANETS} from "../../config/planets.js";
 import {SHIPS, hullMax} from "./ships.js";
 import {bankShip} from "./pseudo3d.js";
 import {RULES} from "./rules.js";
+import {ARK_POS} from "./galaxy.js";
 import {EMERGENCY} from "./emergency.js";
 
 export const SHIP_ORBIT = 26;             // low-orbit radius around a world (world units)
@@ -13,6 +14,35 @@ export const ORBIT_RATE = 0.02;           // radians per tick around a world
 export const IMPULSE = Object.fromEntries(Object.entries(SHIPS).map(([k, v]) => [k, v.speed]));  // world units per tick
 export const SURF_MULT = 5;               // conduit surfing speed multiplier
 export const PROPELLANT_PER_TICK = 0.05;  // propellant per tick of impulse burn
+
+// The Ark Endeavor moves like a ship: a burn to any point in space, paid in propellant, at its own speed.
+export const ARK_IMPULSE = 1.5, ARK_SPEED = 30;   // world units per game second
+// Radiation the Ark receives from the star (at the origin): full flux inside ARK_RAD_IN, none beyond ARK_RAD_OUT.
+export const ARK_RAD_IN = 44, ARK_RAD_OUT = 400;
+export function arkState(s) { if (!s.ark) s.ark = {x: ARK_POS.x, y: ARK_POS.y, dest: null}; return s.ark; }
+export function sendArkToPoint(s, pt) {
+  const a = arkState(s);
+  const cost = (Math.hypot(pt.x - a.x, pt.y - a.y) / ARK_IMPULSE) * PROPELLANT_PER_TICK;
+  if (s.propellant < cost) return {ok: false, msg: `Not enough propellant for that burn (needs ${Math.ceil(cost)}).`};
+  s.propellant -= cost;
+  a.dest = {x: pt.x, y: pt.y};
+  return {ok: true, msg: "Ark Endeavor burns for open space."};
+}
+// Moves the Ark along its burn; it stops on arrival.
+export function stepArk(s, dt) {
+  const a = arkState(s);
+  if (!a.dest || dt <= 0) return;
+  const dx = a.dest.x - a.x, dy = a.dest.y - a.y, d = Math.hypot(dx, dy), step = ARK_SPEED * dt;
+  if (d <= step) { a.x = a.dest.x; a.y = a.dest.y; a.dest = null; return; }
+  a.x += (dx / d) * step; a.y += (dy / d) * step;
+}
+// Radiation level 0 (none) to 4 (severe), from the Ark's distance to the star: the closer, the harder.
+export function arkRadiation(s) {
+  const a = arkState(s), d = Math.hypot(a.x, a.y);
+  if (d >= ARK_RAD_OUT) return 0;
+  const t = Math.max(0, (ARK_RAD_OUT - d) / (ARK_RAD_OUT - ARK_RAD_IN));
+  return Math.min(4, Math.ceil(4 * t * t));
+}
 export const MAX_PROPELLANT = 100;        // tank capacity used by depots and the telemetry bar
 export const REFUEL_PER_TICK = 0.6;       // propellant taken on per tick while docked
 export const HULL_REPAIR_PER_TICK = 0.05; // hull points recovered per tick while docked

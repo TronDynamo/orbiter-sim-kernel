@@ -27,7 +27,7 @@ import {SenateChamber} from "./SenateChamber.jsx";
 import {VictoryModal} from "./VictoryModal.jsx";
 import {RULES, newState, snapTethers, network, tick, tryTether, checkTether, cut, tetherAt, tensionOf, tensionColor, build, hitBody, distToTether, orderShip, shortfall, fireWeapon} from "./rules.js";
 import {SHIPS, SHIP_ORDER, COST_LABEL, drawShip, drawChevron, fleetPower, FLIGHT_LENGTH, DEPOT_COST, ARMOR, hullMax} from "./ships.js";
-import {stepFleet, sendShip, sendShipToPoint, emergencyBurn, shipPosition, interceptAt, depotPos, MAX_PROPELLANT, deploySatellite, SURVEY_TICKS, CARGO_CAP, IMPULSE, OVERCLOCK, predictOrbit} from "./fleet.js";
+import {arkState, sendArkToPoint, stepArk, arkRadiation, stepFleet, sendShip, sendShipToPoint, emergencyBurn, shipPosition, interceptAt, depotPos, MAX_PROPELLANT, deploySatellite, SURVEY_TICKS, CARGO_CAP, IMPULSE, OVERCLOCK, predictOrbit} from "./fleet.js";
 import {Icon, drawArk, drawRelay} from "./icons.jsx";
 import {Academy} from "./Academy.jsx";
 import {drawPseudo3DShip, sunLocal, emitPlume, updatePlumes, drawPlumes} from "./pseudo3d.js";
@@ -190,7 +190,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
     const positions = () => {
       const sim = scene.sim;
       if (!sim) return null;
-      const P = {core: {x: 0, y: 0}, ark: ARK_POS};
+      const P = {core: {x: 0, y: 0}, ark: arkState(st.current)};
       sysRef.current.planets.forEach((p, i) => { const o = i * BODY_STRIDE; P[p.id] = {x: sim.b[o + 10], y: sim.b[o + 11]}; });
       for (const r of st.current.relays) P[r.id] = {x: r.x, y: r.y};
       for (const d of st.current.depots ?? []) P[d.id] = depotPos(d, P);
@@ -367,6 +367,13 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       }
       if (picked && s0.selected === picked.id) { s0.selected = null; s0.inspect = false; applySpeed(); say("Ship deselected."); refresh(); return; }
       if (picked) { s0.selected = picked.id; s0.panelHidden = true; say(`${SHIPS[picked.type].name} selected. Right-click a world to send it, click empty space to send it there, or tap twice on a phone.`); refresh(); return; }
+      // The Ark: click to select (like a ship), then a tap on empty space or a right-click sends it.
+      const ark = arkState(st.current);
+      if (Math.hypot(ark.x - p.x, ark.y - p.y) <= 22 / zb) {
+        s0.arkSel = !s0.arkSel;
+        say(s0.arkSel ? "Ark Endeavor selected. Tap empty space or right-click to move it." : "Ark Endeavor deselected.");
+        refresh(); return;
+      }
       const id = hitBody(st.current, P, p);
       if (id) s0.drag = {from: id, cur: p, start: p};
       else s0.pan = {x: e.clientX, y: e.clientY, moved: false}; // empty space: a drag pans the map, a tap deselects
@@ -410,6 +417,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         const ship = s0.selected != null ? st.current.fleet.find((f) => f.id === s0.selected) : null;
         const P = positions();
         if (!s0.pan.moved && ship && P) { const r = orderBurn(ship, P, sendShipToPoint(st.current, ship, toWorld(e), P)); say(r.msg, r.ok); refresh(); }
+        else if (!s0.pan.moved && s0.arkSel) { const r = sendArkToPoint(st.current, toWorld(e)); say(r.msg, r.ok); refresh(); }
         s0.pan = null;
         return;
       }
@@ -440,6 +448,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
     };
     const onCtx = (e) => {
       e.preventDefault();
+      if (s0.arkSel) { const r = sendArkToPoint(st.current, toWorld(e)); say(r.msg, r.ok); refresh(); return; }
       const P = positions(); if (!P || s0.selected == null) return;
       const ship = st.current.fleet.find((f) => f.id === s0.selected);
       if (!ship) { s0.selected = null; s0.inspect = false; applySpeed(); refresh(); return; }
@@ -798,8 +807,13 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       }
       // Ark, relays, labels
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      const ark = toS(ARK_POS);
+      const arkW = arkState(s), ark = toS(arkW);
+      if (arkW.dest) {   // the burn line, like a ship's
+        const dq = toS(arkW.dest);
+        ctx.save(); ctx.setLineDash([6, 6]); ctx.strokeStyle = "rgba(125,211,252,0.6)"; ctx.beginPath(); ctx.moveTo(ark.x, ark.y); ctx.lineTo(dq.x, dq.y); ctx.stroke(); ctx.restore();
+      }
       drawArk(ctx, ark.x, ark.y);
+      if (s0.arkSel) { ctx.strokeStyle = "#7dd3fc"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(ark.x, ark.y, 24, 0, Math.PI * 2); ctx.stroke(); }
       ctx.font = "12px system-ui"; ctx.fillStyle = "#cfd8e6"; ctx.fillText("Ark Endeavor", ark.x, ark.y - 20);
       for (const r of s.relays) {
         const q = toS(r);
@@ -830,6 +844,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
             const vel = {};
             for (const id of Object.keys(P)) if (prevP[id]) vel[id] = {x: (P[id].x - prevP[id].x) / dt, y: (P[id].y - prevP[id].y) / dt};
             lastVel = vel; // the arrival marker predicts with the same world speeds the ships steer by
+            stepArk(s, dt);
             for (const m of stepFleet(s, P, dt, {conduits: liveConduits(), velocity: vel})) say(m);
             if (s.jumpGate?.warp?.active) {
               advanceWarp(s.jumpGate, Math.max(0, (now - warpT) / 1000));
@@ -1210,14 +1225,15 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
   const s = st.current;
   const over = s.won || s.lost;
   const yr = s.year || 1;
-  const radiationLabel = ["Low", "Rising", "High", "Severe", "Critical"][Math.min(4, Math.max(0, s.radiation))];
+  const arkRad = arkRadiation(s);   // the Ark's own radiation, from its distance to the star
+  const radiationLabel = ["None", "Low", "Rising", "High", "Severe"][arkRad];
   const hullPct = Math.max(0, Math.round(s.hull));
   const selShip = u.current.selected != null ? s.fleet.find((f) => f.id === u.current.selected) : null;
   const selMax = selShip ? hullMax(selShip) : 1;
   const selHp = selShip ? Math.max(0, Math.round(selShip.hp ?? selMax)) : 0;
   const selPct = Math.round((selHp / selMax) * 100);
   const hullColor = hullPct > 60 ? "#22c55e" : hullPct > 30 ? "#eab308" : "#ef4444";
-  const radColor = s.radiation >= 4 ? "#ef4444" : s.radiation >= 2 ? "#f59e0b" : "#22d3ee";
+  const radColor = arkRad >= 4 ? "#ef4444" : arkRad >= 2 ? "#f59e0b" : "#22d3ee";
   return (
     <div className="app" ref={appRef}>
       <canvas ref={canvasRef} className="stage" />
@@ -1238,7 +1254,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         <HudMeter label="Hull" pct={hullPct} color={hullColor} value={`${hullPct}%`} warn={hullPct <= 30} />
         <HudMeter label="Propellant" pct={Math.min(100, s.propellant)} color="#38bdf8" value={Math.floor(s.propellant)} />
         <HudMeter label="Fuel" pct={Math.min(100, (s.fuel / Math.max(120, s.fuel)) * 100)} color="#60a5fa" value={Math.floor(s.fuel)} />
-        <HudMeter label={`Radiation · ${radiationLabel}`} pct={(s.radiation / 4) * 100} color={radColor} value={radiationLabel.toUpperCase()} warn={s.radiation >= 3} />
+        <HudMeter label={`Radiation · ${radiationLabel}`} pct={(arkRad / 4) * 100} color={radColor} value={radiationLabel.toUpperCase()} warn={arkRad >= 3} />
         <HudMeter label="Singularity" pct={(s.data / RULES.DATA_GOAL) * 100} color="#c084fc" value={`${Math.floor(s.data)} / ${RULES.DATA_GOAL}`} />
         <div className="hud-fleet mono">
           <span>FLEET {s.fleet.length}</span>
