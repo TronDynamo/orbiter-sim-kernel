@@ -5,15 +5,17 @@
 import {SHIPS, hullMax} from "./ships.js";
 import {EMERGENCY} from "./emergency.js";
 
-export const RAID_INTERVAL = 90;     // seconds of game time between raids
+export const RAID_INTERVAL = 90;     // seconds of game time before the first raid (later gaps are random)
+// Raids come at random gaps, a minute to three, and sooner in dangerous systems (danger 1 = average).
+export const raidGap = (rand, danger = 1) => (60 + rand() * 120) / danger;
+// Seconds between one raider's plunders: random, so the player is not on a fixed clock.
+const plunderGap = (rand) => 20 + rand() * 60;
 export const RAID_MIN = 1, RAID_MAX = 3;
 export const RAID_BOUNTY = 60;       // credits on kill
 const RAIDER_HULL = 40;
 const RAIDER_SPEED = 55;             // world units per second
 const ENGAGE_RANGE = 300;            // raiders go after ships within this distance
 const HOLD_RANGE = 170;              // raiders hover this far from the nearest world when no ship is in range
-const PLUNDER_TIME = 8;              // seconds a raider sitting on a world with no ship to fight takes before it plunders
-const PLUNDER_CREDITS = 25;          // credits carried off per plunder
 const HIT_RADIUS = 9;
 const FLAK_FUSE = 14;                // flak detonates within this distance of an enemy
 const DRAG = 0.8;
@@ -218,7 +220,7 @@ export function stepCombat(state, env) {
   if (env.edgeR != null) {
     state.raidT -= dt;
     if (state.raidT <= 0) {
-      state.raidT = RAID_INTERVAL;
+      state.raidT = raidGap(rand, env.danger ?? 1);
       const n = spawnRaid(state, env.edgeR, rand);
       events.push({kind: "raid", n, msg: `${n} raider${n > 1 ? "s" : ""} entering the system.`});
     }
@@ -245,10 +247,12 @@ export function stepCombat(state, env) {
     r.x += r.vx * dt; r.y += r.vy * dt;
     // with no ship to fight, a raider over a world takes what it can carry off
     if (!target && goal && dist(r, goal) <= HOLD_RANGE + 40) {
+      if (!r.plunderGap) r.plunderGap = plunderGap(rand);
       r.plunder = (r.plunder ?? 0) + dt;
-      if (r.plunder >= PLUNDER_TIME) {
-        r.plunder = 0;
-        events.push({kind: "theft", amount: PLUNDER_CREDITS, msg: `Raiders plundered ${PLUNDER_CREDITS} credits from a world.`});
+      if (r.plunder >= r.plunderGap) {
+        r.plunder = 0; r.plunderGap = plunderGap(rand);
+        const amount = 10 + Math.floor(rand() * 31);
+        events.push({kind: "theft", amount, msg: `Raiders plundered ${amount} credits from a world.`});
       }
     }
   }

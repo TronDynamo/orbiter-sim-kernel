@@ -4,7 +4,7 @@ import {useEffect, useRef, useState} from "react";
 import {OrbitScene, ZOOM_DETAIL, ZOOM_FOCUS} from "../orbit/scene.js";
 import {BODY_STRIDE} from "../orbit/engine.js";
 import {ARK_POS} from "./galaxy.js";
-import {bootSystem, homeSystem, homeBuild, legacyCommander, systemFromSector, kernelSystemFromSector, systemState, rehomeFleet, resourceFor, extraDestinations, RESOURCE_LABEL} from "./currentSystem.js";
+import {bootSystem, homeSystem, homeBuild, legacyCommander, systemDanger, systemFromSector, kernelSystemFromSector, systemState, rehomeFleet, resourceFor, extraDestinations, RESOURCE_LABEL} from "./currentSystem.js";
 import {loadOrbiterKernel, TICKS_PER_SECOND, WEAPON, WORLD, CONDUIT_ERR, CONDUIT_RULES} from "./kernel/orbiterKernel.js";
 import {ARMORY, drawCage, drawMagma, drawIrradiated, drawBlackHole, drawSupernova} from "./armory.js";
 import {STAR_COLLAPSE, VORTEX, DRILL_CRACK_DISTANCE, PLANETS as PLANET_DEFS, STAR as STAR_DEF} from "../../config/planets.js";
@@ -1001,7 +1001,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           const raidNow = !!s0.raidNow; s0.raidNow = false;
           // radar bodies: the star and every world on the map block line of sight
           const bodies = [{x: P.core.x, y: P.core.y, r: STAR_DEF.radius}, ...sys.planets.filter((p) => P[p.id]).map((p) => ({x: P[p.id].x, y: P[p.id].y, r: PLANET_DEFS.find((d) => d.key === p.id)?.r ?? 10}))];
-          for (const ev of stepCombat(combatRef.current, {dt: cdt, fleet: s.fleet, planets, core: P.core, pos: (f) => shipPosition(f, P), tech: s.tech, edgeR, raidNow, bodies})) {
+          for (const ev of stepCombat(combatRef.current, {dt: cdt, fleet: s.fleet, planets, core: P.core, pos: (f) => shipPosition(f, P), tech: s.tech, edgeR, raidNow, bodies, danger: systemDanger(sys)})) {
             if (ev.kind === "kill") s.credits += ev.bounty;
             if (ev.kind === "theft") s.credits = Math.max(0, s.credits - ev.amount);
             say(ev.msg, ev.kind === "kill");

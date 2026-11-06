@@ -207,6 +207,12 @@ export function legacyCommander(seed) {
   const r = makeRng(`legacy:${seed}`);
   return LEADERS[Math.floor(r() * LEADERS.length)].id;
 }
+// How dangerous a system is for raids: a stable value per system (1 = average). Home systems are quieter;
+// other systems vary, so some draw raiders more often than others.
+export function systemDanger(sys) {
+  const r = makeRng(`danger:${sys.id}`);
+  return String(sys.id).startsWith("HOME-") ? 0.6 + r() * 0.3 : 0.7 + r() * 1.1;
+}
 // The commander's home sector and the system built from it (same result every time for the same commander).
 export function homeBuild(commanderId) {
   const id = `HOME-${commanderId}`.toUpperCase();
