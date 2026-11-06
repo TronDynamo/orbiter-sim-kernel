@@ -122,7 +122,8 @@ export function snapTethers(state, P, now = 0) {
   state.tethers = state.tethers.filter((t) => [t.a, t.b].every((id) => id === 'core' || id === 'ark' || PLANET_OR_RELAY(state, id)));
   return events;
 }
-const PLANET_OR_RELAY = (state, id) => (state.planetIds ?? ['thalassa', 'aeros', 'ferrum', 'kryos']).includes(id) || state.relays.some((r) => r.id === id);
+// Bodies a tether may hold: worlds, relays and deployed fuel depots. Anything else is dropped as stale.
+const PLANET_OR_RELAY = (state, id) => (state.planetIds ?? ['thalassa', 'aeros', 'ferrum', 'kryos']).includes(id) || state.relays.some((r) => r.id === id) || (state.depots ?? []).some((d) => d.id === id);
 
 // Nodes reachable from the Ark through intact tethers.
 export function network(state) {
