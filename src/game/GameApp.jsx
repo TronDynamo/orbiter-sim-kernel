@@ -26,7 +26,7 @@ import {SenateChamber} from "./SenateChamber.jsx";
 import {VictoryModal} from "./VictoryModal.jsx";
 import {RULES, newState, snapTethers, network, tick, tryTether, checkTether, cut, tetherAt, tensionOf, tensionColor, build, hitBody, distToTether, orderShip, shortfall, fireWeapon} from "./rules.js";
 import {SHIPS, SHIP_ORDER, COST_LABEL, drawShip, drawChevron, fleetPower, FLIGHT_LENGTH, DEPOT_COST} from "./ships.js";
-import {stepFleet, sendShip, shipPosition, interceptAt, depotPos, MAX_PROPELLANT, deploySatellite, SURVEY_TICKS, CARGO_CAP, IMPULSE, OVERCLOCK} from "./fleet.js";
+import {stepFleet, sendShip, sendShipToPoint, shipPosition, interceptAt, depotPos, MAX_PROPELLANT, deploySatellite, SURVEY_TICKS, CARGO_CAP, IMPULSE, OVERCLOCK} from "./fleet.js";
 import {Icon, drawArk, drawRelay} from "./icons.jsx";
 import {Academy} from "./Academy.jsx";
 import {drawPseudo3DShip, sunLocal, emitPlume, updatePlumes, drawPlumes} from "./pseudo3d.js";
@@ -339,7 +339,8 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       }
       const zb = scene.sim.c[4] * scene.base;
       const picked = st.current.fleet.find((f) => { const q = shipPosition(f, P); return Math.hypot(q.x - p.x, q.y - p.y) <= 16 / zb; });
-      if (picked) { s0.selected = picked.id; scene.setFollow(shipFollow(picked.id)); say(`${SHIPS[picked.type].name} selected. Right-click a world to send it, or tap it twice on a phone.`); refresh(); return; }
+      if (picked && s0.selected === picked.id) { s0.selected = null; scene.setFollow(null); say("Ship deselected."); refresh(); return; }
+      if (picked) { s0.selected = picked.id; scene.setFollow(shipFollow(picked.id)); say(`${SHIPS[picked.type].name} selected. Right-click a world to send it, click empty space to send it there, or tap twice on a phone.`); refresh(); return; }
       const id = hitBody(st.current, P, p);
       if (id) s0.drag = {from: id, cur: p, start: p};
       else s0.pan = {x: e.clientX, y: e.clientY, moved: false}; // empty space: a drag pans the map, a tap deselects
@@ -378,7 +379,10 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         if (touches.size > 0) return;
       }
       if (s0.pan) {
-        if (!s0.pan.moved && s0.selected != null) { s0.selected = null; say("Ship deselected."); refresh(); }
+        // A tap on empty space sends the selected ship to that point. Dragging still pans.
+        const ship = s0.selected != null ? st.current.fleet.find((f) => f.id === s0.selected) : null;
+        const P = positions();
+        if (!s0.pan.moved && ship && P) { const r = sendShipToPoint(st.current, ship, toWorld(e), P); say(r.msg, r.ok); refresh(); }
         s0.pan = null;
         return;
       }
@@ -406,7 +410,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       const ship = st.current.fleet.find((f) => f.id === s0.selected);
       if (!ship) { s0.selected = null; refresh(); return; }
       const id = hitBody(st.current, P, toWorld(e));
-      if (!id || !(isPlanet(id) || id.startsWith("depot"))) { say("Right-click a world or fuel depot to send the selected ship."); refresh(); return; }
+      if (!id || !(isPlanet(id) || id.startsWith("depot"))) { const r = sendShipToPoint(st.current, ship, toWorld(e), P); say(r.msg, r.ok); refresh(); return; }
       const r = sendShip(st.current, ship, id, P, liveConduits(), id.startsWith("depot") ? "the fuel depot" : planetName(id));
       say(r.msg, r.ok); refresh();
     };
@@ -692,6 +696,10 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
             } else if (T && f.mode === "surf") {
               const tq = toS(T); ctx.strokeStyle = "rgba(56,189,248,0.6)"; ctx.lineWidth = 1;
               ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(tq.x, tq.y); ctx.stroke();
+            } else if (f.mode === "transit" && f.dest) {
+              // open-space burn: route straight to the chosen point
+              const dq = toS(f.dest); ctx.strokeStyle = "rgba(56,189,248,0.6)"; ctx.lineWidth = 1;
+              ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(dq.x, dq.y); ctx.stroke();
             }
           }
         }

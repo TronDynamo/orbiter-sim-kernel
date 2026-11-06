@@ -118,6 +118,20 @@ export function stepFleet(s, P, ticks, ctx) {
       continue;
     }
     if (f.mode === 'surf') f.mode = 'transit'; // the beam was cut: fall back to an impulse burn
+    // parked in open space: stays put until it is ordered elsewhere
+    if (f.mode === 'hold') { f.thrust = 0; continue; }
+    // burn toward an empty point in space (no world to lead)
+    if (f.mode === 'transit' && !f.to && f.dest) {
+      const D = f.dest, dx = D.x - f.x, dy = D.y - f.y, d = Math.hypot(dx, dy);
+      if (d > 1e-6) { const step = Math.min(d, speed * ticks); f.x += (dx / d) * step; f.y += (dy / d) * step; }
+      f.heading = Math.atan2(dy, dx); f.thrust = 1;
+      s.propellant = Math.max(0, s.propellant - PROPELLANT_PER_TICK * burn * ticks);
+      if (Math.hypot(D.x - f.x, D.y - f.y) <= 1.5) {
+        f.x = D.x; f.y = D.y; f.mode = 'hold'; f.dest = null; f.thrust = 0;
+        msgs.push(`${SHIPS[f.type]?.name ?? 'Ship'} holds position in open space.`);
+      }
+      continue;
+    }
     // impulse transit: steer at where the target will be when the ship arrives (intercept)
     const T = P[f.to];
     if (!T) { f.mode = 'orbit'; f.planet = homeOf(s); f.ang = 0; continue; }
@@ -199,6 +213,17 @@ export function deploySatellite(s, f, P) {
   const id = 'relay' + (++s.relayN);
   s.relays.push({id, x: q.x, y: q.y, hp: RULES.RELAY_HP});
   return {ok: true, msg: `Relay satellite locked into orbit. ${f.sats} left aboard.`};
+}
+
+// Send a ship to an empty point in space. It burns there, then holds position until ordered elsewhere.
+export function sendShipToPoint(s, f, pt, P) {
+  const name = SHIPS[f.type]?.name ?? 'Ship';
+  const q = shipPosition(f, P);
+  const burn = f.overclock ? OVERCLOCK.burn : 1;
+  const cost = (Math.hypot(pt.x - q.x, pt.y - q.y) / (IMPULSE[f.type] ?? 1.5)) * PROPELLANT_PER_TICK * burn;
+  if (s.propellant < cost) return {ok: false, msg: `Not enough propellant for that burn (needs ${Math.ceil(cost)}).`};
+  f.mode = 'transit'; f.to = null; f.from = null; f.dest = {x: pt.x, y: pt.y}; f.x = q.x; f.y = q.y; f.thrust = 1;
+  return {ok: true, msg: `${name} burns for open space.`};
 }
 
 // A ship in orbit around a world takes the first incoming strike at that world. It survives unless the hull gives out.
