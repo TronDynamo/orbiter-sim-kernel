@@ -14,8 +14,8 @@ export const RULES = {
   WHIPLASH_R: 40,
   RELAY_HP: 30,
   RELAY_MIN: 60, RELAY_MAX: 440,
-  TETHER_FUEL: 0.2,       // fuel per tether per tick
-  LIFE_FUEL: 0.5,         // life support per tick
+  TETHER_FUEL: 0.05,      // fuel per tether per tick
+  LIFE_FUEL: 0.1,         // life support per tick
   YEAR_SECONDS: 40,       // one solar orbit; radiation rises each year (prototype value)
   DATA_GOAL: 300,         // singularity data to finish the gravitational drive (prototype value)
   COST: {tether: {alloys: 5}, relay: {alloys: 15, cryo: 5}, repair: {alloys: 10}},

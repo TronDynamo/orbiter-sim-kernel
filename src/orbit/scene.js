@@ -292,6 +292,8 @@ export class OrbitScene {
   frame(now) {
     const dt = Math.min(0.05, (now - this.last) / 1000);
     this.last = now;
+    // planet spin follows the game clock: half speed at 1X, full speed at 2X and 4X, stopped when paused
+    this.spin = (this.spin ?? 0) + dt * (this.speed > 1 ? 1 : this.speed > 0 ? 0.5 : 0);
 
     if (this.pendingGalaxy) {
       this.fade = Math.max(0, this.fade - dt * 3.2);
@@ -469,7 +471,7 @@ export class OrbitScene {
     if (this.bodies.ok) {
       const c1 = col.map((v) => v / 255);
             this.bodies.draw(ctx, s.x, s.y, R, this.dpr, {
-        kind: p.molten ? 2 : 1, time: this.real, rot: this.real * (0.22 + (idx % 4) * 0.06) + idx * 1.7, seed: 4.3 + idx * 7.1,
+        kind: p.molten ? 2 : 1, time: this.real, rot: this.spin * (0.22 + (idx % 4) * 0.06) + idx * 1.7, seed: 4.3 + idx * 7.1,
         bands: !p.molten && p.r >= 12 ? 5 : 0,
         c0: c1.map((v) => v * 0.32), c1, c2: c1.map((v) => v + (1 - v) * 0.55),
         light: L, lightCol: st.light,

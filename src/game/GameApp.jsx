@@ -996,13 +996,14 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         combatT = now;
         if (!s.won && !s.lost) {
           const sys = sysRef.current;
-          const edgeR = sys.type === "sector" ? Math.max(...sys.planets.map((p) => p.orbit)) : null;
+          const edgeR = sys.planets.length ? Math.max(...sys.planets.map((p) => p.orbit)) : null;   // raids come to every system
           const planets = sys.planets.filter((p) => P[p.id]).map((p) => P[p.id]);
           const raidNow = !!s0.raidNow; s0.raidNow = false;
           // radar bodies: the star and every world on the map block line of sight
           const bodies = [{x: P.core.x, y: P.core.y, r: STAR_DEF.radius}, ...sys.planets.filter((p) => P[p.id]).map((p) => ({x: P[p.id].x, y: P[p.id].y, r: PLANET_DEFS.find((d) => d.key === p.id)?.r ?? 10}))];
           for (const ev of stepCombat(combatRef.current, {dt: cdt, fleet: s.fleet, planets, core: P.core, pos: (f) => shipPosition(f, P), tech: s.tech, edgeR, raidNow, bodies})) {
             if (ev.kind === "kill") s.credits += ev.bounty;
+            if (ev.kind === "theft") s.credits = Math.max(0, s.credits - ev.amount);
             say(ev.msg, ev.kind === "kill");
           }
         }
@@ -1035,7 +1036,6 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         if (data) onLoad(data); else { say("No quick save yet. Press F5 during a campaign to make one."); refresh(); }
       }
       if (e.code === "Space") { e.preventDefault(); togglePause(); }
-      if ((e.key === "r" || e.key === "R") && !e.ctrlKey && !e.metaKey) { s0.raidNow = true; say("[DEV] Raid queued for the next frame."); refresh(); }
       if (e.key === "1" || e.key === "2" || e.key === "4") setSpeedKey(Number(e.key));
     };
     window.addEventListener("keydown", onKey);
@@ -1137,11 +1137,6 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
   // A patch queues welding sparks at the ship; the frame loop places them, since it holds the positions.
   function weldFx(f) {
     combatRef.current.weld.push(f.id);
-  }
-  // dev: queue one raid for the next frame (the R key does the same)
-  function devRaid() {
-    u.current.raidNow = true;
-    flash("[DEV] Raid queued.", true);
   }
   function toggleOverclock() {
     const f = st.current.fleet.find((x) => x.id === u.current.selected); if (!f) return;
@@ -1310,7 +1305,6 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           <button className={"hud-btn" + (u.current.armory ? " on" : "")} onClick={toggleArmory}><Icon name="armory" size={14} /> Armory</button>
           <button className={"hud-btn" + (u.current.comms ? " on" : "")} onClick={toggleComms}><Icon name="comms" size={14} /> Comms</button>
           <button className={"hud-btn" + (s.senate.dismissed ? "" : " flash-alert")} onClick={openSenate}><Icon name="senate" size={14} /> Senate</button>
-          <button className="hud-btn hud-dev" title="Dev: spawn one raid now (also the R key). Remove before release." onClick={devRaid}>[+ Raid] Dev</button>
         </div>
       </footer>
 
