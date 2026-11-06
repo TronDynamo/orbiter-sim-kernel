@@ -1108,7 +1108,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
     const onFocus = () => { if (s0.blurPaused) { s0.blurPaused = false; s0.paused = false; applySpeed(); refresh(); } };
     window.addEventListener("blur", onBlur);
     window.addEventListener("focus", onFocus);
-    window.__relic = {maxTension: RULES.MAX_TENSION, scene, u: s0, st, say, refresh, positions: () => positions(), hitBody: (p) => hitBody(st.current, positions(), p), get kernel() { return kernel; }, resetKernel: () => { kernel.reset(); kBase = null; gainSeen.fill(0); creditSeen = 0; buildTick = 0; snapSeen.clear(); }};
+    window.__relic = {maxTension: RULES.MAX_TENSION, scene, u: s0, st, combat: () => combatRef.current, say, refresh, positions: () => positions(), hitBody: (p) => hitBody(st.current, positions(), p), get kernel() { return kernel; }, resetKernel: () => { kernel.reset(); kBase = null; gainSeen.fill(0); creditSeen = 0; buildTick = 0; snapSeen.clear(); }};
     applySpeed(); // a tutorial starts with the briefing open, so the clock must stop before the first frame
     return () => {
       cancelAnimationFrame(raf);
