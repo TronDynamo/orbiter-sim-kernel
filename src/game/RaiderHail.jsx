@@ -10,7 +10,8 @@ export function RaiderHail({s, hail, note, onChoose, onClose}) {
     <aside className="hail glass" role="dialog" aria-label="Raider hail">
       <div className="hail-head mono"><b>INCOMING HAIL · RAIDER WARBAND</b><button className="hail-close" aria-label="Close hail" title="Close" onClick={onClose}>×</button></div>
       <div className="hail-body">
-        <img className="hail-portrait wheel" src={`${import.meta.env.BASE_URL}assets/raiders/mothership.png`} alt="Raider mothership" />
+        <img className="hail-portrait wheel" src={`${import.meta.env.BASE_URL}assets/characters/char_raider_warband.png`} alt="Raider warband leader"
+          onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = `${import.meta.env.BASE_URL}assets/raiders/mothership.png`; }} />
         <div>
           <div className="hail-name" style={{color: "#f87171"}}>Raider Warband</div>
           <div className="hail-sub">{hail.n} raider{hail.n > 1 ? "s" : ""} in your system</div>
