@@ -1,0 +1,32 @@
+/* Commander pick. Everything flows in normal layout: the grid wraps, the detail stacks on narrow screens. */
+.cmdr { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+.cmdr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; }
+.cmdr-card { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 6px; min-height: 44px;
+  background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; color: #e2e8f0; cursor: pointer; text-align: center; }
+.cmdr-card:hover, .cmdr-card:focus-visible { border-color: var(--bloc); outline: none; }
+.cmdr-card.on { border-color: var(--bloc); box-shadow: 0 0 0 1px var(--bloc), 0 0 18px color-mix(in srgb, var(--bloc) 35%, transparent); background: rgba(255,255,255,0.06); }
+.cmdr-avatar { border-radius: 8px; object-fit: cover; background: #0b1220; }
+.cmdr-name { font-size: 12px; font-weight: 700; line-height: 1.2; }
+.cmdr-faction { font-size: 10px; color: #94a3b8; line-height: 1.25; }
+.cmdr-detail { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--bloc) 45%, transparent);
+  background: rgba(255,255,255,0.02); }
+.cmdr-head { display: flex; gap: 14px; align-items: center; }
+.cmdr-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.cmdr-kicker { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--bloc); font-family: monospace; }
+.cmdr-title { margin: 0; font-size: 18px; font-weight: 800; color: var(--bloc); }
+.cmdr-trait { font-size: 12px; color: #cbd5e1; line-height: 1.4; }
+.cmdr-ships-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #94a3b8; font-family: monospace; }
+.cmdr-ships { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.cmdr-ship { margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 84px; padding: 6px;
+  background: rgba(0,0,0,0.35); border-radius: 8px; border: 1px solid rgba(255,255,255,0.06); }
+.cmdr-ship img { max-width: 100%; height: auto; max-height: 90px; object-fit: contain; }
+.cmdr-ship figcaption { font-size: 10px; color: #94a3b8; text-align: center; }
+.cmdr-hint { font-size: 12px; color: #64748b; margin: 0; text-align: center; }
+@media (max-width: 560px) {
+  .cmdr-grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
+  .cmdr-head { flex-direction: column; align-items: flex-start; }
+  .cmdr-ships { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+/* The new-campaign box is wider than the other panels so the commander grid can breathe. */
+.intro-root .intro-box.intro-box-wide { max-width: 920px; }
+@media (max-width: 560px) { .intro-root .intro-box.intro-box-wide { padding: 16px; } }

@@ -57,6 +57,14 @@ export function drawPseudo3DShip(ctx, type, x, y, heading, opts = {}) {
   ctx.rotate(heading);
   ctx.scale(1, Math.cos(roll));            // kinetic bank: compress the lateral axis
 
+  // Commander art: the ship's own sprite, nose along +x, fitted to the flight length.
+  if (opts.sprite) {
+    const w = length, h = w * opts.sprite.naturalHeight / opts.sprite.naturalWidth;
+    ctx.drawImage(opts.sprite, -w / 2, -h / 2, w, h);
+    ctx.restore();
+    return;
+  }
+
   // keel layer: a dim ghost pushed away from the star reads as thickness under the hull
   ctx.save();
   ctx.globalAlpha = 0.3;

@@ -9,6 +9,8 @@ import {createAudio} from "./audio.js";
 import {listSaves, loadGame, fmtElapsed} from "./saveManager.js";
 import {SlotBrowser} from "./SlotBrowser.jsx";
 import {SettingsModal} from "./SettingsModal.jsx";
+import {CommanderPick} from "./CommanderPick.jsx";
+import {LEADERS} from "./roster_data.js";
 
 // Decorative orbits for the title backdrop (not the game simulation).
 const BACKDROP_PLANETS = [
@@ -26,6 +28,7 @@ export function IntroScreen({kernelStatus, onStart, onLoad}) {
   const [panel, setPanel] = useState(null); // null | "new" | "load" | "settings" | "roster" | "credits"
   const [, setSaveTick] = useState(0);      // re-reads the save list after a delete
   const [seedText, setSeedText] = useState("");
+  const [commander, setCommander] = useState(null); // the leader the player plays as (id from roster_data)
   if (!audioRef.current) audioRef.current = createAudio();
   const kernelOnline = kernelStatus === "ONLINE";
   const saves = listSaves();
@@ -107,7 +110,7 @@ export function IntroScreen({kernelStatus, onStart, onLoad}) {
   };
   const beginNew = (difficulty) => {
     const seed = seedText.trim() || randomSeed();
-    go(() => onStart({seed, difficulty, tutorial: true}));
+    go(() => onStart({seed, difficulty, tutorial: true, commander}));
   };
   const continueLatest = () => { if (latest) go(() => onLoad(latest)); };
   const loadSlot = (id) => { const data = loadGame(id); if (data) go(() => onLoad(data)); };
@@ -172,21 +175,34 @@ export function IntroScreen({kernelStatus, onStart, onLoad}) {
 
       {modalOpen ? (
         <div className="intro-modal open" onClick={(e) => { if (e.target === e.currentTarget) closePanel(); }}>
-          <div className="intro-box">
+          <div className={"intro-box" + (panel === "new" ? " intro-box-wide" : "")}>
             <div className="intro-box-head">
               <div>
                 <h3 style={{fontSize: 18, fontWeight: 800, letterSpacing: "0.1em", color: "#38bdf8", textTransform: "uppercase"}}>
                   {panel === "new" ? "New Campaign" : panel === "roster" ? "Galactic Senate Factions" : "Credits"}
                 </h3>
                 <p style={{fontSize: 12, color: "#64748b", fontFamily: "monospace"}}>
-                  {panel === "new" ? "Sector seed and difficulty" : panel === "roster" ? "20 Interspecies Factions Across 5 Blocs" : "Orbiter: Stellar Conquest"}
+                  {panel === "new" ? (commander ? "Sector seed and difficulty" : "Choose your commander") : panel === "roster" ? "20 Interspecies Factions Across 5 Blocs" : "Orbiter: Stellar Conquest"}
                 </p>
               </div>
               <button className="intro-close" onClick={closePanel} aria-label="Close">×</button>
             </div>
 
-            {panel === "new" ? (
-              <div style={{display: "flex", flexDirection: "column", gap: 12, padding: 4}}>
+            {panel === "new" && !commander ? (
+              <div style={{display: "flex", flexDirection: "column", gap: 12, padding: 4, overflowY: "auto", minHeight: 0}}>
+                <div style={{display: "flex", justifyContent: "flex-end"}}>
+                  <button className="intro-secondary" style={{flex: "0 0 auto", padding: "10px 16px"}} onClick={() => setCommander(LEADERS[0].id)}>Random</button>
+                </div>
+                <CommanderPick selected={null} onSelect={setCommander} />
+              </div>
+            ) : null}
+
+            {panel === "new" && commander ? (
+              <div style={{display: "flex", flexDirection: "column", gap: 12, padding: 4, overflowY: "auto", minHeight: 0}}>
+                <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap"}}>
+                  <span style={{fontSize: 13}}>Commander: <b>{LEADERS.find((l) => l.id === commander)?.name}</b></span>
+                  <button className="intro-secondary" onClick={() => setCommander(null)}>Change</button>
+                </div>
                 <div style={{fontSize: 13, opacity: 0.85}}>The seed sets where the worlds start in their orbits and names the sector. Leave it blank for a random sector.</div>
                 <div className="seed-row">
                   <input value={seedText} onChange={(e) => setSeedText(e.target.value.slice(0, 24))} placeholder="random"

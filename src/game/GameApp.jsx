@@ -30,6 +30,7 @@ import {stepFleet, sendShip, sendShipToPoint, emergencyBurn, shipPosition, inter
 import {Icon, drawArk, drawRelay} from "./icons.jsx";
 import {Academy} from "./Academy.jsx";
 import {drawPseudo3DShip, sunLocal, emitPlume, updatePlumes, drawPlumes} from "./pseudo3d.js";
+import {commanderSprite} from "./assetLoader.js";
 import {shadowAt, drawUmbra, drawLensing, drawDebrisBelt} from "./stellarFx.js";
 import {drawCombatFx, drawHullDamage} from "./combatFx.js";
 import {newCombat, stepCombat, weldSparks, mountsOf, MOUNTS, SWAP_COST, nextMount, engaged} from "./combat.js";
@@ -692,7 +693,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           const heading = f.theta ?? f.heading ?? 0;   // banked along the velocity vector
           const length = closeUp ? FLIGHT_LENGTH[f.type] * scene.zoomUser / 2 : 0;
           ctx.globalAlpha = 1 - 0.5 * shadowAt(world, star, bodies);   // planetary shadow dims the hull
-          if (closeUp) drawPseudo3DShip(ctx, f.type, q.x, q.y, heading, {length, roll: f.roll ?? 0, thrust: f.thrust ?? 0, sunDir: sunLocal(world.x, world.y, heading, sunW)});
+          if (closeUp) drawPseudo3DShip(ctx, f.type, q.x, q.y, heading, {length, roll: f.roll ?? 0, thrust: f.thrust ?? 0, sunDir: sunLocal(world.x, world.y, heading, sunW), sprite: commanderSprite(st.current.commander, f.type)});
           else drawChevron(ctx, q.x, q.y, heading, {thrust: f.thrust ?? 0, t: tt});
           // detached ion plumes: emitted at the stern, left behind to drift
           const tail = closeUp ? length * 0.5 : 3;
@@ -1483,7 +1484,7 @@ export function GameApp() {
     return () => { alive = false; };
   }, []);
   // Each new, restarted or loaded game is a new session with its own key, so the screen mounts clean.
-  const startNew = (opts) => { setSession({key: Date.now(), seed: opts.seed, difficulty: opts.difficulty, save: null, tutorial: !!opts.tutorial}); setScreen("game"); };
+  const startNew = (opts) => { setSession({key: Date.now(), seed: opts.seed, difficulty: opts.difficulty, save: null, tutorial: !!opts.tutorial, commander: opts.commander ?? null}); setScreen("game"); };
   const startLoad = (save) => { setSession({key: Date.now(), seed: save.seed, difficulty: save.difficulty, save}); setScreen("game"); };
   if (screen === "intro" || !kernel || !session) {
     return <IntroScreen kernelStatus={kernel ? "ONLINE" : "LOADING"} onStart={startNew} onLoad={startLoad} />;

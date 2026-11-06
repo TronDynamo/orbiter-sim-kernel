@@ -42,3 +42,17 @@ export function spriteReady(img) {
   return !!img && img.complete && img.naturalWidth > 0;
 }
 export const assetsReady = () => ready;
+
+// Commander ship art: public/assets/ships/<leader key>/<role>.png, loaded on first use and cached. Returns the image once
+// it has decoded, otherwise null, so the caller keeps its vector hull until the art is ready.
+const SHIP_ART = {};
+export function commanderSprite(leaderId, role) {
+  if (!leaderId || !role) return null;
+  const key = `${leaderId.split("_")[0]}/${role}`;
+  if (!SHIP_ART[key]) {
+    const img = new Image();
+    img.src = `${BASE}/ships/${key}.png`;
+    SHIP_ART[key] = img;
+  }
+  return spriteReady(SHIP_ART[key]) ? SHIP_ART[key] : null;
+}

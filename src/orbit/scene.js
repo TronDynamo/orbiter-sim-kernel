@@ -278,6 +278,7 @@ export class OrbitScene {
     // The kernel places planets on true circles, so the tracks must be circles too (see drawOrbits).
     this.kernelOrbits = true;
     const b = this.sim.b;
+    this.bodyLive = list.map((p) => !!p); // slots without a planet are unused and must not be drawn
     list.forEach((p, i) => {
       if (!p) return;
       const o = i * BODY_STRIDE;
@@ -349,9 +350,10 @@ export class OrbitScene {
     // depth order comes from the engine: planets behind the sun, the sun, planets in front
     const { b, o } = this.sim;
     const order = Array.from(o);
-    order.filter((i) => b[i * BODY_STRIDE + 3] < 0).forEach((i) => this.drawPlanet(i));
+    const live = (i) => this.bodyLive ? !!this.bodyLive[i] : true;   // empty engine slots sit at the sun and would draw as a dark disc
+    order.filter((i) => live(i) && b[i * BODY_STRIDE + 3] < 0).forEach((i) => this.drawPlanet(i));
     this.drawSun(g);
-    order.filter((i) => b[i * BODY_STRIDE + 3] >= 0).forEach((i) => this.drawPlanet(i));
+    order.filter((i) => live(i) && b[i * BODY_STRIDE + 3] >= 0).forEach((i) => this.drawPlanet(i));
     ctx.globalAlpha = 1;
     ctx.restore();
   }
