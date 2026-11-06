@@ -1,0 +1,14 @@
+{
+ "corvette": [
+  {
+   "x": 0.4291,
+   "y": 0.2462,
+   "r": 0.0043
+  }
+ ],
+ "destroyer": [],
+ "cruiser": [],
+ "probe": [],
+ "tender": [],
+ "freighter": []
+}
