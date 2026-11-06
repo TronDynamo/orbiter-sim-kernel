@@ -53,7 +53,7 @@ void main(){
 
   if (uKind < 0.5) {
     // ---- STAR: the original boiling lava surface, turning as one solid sphere (q = rigid spin from uRot)
-    float t = 0.0;   // the sun keeps its colours: its surface pattern does not move
+    float t = uTime * 0.12;   // real-time boil: the granulation and flares churn over the spinning surface (colours unchanged)
     vec3 w = q * 1.15 + vec3(uSeed);
     vec3 warp = vec3(fbm(w + vec3(0.0, 0.0, t)),
                      fbm(w + vec3(5.2, 1.3, -t)),
