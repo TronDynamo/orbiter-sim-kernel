@@ -9,6 +9,7 @@ import {loadOrbiterKernel, TICKS_PER_SECOND, WEAPON, WORLD, CONDUIT_ERR, CONDUIT
 import {ARMORY, drawCage, drawMagma, drawIrradiated, drawBlackHole, drawSupernova} from "./armory.js";
 import {STAR_COLLAPSE, VORTEX, DRILL_CRACK_DISTANCE, PLANETS as PLANET_DEFS, STAR as STAR_DEF} from "../../config/planets.js";
 import {IntroScreen} from "./IntroScreen.jsx";
+import {LEADERS} from "./roster_data.js";
 import {PauseMenu} from "./PauseMenu.jsx";
 import {DIFFICULTIES, seedOffset} from "./campaign.js";
 import {getSettings} from "./settings.js";
@@ -689,6 +690,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         const dtP = Math.min(0.05, Math.max(0, (now - plumeT) / 1000)); plumeT = now;
         const sunW = P.sun ?? {x: 0, y: 0};
         updatePlumes(plumeBank, dtP, new Set(s.fleet.map((f) => f.id)));
+        const commanderColor = LEADERS.find((l) => l.id === st.current.commander)?.color;   // arrows take the commander's colour
         for (const f of s.fleet) {
           const world = shipPosition(f, P);
           const q = toS(world);
@@ -696,7 +698,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           const length = closeUp ? FLIGHT_LENGTH[f.type] * scene.zoomUser / 2 : 0;
           ctx.globalAlpha = 1 - 0.5 * shadowAt(world, star, bodies);   // planetary shadow dims the hull
           if (closeUp) drawPseudo3DShip(ctx, f.type, q.x, q.y, heading, {length, roll: f.roll ?? 0, thrust: f.thrust ?? 0, sunDir: sunLocal(world.x, world.y, heading, sunW), sprite: commanderSprite(st.current.commander, f.type)});
-          else drawChevron(ctx, q.x, q.y, heading, {thrust: f.thrust ?? 0, t: tt});
+          else drawChevron(ctx, q.x, q.y, heading, {thrust: f.thrust ?? 0, t: tt, color: commanderColor});
           // detached ion plumes: emitted at the stern, left behind to drift
           const tail = closeUp ? length * 0.5 : 3;
           emitPlume(plumeBank, f.id, q.x, q.y, heading, f.thrust ?? 0, dtP, tail);
@@ -1431,7 +1433,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
             const ship = SHIPS[id], short = shortfall(s, ship.cost);
             return (
               <div key={id} style={{borderTop: "1px solid rgba(255,255,255,0.08)", padding: "8px 0"}}>
-                <ShipPreview type={id} />
+                <ShipPreview type={id} commander={s.commander} />
                 <div style={{display: "flex", justifyContent: "space-between"}}><b>{ship.name}</b><span>{ship.seconds}s build</span></div>
                 <div style={{fontSize: 12, opacity: 0.8, margin: "2px 0 4px"}}>{ship.blurb}</div>
                 <div className="ship-badges mono"><span>HULL {ship.hull}</span><span>{ship.weapons}</span><span>SPEED {ship.speed}</span><span>POWER {ship.power}</span></div>

@@ -1,10 +1,11 @@
 // A shipyard card's preview bay: the hull drawn large, idling with a slow float and a small thrust plume.
 import {useEffect, useRef} from "react";
 import {drawShip} from "./ships.js";
+import {commanderSprite} from "./assetLoader.js";
 
 const PREVIEW_FIT = {corvette: 0.8, destroyer: 0.9, cruiser: 0.95};
 
-export function ShipPreview({type}) {
+export function ShipPreview({type, commander}) {
   const ref = useRef(null);
   useEffect(() => {
     const c = ref.current;
@@ -25,13 +26,20 @@ export function ShipPreview({type}) {
       ctx.clearRect(0, 0, w, h);
       const length = Math.min(w * 0.72, h * 1.1) * (PREVIEW_FIT[type] ?? 0.9);
       const float = Math.sin(t * 1.6) * 3;
-      drawShip(ctx, type, w / 2, h / 2 + float, 0, {thrust: 0.55, t, length});
+      // The commander's own ship art once it has loaded; the vector hull until then (or with no commander).
+      const art = commanderSprite(commander, type);
+      if (art) {
+        const dw = length, dh = dw * art.naturalHeight / art.naturalWidth;
+        ctx.drawImage(art, w / 2 - dw / 2, h / 2 + float - dh / 2, dw, dh);
+      } else {
+        drawShip(ctx, type, w / 2, h / 2 + float, 0, {thrust: 0.55, t, length});
+      }
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
     window.addEventListener("resize", fit);
     return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", fit); };
-  }, [type]);
+  }, [type, commander]);
   return (
     <div style={{background: "rgba(2,6,23,0.9)", border: "1px solid rgba(56,189,248,0.2)", borderRadius: 12, height: 96, margin: "6px 0", overflow: "hidden"}}>
       <canvas ref={ref} aria-label={type} style={{display: "block", width: "100%", height: "100%"}} />

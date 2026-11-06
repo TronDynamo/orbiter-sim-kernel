@@ -182,7 +182,7 @@ export function drawChevron(ctx, x, y, heading, opts = {}) {
     ctx.fillStyle = g;
     ctx.beginPath(); ctx.moveTo(-1.5, -0.9); ctx.lineTo(-1.5 - L, 0); ctx.lineTo(-1.5, 0.9); ctx.closePath(); ctx.fill();
   }
-  ctx.fillStyle = "#e0f2fe";
+  ctx.fillStyle = opts.color ?? "#e0f2fe";   // a commander's ships take that commander's colour
   ctx.beginPath(); ctx.moveTo(2.5, 0); ctx.lineTo(-1.5, -1.8); ctx.lineTo(-0.6, 0); ctx.lineTo(-1.5, 1.8); ctx.closePath(); ctx.fill();
   ctx.restore();
 }
