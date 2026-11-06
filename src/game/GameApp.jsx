@@ -77,6 +77,7 @@ const conduitPath = (ctx, a, b, ratio, now, seed = 0) => {
   ctx.stroke();
 };
 // Packet colour per resource, so the player can read what a line carries at a glance.
+const ATTACK_HOLD = 150;   // a ship on an attack order closes to this distance from its raider, then holds
 const PULSE_COLOR = {biomass: "#4ade80", cryo: "#7dd3fc", alloys: "#fb923c", compute: "#c4b5fd", credits: "#fde047", fuel: "#f472b6", propellant: "#f97316"};
 // Compressed packets of light travelling source to target; faster and more of them as throughput rises.
 const drawPulses = (ctx, a, b, ratio, now, flow, color, seed) => {
@@ -189,6 +190,11 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
     const toWorld = (e) => {
       const r = ov.getBoundingClientRect(), c = scene.sim.c, zb = c[4] * scene.base, pitch = scene.pitch ?? 1;
       return {x: c[2] + (e.clientX - r.left - c[0]) / zb, y: c[3] + (e.clientY - r.top - c[1]) / (zb * pitch)};
+    };
+    // the raider under a world point (within a fingertip or cursor's reach), or null
+    const raiderAt = (w) => {
+      const zu = scene.sim.c[4] * scene.base;
+      return combatRef.current.raiders.find((r) => Math.hypot(r.x - w.x, r.y - w.y) <= 24 / zu) ?? null;
     };
     const positions = () => {
       const sim = scene.sim;
@@ -369,7 +375,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         }
       }
       if (picked && s0.selected === picked.id) { s0.selected = null; s0.inspect = false; applySpeed(); say("Ship deselected."); refresh(); return; }
-      if (picked) { s0.selected = picked.id; s0.panelHidden = true; say(`${SHIPS[picked.type].name} selected. Right-click a world to send it, click empty space to send it there, or tap twice on a phone.`); refresh(); return; }
+      if (picked) { s0.shipDrag = {id: picked.id, start: p, cur: p}; s0.selected = picked.id; s0.panelHidden = true; say(`${SHIPS[picked.type].name} selected. Right-click a world to send it, click empty space to send it there, or tap twice on a phone.`); refresh(); return; }
       // The Ark: press on it and drag a line to where it should go; release there to send it. A press without a drag selects it.
       const ark = arkState(st.current);
       if (Math.hypot(ark.x - p.x, ark.y - p.y) <= (e.pointerType === "touch" ? 40 : 22) / zb) {   // a fingertip needs a bigger target
@@ -405,6 +411,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       }
       if (s0.drag) s0.drag.cur = toWorld(e);
       if (s0.arkDrag) s0.arkDrag.cur = toWorld(e);
+      if (s0.shipDrag) s0.shipDrag.cur = toWorld(e);
       const r = ov.getBoundingClientRect();
       s0.pointer = {x: e.clientX - r.left, y: e.clientY - r.top};
       s0.pointerWorld = toWorld(e); // the Arrival Ghost Pip previews the world under the pointer
@@ -419,6 +426,18 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         else if (d.wasSel) { s0.arkSel = false; say("Ark Endeavor deselected."); }
         else say("Ark Endeavor selected. Drag from it to move it.");
         refresh(); return;
+      }
+      if (s0.shipDrag) {
+        const d = s0.shipDrag, zu = scene.sim.c[4] * scene.base;
+        s0.shipDrag = null;
+        const ship = st.current.fleet.find((f) => f.id === d.id);
+        if (ship && Math.hypot(d.cur.x - d.start.x, d.cur.y - d.start.y) > 8 / zu) {
+          const rd = raiderAt(d.cur);
+          if (rd) { ship.attack = rd.id; say(`${SHIPS[ship.type].name} attacks the raider.`); }
+          else { const P = positions(); if (P) { const r = orderBurn(ship, P, sendShipToPoint(st.current, ship, d.cur, P)); say(r.msg, r.ok); } }
+          refresh();
+        }
+        return;
       }
       if (e?.pointerType === "touch") {
         touches.delete(e.pointerId);
@@ -463,6 +482,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       e.preventDefault();
       if (s0.arkSel) { const r = sendArkToPoint(st.current, toWorld(e)); say(r.msg, r.ok); refresh(); return; }
       const P = positions(); if (!P || s0.selected == null) return;
+      { const rd = raiderAt(toWorld(e)), sh = st.current.fleet.find((f) => f.id === s0.selected); if (rd && sh) { sh.attack = rd.id; say(`${SHIPS[sh.type].name} attacks the raider.`); refresh(); return; } }
       const ship = st.current.fleet.find((f) => f.id === s0.selected);
       if (!ship) { s0.selected = null; s0.inspect = false; applySpeed(); refresh(); return; }
       const id = hitBody(st.current, P, toWorld(e));
@@ -721,6 +741,10 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           ctx.globalAlpha = 1 - 0.5 * shadowAt(world, star, bodies);   // planetary shadow dims the hull
           if (closeUp) drawPseudo3DShip(ctx, f.type, q.x, q.y, heading, {length, roll: f.roll ?? 0, thrust: f.thrust ?? 0, sunDir: sunLocal(world.x, world.y, heading, sunW), sprite: commanderSprite(st.current.commander, f.type)});
           else drawChevron(ctx, q.x, q.y, heading, {thrust: f.thrust ?? 0, t: tt, color: commanderColor});
+          if (f.attack != null) {   // the attack line to its raider
+            const rd = combatRef.current.raiders.find((x) => x.id === f.attack);
+            if (rd) { const tq = toS(rd); ctx.save(); ctx.setLineDash([4, 6]); ctx.strokeStyle = "rgba(248,113,113,0.85)"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(tq.x, tq.y); ctx.stroke(); ctx.restore(); }
+          }
           // detached ion plumes: emitted at the stern, left behind to drift
           const tail = closeUp ? length * 0.5 : 3;
           emitPlume(plumeBank, f.id, q.x, q.y, heading, f.thrust ?? 0, dtP, tail);
@@ -825,6 +849,10 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         const dq = toS(arkW.dest);
         ctx.save(); ctx.setLineDash([6, 6]); ctx.strokeStyle = "rgba(125,211,252,0.6)"; ctx.beginPath(); ctx.moveTo(ark.x, ark.y); ctx.lineTo(dq.x, dq.y); ctx.stroke(); ctx.restore();
       }
+      if (s0.shipDrag && Math.hypot(s0.shipDrag.cur.x - s0.shipDrag.start.x, s0.shipDrag.cur.y - s0.shipDrag.start.y) > 0) {
+        const sd = st.current.fleet.find((f) => f.id === s0.shipDrag.id), P0 = positions();
+        if (sd && P0) { const a0 = toS(shipPosition(sd, P0)), b0 = toS(s0.shipDrag.cur); ctx.save(); ctx.setLineDash([4, 6]); ctx.strokeStyle = "rgba(125,211,252,0.9)"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(a0.x, a0.y); ctx.lineTo(b0.x, b0.y); ctx.stroke(); ctx.restore(); }
+      }
       if (s0.arkDrag) {   // the line being dragged out from the Ark
         const dq = toS(s0.arkDrag.cur);
         ctx.save(); ctx.setLineDash([4, 6]); ctx.strokeStyle = "rgba(125,211,252,0.9)"; ctx.lineWidth = 1.5;
@@ -862,6 +890,15 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
             const vel = {};
             for (const id of Object.keys(P)) if (prevP[id]) vel[id] = {x: (P[id].x - prevP[id].x) / dt, y: (P[id].y - prevP[id].y) / dt};
             lastVel = vel; // the arrival marker predicts with the same world speeds the ships steer by
+            // ships on an attack order chase their raider and hold station at gun range
+            for (const f of s.fleet) {
+              if (f.attack == null) continue;
+              const rd = combatRef.current.raiders.find((x) => x.id === f.attack);
+              if (!rd) { f.attack = null; f.dest = null; f.thrust = 0; say("Raider destroyed or lost."); continue; }
+              const q = shipPosition(f, P);
+              if (Math.hypot(rd.x - q.x, rd.y - q.y) > ATTACK_HOLD) { f.mode = 'transit'; f.to = null; f.x = q.x; f.y = q.y; f.dest = {x: rd.x, y: rd.y}; f.thrust = 1; }
+              else { f.dest = null; f.thrust = 0; }
+            }
             stepArk(s, dt);
             for (const m of stepFleet(s, P, dt, {conduits: liveConduits(), velocity: vel})) say(m);
             if (s.jumpGate?.warp?.active) {

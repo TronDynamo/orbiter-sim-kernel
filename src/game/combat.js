@@ -280,7 +280,9 @@ export function stepCombat(state, env) {
     else fire(state, key, kind, from, t, side, rand);
   };
   for (const a of allies) {
-    mountsOf(a._f).forEach((kind, i) => trigger(`a${a._f.id}:${i}`, kind, a, seen(a, state.raiders), "ally", true));
+    // a ship on an attack order fires only at its raider; otherwise at any raider in range
+    const pool = a._f.attack != null ? state.raiders.filter((r) => r.id === a._f.attack) : state.raiders;
+    mountsOf(a._f).forEach((kind, i) => trigger(`a${a._f.id}:${i}`, kind, a, seen(a, pool), "ally", true));
   }
   for (const r of state.raiders) {
     r.mounts.forEach((kind, i) => trigger(`r${r.id}:${i}`, kind, r, seen(r, allies), "raider", false));
