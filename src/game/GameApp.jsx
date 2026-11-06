@@ -32,7 +32,7 @@ import {arkState, sendArkToPoint, stepArk, arkRadiation, stepFleet, stepRetreat,
 import {Icon, drawArk, drawRelay} from "./icons.jsx";
 import {Academy} from "./Academy.jsx";
 import {drawPseudo3DShip, sunLocal, emitPlume, updatePlumes, drawPlumes} from "./pseudo3d.js";
-import {commanderSprite, ASSET_BASE} from "./assetLoader.js";
+import {commanderSprite, ASSET_BASE, arkArt} from "./assetLoader.js";
 import {enginesFor} from "./thrusters.js";
 import {shadowAt, drawUmbra, drawLensing, drawDebrisBelt} from "./stellarFx.js";
 import {drawCombatFx, drawHullDamage} from "./combatFx.js";
@@ -860,7 +860,12 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         ctx.save(); ctx.setLineDash([4, 6]); ctx.strokeStyle = "rgba(125,211,252,0.9)"; ctx.lineWidth = 1.5;
         ctx.beginPath(); ctx.moveTo(ark.x, ark.y); ctx.lineTo(dq.x, dq.y); ctx.stroke(); ctx.restore();
       }
-      drawArk(ctx, ark.x, ark.y);
+      // the commander's Ark art when zoomed in (screen-blended so its black backdrop vanishes), otherwise the arrow
+      const arkImg = scene.zoomUser >= ZOOM_DETAIL ? arkArt(st.current.commander) : null;
+      if (arkImg) {
+        const aw = 150 * scene.zoomUser / 2, ah = aw * arkImg.naturalHeight / arkImg.naturalWidth;
+        ctx.save(); ctx.globalCompositeOperation = "screen"; ctx.drawImage(arkImg, ark.x - aw / 2, ark.y - ah / 2, aw, ah); ctx.restore();
+      } else drawArk(ctx, ark.x, ark.y);
       if (s0.arkSel) { ctx.strokeStyle = "#7dd3fc"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(ark.x, ark.y, 24, 0, Math.PI * 2); ctx.stroke(); }
       ctx.font = "12px system-ui"; ctx.fillStyle = "#cfd8e6"; ctx.fillText("Ark Endeavor", ark.x, ark.y - 20);
       for (const r of s.relays) {
