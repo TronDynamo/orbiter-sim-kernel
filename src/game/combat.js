@@ -80,6 +80,7 @@ const AID_HOLD = 140;                // it holds this far from its target
 const AID_STATION = 120;             // the station an allied wave holds beside the Ark
 const CONVOY_RADIUS = 80;            // convoy formation distance from the Ark
 const CONVOY_SPACING = 1.1;          // radians between convoy slots
+const AID_SPACING = 46;              // minimum distance kept between allied waves
 // Distance from point p to the segment a-b. Shots are swept along their path, so a fast round cannot skip a target.
 function segDist(p, a, b) {
   const vx = b.x - a.x, vy = b.y - a.y, len2 = vx * vx + vy * vy;
@@ -311,6 +312,15 @@ export function stepCombat(state, env) {
       }
       a.heading = Math.atan2(near.y - a.y, near.x - a.x);
     }
+  }
+  // formation: allied waves keep a minimum spacing, so a convoy spreads out instead of stacking
+  for (let i = 0; i < state.aid.length; i++) for (let j = i + 1; j < state.aid.length; j++) {
+    const A = state.aid[i], B = state.aid[j];
+    let dx = B.x - A.x, dy = B.y - A.y, d = Math.hypot(dx, dy);
+    if (d >= AID_SPACING) continue;
+    if (d < 1e-6) { dx = 1; dy = 0; d = 1; }
+    const push = (AID_SPACING - d) / 2;
+    A.x -= dx / d * push; A.y -= dy / d * push; B.x += dx / d * push; B.y += dy / d * push;
   }
   for (const a of state.aid) {
     if (!state.raiders.length) break;

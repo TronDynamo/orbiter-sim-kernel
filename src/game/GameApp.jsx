@@ -385,7 +385,16 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       {
         const zw = scene.sim.c[4] * scene.base;
         const aw = (combatRef.current.aid ?? []).find((a) => Math.hypot(a.x - p.x, a.y - p.y) <= 26 / zw);
-        if (aw) { s0.waveDrag = {id: aw.id, start: p, cur: p}; s0.waveSel = aw.id; refresh(); return; }
+        if (aw) {
+          // Ctrl/Cmd-click toggles a fleet in the selection (Shift tilts the camera); a press on a selected fleet drags the whole selection together
+          if (e.ctrlKey || e.metaKey) { const cur = s0.waveSel ?? []; s0.waveSel = cur.includes(aw.id) ? cur.filter((i) => i !== aw.id) : [...cur, aw.id]; refresh(); return; }
+          const sel = (s0.waveSel ?? []).includes(aw.id) ? s0.waveSel : [aw.id];
+          s0.waveSel = sel;
+          const offs = {};
+          for (const id of sel) { const w = (combatRef.current.aid ?? []).find((a) => a.id === id); if (w) offs[id] = {x: w.x - p.x, y: w.y - p.y}; }
+          s0.waveDrag = {ids: sel, start: p, cur: p, offs};
+          refresh(); return;
+        }
       }
       // The Ark: press on it and drag a line to where it should go; release there to send it. A press without a drag selects it.
       const ark = arkState(st.current);
@@ -442,10 +451,14 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       if (s0.waveDrag) {
         const d = s0.waveDrag, zu = scene.sim.c[4] * scene.base;
         s0.waveDrag = null;
-        const w = (combatRef.current.aid ?? []).find((a) => a.id === d.id);
-        if (w && Math.hypot(d.cur.x - d.start.x, d.cur.y - d.start.y) > 8 / zu) {
-          w.dest = {x: d.cur.x, y: d.cur.y}; w.convoy = false; w.phase = "station";
-          say(`${factionById(w.id)?.name ?? "Allied fleet"} moves to the new position.`);
+        if (Math.hypot(d.cur.x - d.start.x, d.cur.y - d.start.y) > 8 / zu) {
+          // each fleet keeps its place in the group: it flies to the drop point plus its offset from the press
+          for (const id of d.ids) {
+            const w = (combatRef.current.aid ?? []).find((a) => a.id === id), o = d.offs[id];
+            if (!w || !o) continue;
+            w.dest = {x: d.cur.x + o.x, y: d.cur.y + o.y}; w.convoy = false; w.phase = "station";
+          }
+          say(d.ids.length > 1 ? `${d.ids.length} allied fleets move to the new position.` : `${factionById(d.ids[0])?.name ?? "Allied fleet"} moves to the new position.`);
         }
         refresh();
         return;
@@ -690,6 +703,18 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         const cb = combatRef.current, k = Math.max(0.6, Math.min(2, scene.zoomUser));
         drawCombatFx(ctx, toS, cb, k, now / 1000, {detail: scene.zoomUser >= ZOOM_DETAIL, art: raiderArt});
         drawAllyWaves(ctx, toS, cb.aid ?? [], k, (id, role) => commanderSprite(id, role), {detail: scene.zoomUser >= ZOOM_DETAIL, color: (id) => factionById(id)?.color});
+        // drag preview: a dashed line from each dragged fleet to where it will land
+        const wd = u.current.waveDrag;
+        if (wd) {
+          ctx.save(); ctx.setLineDash([6, 5]); ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(190,242,255,0.8)";
+          for (const id of wd.ids) {
+            const w = cb.aid?.find((a) => a.id === id), o = wd.offs[id];
+            if (!w || !o) continue;
+            const from = toS({x: w.x, y: w.y}), to = toS({x: wd.cur.x + o.x, y: wd.cur.y + o.y});
+            ctx.beginPath(); ctx.moveTo(from.x, from.y); ctx.lineTo(to.x, to.y); ctx.stroke();
+          }
+          ctx.restore();
+        }
         for (const f of s.fleet) {
           const max = hullMax(f), hp = f.hp ?? max;
           if (hp >= max) continue;
@@ -1294,15 +1319,17 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
   }
   // allied wave helpers, by faction id
   const waveById = (id) => (combatRef.current.aid ?? []).find((a) => a.id === id) ?? null;
-  function waveConvoy(id, on) {
-    const w = waveById(id); if (!w) return;
-    w.convoy = on; w.dest = null;
-    u.current.msg = on ? `${factionById(id)?.name} joins your convoy.` : `${factionById(id)?.name} leaves the convoy.`; refresh();
+  const selectedWaves = () => (u.current.waveSel ?? []).map(waveById).filter(Boolean);
+  function waveConvoy(on) {
+    const ws = selectedWaves(); if (!ws.length) return;
+    for (const w of ws) { w.convoy = on; w.dest = null; }
+    u.current.msg = on ? `${ws.length > 1 ? `${ws.length} fleets join` : `${factionById(ws[0].id)?.name} joins`} your convoy.` : `${ws.length > 1 ? `${ws.length} fleets leave` : `${factionById(ws[0].id)?.name} leaves`} the convoy.`; refresh();
   }
-  function waveSendHome(id) {
-    combatRef.current.aid = (combatRef.current.aid ?? []).filter((a) => a.id !== id);
-    u.current.waveSel = null;
-    u.current.msg = `${factionById(id)?.name ?? "The ally"} withdraws to their own space.`; refresh();
+  function waveSendHome() {
+    const ids = (u.current.waveSel ?? []);
+    combatRef.current.aid = (combatRef.current.aid ?? []).filter((a) => !ids.includes(a.id));
+    u.current.waveSel = [];
+    u.current.msg = ids.length > 1 ? `${ids.length} allied fleets withdraw to their own space.` : `${factionById(ids[0])?.name ?? "The ally"} withdraws to their own space.`; refresh();
   }
   function commsRequestAid() {
     const raiding = combatRef.current.raiders.length > 0;
@@ -1560,7 +1587,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       ) : null}
 
       {u.current.comms ? <CommsTerminal s={s} onOpen={commsOpen} onChoose={commsChoose} onClose={toggleComms} raiding={combatRef.current.raiders.length > 0} onRequestAid={commsRequestAid} aidOn={aidOnStation(st.current.comms.selected)} onSendHome={commsSendHome} /> : null}
-      {u.current.waveSel && waveById(u.current.waveSel) ? <WavePanel wave={waveById(u.current.waveSel)} onConvoy={(on) => waveConvoy(u.current.waveSel, on)} onSendHome={() => waveSendHome(u.current.waveSel)} onClose={() => { u.current.waveSel = null; refresh(); }} /> : null}
+      {selectedWaves().length ? <WavePanel waves={selectedWaves()} onConvoy={(on) => waveConvoy(on)} onSendHome={() => waveSendHome()} onClose={() => { u.current.waveSel = []; refresh(); }} /> : null}
       {u.current.hail ? <RaiderHail s={st.current} hail={u.current.hail} note={u.current.hailNote} onChoose={raiderChoose} onClose={raiderClose} /> : null}
       {u.current.allyHail && !u.current.hail ? <AllyConflict s={st.current} factionId={u.current.allyHail} note={u.current.hailNote} onChoose={allyChoose} onClose={allyClose} /> : null}
 

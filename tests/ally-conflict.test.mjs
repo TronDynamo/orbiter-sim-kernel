@@ -85,3 +85,14 @@ test("sending a wave home keeps respect", () => {
   assert.equal(r.ok, true);
   assert.equal(opinionOf(s, ally), 30);
 });
+
+test("allied waves keep formation spacing instead of stacking", () => {
+  const c = newCombat();
+  c.aid = [
+    {id: ally, n: 2, dps: 4, hull: 120, phase: "station", station: {x: 0, y: 0}, x: 0, y: 0},
+    {id: FACTIONS[1].id, n: 2, dps: 4, hull: 120, phase: "station", station: {x: 0, y: 0}, x: 0, y: 0},
+  ];
+  stepCombat(c, {dt: 0.05, fleet: [], planets: [], core: {x: 0, y: 0}, pos: () => null, tech: {}, rand: () => 0.5, bodies: []});
+  const d = Math.hypot(c.aid[0].x - c.aid[1].x, c.aid[0].y - c.aid[1].y);
+  assert.ok(d >= 40, `spacing ${d.toFixed(1)}`);
+});
