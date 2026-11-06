@@ -590,6 +590,10 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       if (id && isPlanet(id)) {
         scene.setFollow(() => positions()?.[id] ?? null); scene.zoomTo(ZOOM_FOCUS);
         say(`${planetName(id)} centred.`); refresh();
+      } else if (id === "ark") {
+        // The Ark centres the camera so its commander art can be seen up close.
+        scene.setFollow(() => arkState(st.current)); scene.zoomTo(ZOOM_FOCUS);
+        say("Ark Endeavor centred."); refresh();
       }
     };
     const onWheel = (e) => { e.preventDefault(); scene.zoomBy(e.deltaY < 0 ? 1.12 : 1 / 1.12); };
@@ -961,13 +965,14 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         ctx.beginPath(); ctx.moveTo(ark.x, ark.y); ctx.lineTo(dq.x, dq.y); ctx.stroke(); ctx.restore();
       }
       // the commander's Ark art when zoomed in, otherwise the arrow
-      // The commander's Ark art draws at every zoom, tethered or not; the arrow stands in only until the art has loaded.
-      const arkImg = arkArt(st.current.commander);
-      const aw = Math.max(56, 150 * scene.zoomUser / 2), ah = arkImg ? aw * arkImg.naturalHeight / arkImg.naturalWidth : 0;
-      if (arkImg) ctx.drawImage(arkImg, ark.x - aw / 2, ark.y - ah / 2, aw, ah);
-      else drawArk(ctx, ark.x, ark.y);
-      if (s0.arkSel) { ctx.strokeStyle = "#7dd3fc"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(ark.x, ark.y, Math.max(24, aw / 2 + 4), 0, Math.PI * 2); ctx.stroke(); }
-      ctx.font = "12px system-ui"; ctx.fillStyle = "#cfd8e6"; ctx.fillText("Ark Endeavor", ark.x, arkImg ? ark.y - ah / 2 - 8 : ark.y - 20);
+      // Far out the Ark is an arrow; the commander's Ark art replaces it only when zoomed in close.
+      const arkImg = scene.zoomUser >= ZOOM_DETAIL ? arkArt(st.current.commander) : null;
+      if (arkImg) {
+        const aw = 150 * scene.zoomUser / 2, ah = aw * arkImg.naturalHeight / arkImg.naturalWidth;
+        ctx.drawImage(arkImg, ark.x - aw / 2, ark.y - ah / 2, aw, ah);
+      } else drawArk(ctx, ark.x, ark.y);
+      if (s0.arkSel) { ctx.strokeStyle = "#7dd3fc"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(ark.x, ark.y, 24, 0, Math.PI * 2); ctx.stroke(); }
+      ctx.font = "12px system-ui"; ctx.fillStyle = "#cfd8e6"; ctx.fillText("Ark Endeavor", ark.x, arkImg ? ark.y - (150 * scene.zoomUser / 2) * (arkImg.naturalHeight / arkImg.naturalWidth) / 2 - 8 : ark.y - 20);
       for (const r of s.relays) {
         const q = toS(r);
         drawRelay(ctx, q.x, q.y);
@@ -1791,7 +1796,7 @@ export function GameApp() {
   }
   return (
     <GameSession key={session.key} kernel={kernel} session={session}
-      onRestart={() => startNew({seed: session.seed, difficulty: session.difficulty})}
+      onRestart={() => startNew({seed: session.seed, difficulty: session.difficulty, commander: session.commander ?? null})}
       onLoad={startLoad} onQuit={() => setScreen("intro")} />
   );
 }

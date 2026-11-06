@@ -191,7 +191,7 @@ export function IntroScreen({kernelStatus, onStart, onLoad}) {
             {panel === "new" && !commander ? (
               <div style={{display: "flex", flexDirection: "column", gap: 12, padding: 4, overflowY: "auto", minHeight: 0}}>
                 <div style={{display: "flex", justifyContent: "flex-end"}}>
-                  <button className="intro-secondary" style={{flex: "0 0 auto", padding: "10px 16px"}} onClick={() => setCommander(LEADERS[0].id)}>Random</button>
+                  <button className="intro-secondary" style={{flex: "0 0 auto", padding: "10px 16px"}} onClick={() => setCommander(LEADERS[Math.floor(Math.random() * LEADERS.length)].id)}>Random</button>
                 </div>
                 <CommanderPick selected={null} onSelect={setCommander} />
               </div>
