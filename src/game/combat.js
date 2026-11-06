@@ -222,7 +222,7 @@ export function stepCombat(state, env) {
     if (state.raidT <= 0) {
       state.raidT = raidGap(rand, env.danger ?? 1);
       const n = spawnRaid(state, env.edgeR, rand);
-      events.push({kind: "raid", n, msg: `${n} raider${n > 1 ? "s" : ""} entering the system.`});
+      events.push({kind: "raid", n, ids: state.raiders.slice(-n).map((r) => r.id), msg: `${n} raider${n > 1 ? "s" : ""} entering the system.`});
     }
   }
 
