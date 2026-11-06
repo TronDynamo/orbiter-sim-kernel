@@ -201,6 +201,7 @@ export class OrbitScene {
   setFollow(fn, shiftPx = null) {
     this.followFn = fn ?? null;
     this.followShiftPx = shiftPx ?? {x: 0, y: 0};
+    this.locked = false;
     this.pan = null; // following a body takes the camera back from a manual pan
   }
 
@@ -208,9 +209,10 @@ export class OrbitScene {
   // Put the camera centre on the followed body at once (no glide), so a zoom-in goes straight into it.
   snapCamera() {
     const p = this.followFn?.(); if (!p || !this.sim) return;
-    const c = this.sim.c; c[2] = p.x; c[3] = p.y; this.camF = {x: p.x, y: p.y}; this.pan = null;
+    const c = this.sim.c; c[2] = p.x; c[3] = p.y; this.camF = {x: p.x, y: p.y}; this.pan = null; this.locked = true;
   }
   panBy(px, py) {
+    this.locked = false;
     const c = this.sim.c, z = c[4] * this.base, pitch = this.pitch ?? 1;
     if (!this.pan) this.pan = { x: c[2], y: c[3] };
     this.pan.x -= px / z; this.pan.y -= py / (z * pitch);
@@ -270,7 +272,8 @@ export class OrbitScene {
   followCamera(dt) {
     const c = this.sim.c;
     if (this.pan) { c[2] = this.pan.x; c[3] = this.pan.y; return; }
-    const p = this.followFn && this.zoomUser >= ZOOM_FOLLOW ? this.followFn() : null;
+    // A focus lock keeps following while zooming in from far out (below ZOOM_FOLLOW), so the engine cannot pull the view to empty space.
+    const p = this.followFn && (this.locked || this.zoomUser >= ZOOM_FOLLOW) ? this.followFn() : null;
     if (!p) { this.camF = null; return; }
     if (!this.camF) this.camF = {x: c[2], y: c[3]};
     // the camera sits off the body by the screen shift, so the body is drawn at centre + shift
