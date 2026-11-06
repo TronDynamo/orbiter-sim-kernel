@@ -78,7 +78,9 @@ const RAIDER_DPS_AGAINST_AID = 3;   // hull damage per raider per second against
 const AID_SPEED = 90;                // world units per second an allied wave closes on a raider
 const AID_HOLD = 140;                // it holds this far from its target
 const AID_STATION = 120;             // the station an allied wave holds beside the Ark
-const CONVOY_RADIUS = 80;            // convoy formation distance from the Ark
+export const CONVOY_RADIUS = 80;     // convoy formation distance from the Ark
+export const CONVOY_JOIN = 150;
+export const CONVOY_ORBIT_RATE = 0.6;  // radians per second a convoy circles the Ark when no raiders are present      // a fleet dropped within this range of the Ark rejoins the convoy orbit
 const CONVOY_SPACING = 1.1;          // radians between convoy slots
 const AID_SPACING = 46;              // minimum distance kept between allied waves
 const WEDGE_FRONT = 110;             // the convoy wedge: lead fleet distance from the Ark, toward the threat
@@ -299,10 +301,12 @@ export function stepCombat(state, env) {
         ty = ark.y + uy * fwd + py * (lat + weave);
         faceX = threat.x; faceY = threat.y;
       } else {
-        // no threat: the convoy reforms into its ring around the Ark
-        const ang = a.slot * CONVOY_SPACING + 0.4, R = CONVOY_RADIUS;
+        // no threat: the convoy reforms into its ring and keeps orbiting the Ark
+        a.orbitA = (a.orbitA ?? a.slot * CONVOY_SPACING + 0.4) + dt * CONVOY_ORBIT_RATE;
+        const ang = a.orbitA, R = CONVOY_RADIUS;
         tx = ark.x + Math.cos(ang) * R; ty = ark.y + Math.sin(ang) * R;
         faceX = null;
+        a.heading = ang + Math.PI / 2;   // tangent to the orbit, the way it travels
       }
       const d = Math.hypot(tx - a.x, ty - a.y), step = Math.min(d, speed * dt);
       if (d > 0) { a.x += (tx - a.x) / d * step; a.y += (ty - a.y) / d * step; }

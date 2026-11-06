@@ -5,7 +5,7 @@
 import {PLANETS} from "../../config/planets.js";
 import {SHIPS, hullMax} from "./ships.js";
 import {bankShip} from "./pseudo3d.js";
-import {RULES, arkOrbitSlot, ARK_ORBIT0} from "./rules.js";
+import {RULES, arkOrbitSlot, ARK_ORBIT0, NOVA_RADIUS} from "./rules.js";
 import {ARK_POS} from "./galaxy.js";
 import {EMERGENCY} from "./emergency.js";
 
@@ -17,8 +17,6 @@ export const PROPELLANT_PER_TICK = 0.05;  // propellant per tick of impulse burn
 
 // The Ark Endeavor moves like a ship: a burn to any point in space, paid in propellant, at its own speed.
 export const ARK_IMPULSE = 1.5, ARK_SPEED = 30;   // world units per game second
-// Radiation the Ark receives from the star (at the origin): full flux inside ARK_RAD_IN, none beyond ARK_RAD_OUT.
-export const ARK_RAD_IN = 44, ARK_RAD_OUT = 400;
 export function arkState(s) { if (!s.ark) s.ark = {x: ARK_POS.x, y: ARK_POS.y, dest: null}; return s.ark; }
 export function sendArkToPoint(s, pt) {
   const a = arkState(s);
@@ -36,12 +34,12 @@ export function stepArk(s, dt) {
   if (d <= step) { a.x = a.dest.x; a.y = a.dest.y; a.dest = null; return; }
   a.x += (dx / d) * step; a.y += (dy / d) * step;
 }
-// Radiation level 0 (none) to 4 (severe), from the Ark's distance to the star: the closer, the harder.
-export function arkRadiation(s) {
-  const a = arkState(s), d = Math.hypot(a.x, a.y);
-  if (d >= ARK_RAD_OUT) return 0;
-  const t = Math.max(0, (ARK_RAD_OUT - d) / (ARK_RAD_OUT - ARK_RAD_IN));
-  return Math.min(4, Math.ceil(4 * t * t));
+// Radiation level for the Ark: 0 unless a nova has gone off, then severe (4) only inside its blast zone.
+// Ships are shielded and take no radiation damage anywhere.
+export function arkRadiation(s, novaFired = false) {
+  if (!novaFired) return 0;
+  const a = arkState(s);
+  return Math.hypot(a.x, a.y) < NOVA_RADIUS ? 4 : 0;
 }
 export const MAX_PROPELLANT = 100;        // tank capacity used by depots and the telemetry bar
 export const REFUEL_PER_TICK = 0.6;       // propellant taken on per tick while docked

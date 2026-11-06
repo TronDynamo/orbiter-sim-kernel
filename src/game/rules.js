@@ -196,6 +196,9 @@ export function arkOrbitSlot(fleet, skipId) {
   return {r: ARK_ORBIT0 + k * ARK_ORBIT_GAP, ang: k * 2.4};
 }
 
+// Radius of the nova's radiation field around the star. Only a nova raises radiation, and only inside this zone.
+export const NOVA_RADIUS = 160;
+
 // One game second: production, upkeep, radiation, collapse, win/lose. Returns events.
 export function tick(state, P) {
   const events = [];
@@ -221,7 +224,9 @@ export function tick(state, P) {
   state.fuel -= RULES.LIFE_FUEL + state.tethers.length * RULES.TETHER_FUEL;
   state.fuel = Math.max(0, state.fuel);
   state.year = Math.floor(state.lastTick / RULES.YEAR_SECONDS) + 1;
-  state.radiation = state.year - 1;
+  // radiation is not a yearly climb: it rises only when a nova has gone off, and only the Ark inside the blast zone takes it
+  const ark = state.ark ?? ARK_POS;
+  state.radiation = state.novaFired && Math.hypot(ark.x, ark.y) < NOVA_RADIUS ? 4 : 0;
   if (!state.won && !state.lost) {
     if (state.hull <= 0) { state.lost = 'The Ark Endeavor breached its hull.'; events.push({lose: true, msg: state.lost}); }
     else if (state.fuel <= 0) { state.lost = 'The Ark is stranded: no fuel left.'; events.push({lose: true, msg: state.lost}); }

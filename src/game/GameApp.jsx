@@ -39,7 +39,7 @@ import {commanderSprite, ASSET_BASE, arkArt, raiderArt} from "./assetLoader.js";
 import {enginesFor} from "./thrusters.js";
 import {shadowAt, drawUmbra, drawLensing, drawDebrisBelt} from "./stellarFx.js";
 import {drawCombatFx, drawHullDamage, drawAllyWaves} from "./combatFx.js";
-import {newCombat, stepCombat, weldSparks, mountsOf, MOUNTS, SWAP_COST, nextMount, engaged} from "./combat.js";
+import {newCombat, stepCombat, weldSparks, mountsOf, MOUNTS, SWAP_COST, nextMount, engaged, CONVOY_JOIN} from "./combat.js";
 import {createAudio} from "./audio.js";
 
 // Alert klaxon: one shared synth, made on first use (by then the player has already clicked, so audio is allowed).
@@ -453,12 +453,20 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         s0.waveDrag = null;
         if (Math.hypot(d.cur.x - d.start.x, d.cur.y - d.start.y) > 8 / zu) {
           // each fleet keeps its place in the group: it flies to the drop point plus its offset from the press
+          // a fleet dropped back near the Ark rejoins the convoy and orbits it; anywhere else it holds station there
+          const ark = arkState(st.current);
+          let joined = 0;
           for (const id of d.ids) {
             const w = (combatRef.current.aid ?? []).find((a) => a.id === id), o = d.offs[id];
             if (!w || !o) continue;
-            w.dest = {x: d.cur.x + o.x, y: d.cur.y + o.y}; w.convoy = false; w.phase = "station";
+            const tx = d.cur.x + o.x, ty = d.cur.y + o.y;
+            if (Math.hypot(tx - ark.x, ty - ark.y) <= CONVOY_JOIN) { w.convoy = true; w.dest = null; joined++; continue; }
+            w.dest = {x: tx, y: ty}; w.convoy = false; w.phase = "station";
           }
-          say(d.ids.length > 1 ? `${d.ids.length} allied fleets move to the new position.` : `${factionById(d.ids[0])?.name ?? "Allied fleet"} moves to the new position.`);
+          const moved = d.ids.length - joined;
+          say(joined && !moved ? (d.ids.length > 1 ? `${d.ids.length} allied fleets rejoin your convoy.` : `${factionById(d.ids[0])?.name ?? "Allied fleet"} rejoins your convoy.`)
+            : joined ? `${joined} allied fleet${joined > 1 ? "s" : ""} rejoin${joined > 1 ? "" : "s"} the convoy; ${moved} hold${moved > 1 ? "" : "s"} station.`
+            : d.ids.length > 1 ? `${d.ids.length} allied fleets move to the new position.` : `${factionById(d.ids[0])?.name ?? "Allied fleet"} moves to the new position.`);
         }
         refresh();
         return;
@@ -1042,6 +1050,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         while (Math.floor(gameT) > s.lastTick && !s.won && !s.lost) {
           s.lastTick += 1;
           s.elapsed += 1;
+          s.novaFired = !!(kernel && (kernel.starSupernova || kernel.starCollapsed));
           if (s.elapsed >= s.senate.next) convene();
           for (const ev of tick(s, P)) say(ev.msg, !!ev.win);
         }
@@ -1397,7 +1406,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
   const s = st.current;
   const over = s.won || s.lost;
   const yr = s.year || 1;
-  const arkRad = arkRadiation(s);   // the Ark's own radiation, from its distance to the star
+  const arkRad = arkRadiation(s, !!s.novaFired);   // the Ark's radiation: only after a nova, only inside its blast zone
   const radiationLabel = ["None", "Low", "Rising", "High", "Severe"][arkRad];
   const hullPct = Math.max(0, Math.round(s.hull));
   const selShip = u.current.selected != null ? s.fleet.find((f) => f.id === u.current.selected) : null;
