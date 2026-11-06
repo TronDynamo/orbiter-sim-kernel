@@ -243,7 +243,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       }
       if (u.current.msg === START_MSG) { u.current.msg = ""; u.current.msgWin = false; refresh(); }
       const open = u.current;
-      if (open.shipyard || open.armory || open.comms || open.senate) { open.shipyard = false; open.armory = false; open.comms = false; open.senate = false; refresh(); return; }
+      if (open.shipyard || open.armory || open.comms || open.senate) { open.shipyard = false; open.armory = false; open.comms = false; open.senate = false; applySpeed(); refresh(); return; }
       const P = positions(); if (!P) return;
       const p = toWorld(e);
       // Phones have no right-click: with a ship selected, tap a world once to choose it, then again to send.
