@@ -96,3 +96,31 @@ test("allied waves keep formation spacing instead of stacking", () => {
   const d = Math.hypot(c.aid[0].x - c.aid[1].x, c.aid[0].y - c.aid[1].y);
   assert.ok(d >= 40, `spacing ${d.toFixed(1)}`);
 });
+
+test("a convoy takes a wedge in front of the Ark toward the threat, and reforms when it is gone", () => {
+  const c = newCombat();
+  const ark = {x: 0, y: 0};
+  c.aid = [0, 1, 2].map((slot) => ({id: FACTIONS[slot].id, n: 2, dps: 4, hull: 120, convoy: true, slot, x: 0, y: 0}));
+  c.raiders.push({id: 99, x: 600, y: 0, vx: 0, vy: 0, hp: 1e9, maxHp: 1e9, mounts: [], bounty: 0});
+  const env = {dt: 0.05, fleet: [], planets: [], core: {x: 0, y: 0}, pos: () => null, tech: {}, rand: () => 0.5, bodies: [], ark};
+  for (let i = 0; i < 200; i++) stepCombat(c, env);
+  for (const a of c.aid) assert.ok(a.x > 40, `fleet ${a.slot} in front of the Ark: x=${a.x.toFixed(1)}`);
+  c.raiders.length = 0;
+  for (let i = 0; i < 400; i++) stepCombat(c, env);
+  for (const a of c.aid) {
+    const r = Math.hypot(a.x - ark.x, a.y - ark.y);
+    assert.ok(Math.abs(r - 80) < 12, `fleet ${a.slot} back in its ring: r=${r.toFixed(1)}`);
+  }
+});
+
+test("a convoy fleet under fire from a close raider sidesteps, weaving across the line", () => {
+  const c = newCombat();
+  const ark = {x: 0, y: 0};
+  c.aid = [{id: ally, n: 2, dps: 4, hull: 120, convoy: true, slot: 0, x: 0, y: 0}];
+  c.raiders.push({id: 99, x: 150, y: 0, vx: 0, vy: 0, hp: 1e9, maxHp: 1e9, mounts: [], bounty: 0});
+  const env = {dt: 0.05, fleet: [], planets: [], core: {x: 0, y: 0}, pos: () => null, tech: {}, rand: () => 0.5, bodies: [], ark};
+  const ys = [];
+  for (let i = 0; i < 120; i++) { stepCombat(c, env); ys.push(c.aid[0].y); }
+  const span = Math.max(...ys.slice(60)) - Math.min(...ys.slice(60));
+  assert.ok(span > 40, `weaving span ${span.toFixed(1)}`);
+});

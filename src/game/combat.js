@@ -81,6 +81,11 @@ const AID_STATION = 120;             // the station an allied wave holds beside 
 const CONVOY_RADIUS = 80;            // convoy formation distance from the Ark
 const CONVOY_SPACING = 1.1;          // radians between convoy slots
 const AID_SPACING = 46;              // minimum distance kept between allied waves
+const WEDGE_FRONT = 110;             // the convoy wedge: lead fleet distance from the Ark, toward the threat
+const WEDGE_ROW = 45;                // each rank falls back this far
+const WEDGE_WING = 60;               // each wing sits this far out to the side
+const DODGE_RANGE = 220;             // a raider this close makes a fleet dodge
+const DODGE_AMPLITUDE = 45;          // sidestep distance while dodging
 // Distance from point p to the segment a-b. Shots are swept along their path, so a fast round cannot skip a target.
 function segDist(p, a, b) {
   const vx = b.x - a.x, vy = b.y - a.y, len2 = vx * vx + vy * vy;
@@ -273,11 +278,35 @@ export function stepCombat(state, env) {
   for (const a of state.aid) {
     // a convoy wave holds its slot beside the Ark, so it moves wherever the Ark goes
     if (a.convoy) {
-      const ang = a.slot * CONVOY_SPACING + 0.4, R = CONVOY_RADIUS;
-      const tx = (env.ark?.x ?? 0) + Math.cos(ang) * R, ty = (env.ark?.y ?? 0) + Math.sin(ang) * R;
-      const d = Math.hypot(tx - a.x, ty - a.y), step = Math.min(d, AID_SPEED * dt * 1.5);
+      const ark = env.ark ?? {x: 0, y: 0};
+      a.weave = (a.weave ?? 0) + dt;
+      const threat = state.raiders.length
+        ? state.raiders.reduce((best, r) => (dist(r, ark) < dist(best, ark) ? r : best)) : null;
+      let tx, ty, speed = AID_SPEED * 1.5, faceX, faceY;
+      if (threat) {
+        // military wedge: the lead fleet holds the front toward the threat, the rest fall back on either wing
+        const L = Math.hypot(threat.x - ark.x, threat.y - ark.y) || 1;
+        const ux = (threat.x - ark.x) / L, uy = (threat.y - ark.y) / L;
+        const px = -uy, py = ux;
+        const k = a.slot, rank = Math.floor((k + 1) / 2), wing = k === 0 ? 0 : (k % 2 ? 1 : -1);
+        const fwd = WEDGE_FRONT - rank * WEDGE_ROW;
+        const lat = wing * rank * WEDGE_WING;
+        // dodge: a fleet under fire from a raider in reach sidesteps, weaving across the line
+        const near = Math.min(...state.raiders.map((r) => dist(r, a)));
+        const weave = near < DODGE_RANGE ? Math.sin(a.weave * 3.2 + k) * DODGE_AMPLITUDE : 0;
+        if (near < DODGE_RANGE) speed = AID_SPEED * 2;
+        tx = ark.x + ux * fwd + px * (lat + weave);
+        ty = ark.y + uy * fwd + py * (lat + weave);
+        faceX = threat.x; faceY = threat.y;
+      } else {
+        // no threat: the convoy reforms into its ring around the Ark
+        const ang = a.slot * CONVOY_SPACING + 0.4, R = CONVOY_RADIUS;
+        tx = ark.x + Math.cos(ang) * R; ty = ark.y + Math.sin(ang) * R;
+        faceX = null;
+      }
+      const d = Math.hypot(tx - a.x, ty - a.y), step = Math.min(d, speed * dt);
       if (d > 0) { a.x += (tx - a.x) / d * step; a.y += (ty - a.y) / d * step; }
-      if (state.raiders.length) a.heading = Math.atan2(state.raiders[0].y - a.y, state.raiders[0].x - a.x);
+      if (faceX != null) a.heading = Math.atan2(faceY - a.y, faceX - a.x);
       continue;
     }
     // a wave the player dragged flies to its new point, then holds there as a station
