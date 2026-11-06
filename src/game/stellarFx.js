@@ -28,22 +28,30 @@ export function shadowAt(q, star, bodies, length = UMBRA_LENGTH) {
   return s;
 }
 
-// Draws the cone as a soft gradient from the body's limb to the far end. toS maps world to screen.
-export function drawUmbra(ctx, toS, star, body, R, length = UMBRA_LENGTH) {
+// The planet's shadow, cast away from the star. It is a soft, transparent oval that fades out toward its end
+// and is never wider than the planet itself, so it reads as shade rather than a hard spike.
+export function drawUmbra(ctx, toS, star, body, R) {
   const dx = body.x - star.x, dy = body.y - star.y, dl = Math.hypot(dx, dy);
   if (dl < 1e-6) return;
-  const ux = dx / dl, uy = dy / dl, nx = -uy, ny = ux;
-  const a = toS({x: body.x + nx * R, y: body.y + ny * R});
-  const b = toS({x: body.x - nx * R, y: body.y - ny * R});
-  const tip = toS({x: body.x + ux * length, y: body.y + uy * length});
+  const ux = dx / dl, uy = dy / dl;
   const base = toS(body);
-  const g = ctx.createLinearGradient(base.x, base.y, tip.x, tip.y);
-  g.addColorStop(0, "rgba(2,6,23,0.42)");
+  const ahead = toS({x: body.x + ux * R, y: body.y + uy * R});
+  const side = toS({x: body.x - uy * R, y: body.y + ux * R});
+  const rPx = Math.hypot(side.x - base.x, side.y - base.y);   // the planet's radius on screen
+  const ang = Math.atan2(ahead.y - base.y, ahead.x - base.x); // away from the star
+  // centred just behind the limb, so the planet covers the inner part of the shadow
+  const cx = base.x + Math.cos(ang) * rPx * 0.9, cy = base.y + Math.sin(ang) * rPx * 0.9;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(ang);
+  ctx.scale(1.6, 1);
+  const g = ctx.createRadialGradient(0, 0, 0, 0, 0, rPx);
+  g.addColorStop(0, "rgba(2,6,23,0.09)");
+  g.addColorStop(0.5, "rgba(2,6,23,0.045)");
   g.addColorStop(1, "rgba(2,6,23,0)");
   ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.moveTo(a.x, a.y); ctx.lineTo(tip.x, tip.y); ctx.lineTo(b.x, b.y); ctx.closePath();
-  ctx.fill();
+  ctx.beginPath(); ctx.arc(0, 0, rPx, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
 }
 
 // Lensing around a black hole or pulsar, approximated in 2D: concentric photon rings plus background

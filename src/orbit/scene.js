@@ -110,6 +110,7 @@ export class OrbitScene {
     this.zoomTarget = this.zoomUser; // where the zoom glides to
     this.followFn = null; // () => {x, y} world point the camera centres on, or null
     this.camF = null;     // smoothed camera centre while following
+    this.followShiftPx = {x: 0, y: 0};   // screen offset of the followed body from the centre
     this.time = 0;
     this.textures = {
       origin: null,
@@ -196,8 +197,10 @@ export class OrbitScene {
     if (snap) { this.zoomUser = this.zoomTarget; this.base = this.baseRaw * this.zoomUser; }
   }
   // Camera follows fn() while zoomed in at or above ZOOM_FOLLOW. Pass null to release.
-  setFollow(fn) {
+  // shiftPx moves the followed body on screen from the centre (e.g. up, to clear a panel). Default: centred.
+  setFollow(fn, shiftPx = null) {
     this.followFn = fn ?? null;
+    this.followShiftPx = shiftPx ?? {x: 0, y: 0};
     this.pan = null; // following a body takes the camera back from a manual pan
   }
 
@@ -265,8 +268,11 @@ export class OrbitScene {
     const p = this.followFn && this.zoomUser >= ZOOM_FOLLOW ? this.followFn() : null;
     if (!p) { this.camF = null; return; }
     if (!this.camF) this.camF = {x: c[2], y: c[3]};
-    this.camF.x = easeToward(this.camF.x, p.x, dt, FOCUS_GLIDE);
-    this.camF.y = easeToward(this.camF.y, p.y, dt, FOCUS_GLIDE);
+    // the camera sits off the body by the screen shift, so the body is drawn at centre + shift
+    const zb = c[4] * this.base, sh = this.followShiftPx ?? {x: 0, y: 0};
+    const tx = p.x - sh.x / zb, ty = p.y - sh.y / zb;
+    this.camF.x = easeToward(this.camF.x, tx, dt, FOCUS_GLIDE);
+    this.camF.y = easeToward(this.camF.y, ty, dt, FOCUS_GLIDE);
     c[2] = this.camF.x; c[3] = this.camF.y;
   }
 
@@ -385,12 +391,14 @@ export class OrbitScene {
       { ox: -160 + Math.sin(drift * 0.13) * 40, oy: 40 + Math.cos(drift * 0.1) * 25, r: 260, a: 0.09 },
       { ox: 180 + Math.cos(drift * 0.11) * 40, oy: -60 + Math.sin(drift * 0.09) * 25, r: 230, a: 0.07 },
     ];
+    // the haze takes the sun's own colour, so a blue sun has a blue haze rather than an orange one
+    const tint = g.sun?.base ?? g.nebula;
     for (const b of blobs) {
       const x = sun.x + b.ox * z, y = sun.y + b.oy * z, r = b.r * z;
       const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
-      grad.addColorStop(0, rgba(g.nebula, b.a));
-      grad.addColorStop(0.5, rgba(g.nebula, b.a * 0.35));
-      grad.addColorStop(1, rgba(g.nebula, 0));
+      grad.addColorStop(0, rgba(tint, b.a));
+      grad.addColorStop(0.5, rgba(tint, b.a * 0.35));
+      grad.addColorStop(1, rgba(tint, 0));
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, w, h);
     }

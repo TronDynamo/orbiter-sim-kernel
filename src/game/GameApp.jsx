@@ -588,7 +588,10 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       }
       const id = hitBody(st.current, P, w);
       if (id && isPlanet(id)) {
-        scene.setFollow(() => positions()?.[id] ?? null); scene.zoomTo(ZOOM_FOCUS);
+        // On a phone the info panel covers the lower half, so the world is drawn in the upper part of the view.
+        const narrow = ov.clientWidth < 700;
+        scene.setFollow(() => positions()?.[id] ?? null, narrow ? {x: 0, y: -0.25 * ov.clientHeight} : null);
+        scene.zoomTo(ZOOM_FOCUS);
         say(`${planetName(id)} centred.`); refresh();
       } else if (id === "ark") {
         // The Ark centres the camera so its commander art can be seen up close.
@@ -967,12 +970,14 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       // the commander's Ark art when zoomed in, otherwise the arrow
       // Far out the Ark is an arrow; the commander's Ark art replaces it only when zoomed in close.
       const arkImg = scene.zoomUser >= ZOOM_DETAIL ? arkArt(st.current.commander) : null;
+      // Capped to a fifth of the smaller screen side, so a phone never shows the Ark larger than the view.
+      const arkSize = Math.min(150 * scene.zoomUser / 2, 0.2 * Math.min(ctx.canvas.clientWidth, ctx.canvas.clientHeight));
       if (arkImg) {
-        const aw = 150 * scene.zoomUser / 2, ah = aw * arkImg.naturalHeight / arkImg.naturalWidth;
+        const aw = arkSize, ah = aw * arkImg.naturalHeight / arkImg.naturalWidth;
         ctx.drawImage(arkImg, ark.x - aw / 2, ark.y - ah / 2, aw, ah);
       } else drawArk(ctx, ark.x, ark.y);
       if (s0.arkSel) { ctx.strokeStyle = "#7dd3fc"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(ark.x, ark.y, 24, 0, Math.PI * 2); ctx.stroke(); }
-      ctx.font = "12px system-ui"; ctx.fillStyle = "#cfd8e6"; ctx.fillText("Ark Endeavor", ark.x, arkImg ? ark.y - (150 * scene.zoomUser / 2) * (arkImg.naturalHeight / arkImg.naturalWidth) / 2 - 8 : ark.y - 20);
+      ctx.font = "12px system-ui"; ctx.fillStyle = "#cfd8e6"; ctx.fillText("Ark Endeavor", ark.x, arkImg ? ark.y - arkSize * (arkImg.naturalHeight / arkImg.naturalWidth) / 2 - 8 : ark.y - 20);
       for (const r of s.relays) {
         const q = toS(r);
         drawRelay(ctx, q.x, q.y);
@@ -1238,7 +1243,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
     const onFocus = () => { if (s0.blurPaused) { s0.blurPaused = false; s0.paused = false; applySpeed(); refresh(); } };
     window.addEventListener("blur", onBlur);
     window.addEventListener("focus", onFocus);
-    window.__relic = {maxTension: RULES.MAX_TENSION, kernel, scene, u: s0, st, combat: () => combatRef.current, say, refresh, positions: () => positions(), hitBody: (p) => hitBody(st.current, positions(), p), get kernel() { return kernel; }, resetKernel: () => { kernel.reset(); kBase = null; gainSeen.fill(0); creditSeen = 0; buildTick = 0; snapSeen.clear(); }};
+    window.__relic = {maxTension: RULES.MAX_TENSION, scene, u: s0, st, combat: () => combatRef.current, say, refresh, positions: () => positions(), hitBody: (p) => hitBody(st.current, positions(), p), get kernel() { return kernel; }, resetKernel: () => { kernel.reset(); kBase = null; gainSeen.fill(0); creditSeen = 0; buildTick = 0; snapSeen.clear(); }};
     applySpeed(); // a tutorial starts with the briefing open, so the clock must stop before the first frame
     return () => {
       cancelAnimationFrame(raf);
