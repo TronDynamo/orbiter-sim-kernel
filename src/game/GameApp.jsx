@@ -577,18 +577,29 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       return f && P2 ? shipPosition(f, P2) : null;
     };
     // Glide and zoom to a world (or the Ark) at world point w. Used by double-click and by a double-tap on touch screens.
+    // On a phone the world sits in the clear band between the top resource HUD and the Colony panel.
+    // Measured from the real edges each frame, so it stays centred on any viewport height.
+    const pocketShift = () => {
+      const oy = ov.getBoundingClientRect().top;
+      // the lowest of the top controls: the resource bar, the pause row and the ARK badge
+      const tops = [".hud-ribbon", ".hud-controls", ".hud-ark-badge"].map((q) => document.querySelector(q)?.getBoundingClientRect().bottom ?? 0);
+      const panel = [...document.querySelectorAll("aside")].find((a) => a.textContent.includes("Colony Governor"))?.getBoundingClientRect();
+      const top = Math.max(...tops) - oy;
+      const bottom = panel ? panel.top - oy : ov.clientHeight;
+      return {x: 0, y: (top + bottom) / 2 - ov.clientHeight / 2};
+    };
     const focusWorld = (w, touch = false) => {
       const P = positions(); if (!P) return;
       const id = hitBody(st.current, P, w) ?? (touch ? nearestPlanet(P, w) : null);
+      const narrow = ov.clientWidth < 700;   // phones: closer out, centred in the pocket
+      const zoom = narrow ? 2.2 : ZOOM_FOCUS;
+      const shift = narrow ? pocketShift : null;
       if (id && isPlanet(id)) {
-        // On a phone the info panel covers the lower half, so the world is drawn in the upper part of the view.
-        const narrow = ov.clientWidth < 700;
-        scene.setFollow(() => positions()?.[id] ?? null, narrow ? {x: 0, y: -0.19 * ov.clientHeight} : null);
-        scene.zoomTo(ZOOM_FOCUS);
+        scene.setFollow(() => positions()?.[id] ?? null, shift);
+        scene.zoomTo(zoom);
         say(`${planetName(id)} centred.`); refresh();
       } else if (id === "ark") {
-        // The Ark centres the camera so its commander art can be seen up close.
-        scene.setFollow(() => arkState(st.current)); scene.zoomTo(ZOOM_FOCUS);
+        scene.setFollow(() => arkState(st.current), shift); scene.zoomTo(zoom);
         say("Ark Endeavor centred."); refresh();
       }
     };

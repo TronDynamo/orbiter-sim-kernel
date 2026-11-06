@@ -269,11 +269,15 @@ export class OrbitScene {
     if (!p) { this.camF = null; return; }
     if (!this.camF) this.camF = {x: c[2], y: c[3]};
     // the camera sits off the body by the screen shift, so the body is drawn at centre + shift
-    const zb = c[4] * this.base, sh = this.followShiftPx ?? {x: 0, y: 0};
+    const zb = c[4] * this.base;
+    const sh = (typeof this.followShiftPx === 'function' ? this.followShiftPx() : this.followShiftPx) ?? {x: 0, y: 0};
     const tx = p.x - sh.x / zb, ty = p.y - sh.y / (zb * (this.pitch ?? 1));   // toScreen scales y by the pitch too
     this.camF.x = easeToward(this.camF.x, tx, dt, FOCUS_GLIDE);
     this.camF.y = easeToward(this.camF.y, ty, dt, FOCUS_GLIDE);
     c[2] = this.camF.x; c[3] = this.camF.y;
+    // Pocket mode (phones): the engine eases the screen centre toward its own panel-avoiding point after each step.
+    // Pin it to the canvas middle, so the offset above lands the body exactly where the pocket is.
+    if (typeof this.followShiftPx === 'function') { c[0] = this.w / 2; c[1] = this.h / 2; }
   }
 
   applyPositions() {
