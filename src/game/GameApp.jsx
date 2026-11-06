@@ -356,7 +356,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         }
       }
       if (picked && s0.selected === picked.id) { s0.selected = null; s0.inspect = false; applySpeed(); scene.setFollow(null); say("Ship deselected."); refresh(); return; }
-      if (picked) { s0.selected = picked.id; s0.panelHidden = true; scene.setFollow(shipFollow(picked.id)); say(`${SHIPS[picked.type].name} selected. Right-click a world to send it, click empty space to send it there, or tap twice on a phone.`); refresh(); return; }
+      if (picked) { s0.selected = picked.id; s0.panelHidden = true; say(`${SHIPS[picked.type].name} selected. Right-click a world to send it, click empty space to send it there, or tap twice on a phone.`); refresh(); return; }
       const id = hitBody(st.current, P, p);
       if (id) s0.drag = {from: id, cur: p, start: p};
       else s0.pan = {x: e.clientX, y: e.clientY, moved: false}; // empty space: a drag pans the map, a tap deselects
