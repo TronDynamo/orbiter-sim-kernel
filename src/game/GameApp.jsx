@@ -591,7 +591,8 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       const tops = [".hud-ribbon", ".hud-controls", ".hud-ark-badge"].map((q) => document.querySelector(q)?.getBoundingClientRect().bottom ?? 0);
       const panel = [...document.querySelectorAll("aside")].find((a) => a.textContent.includes("Colony Governor"))?.getBoundingClientRect();
       const top = Math.max(...tops) - oy;
-      const bottom = panel ? panel.top - oy : ov.clientHeight;
+      // no panel yet: assume the drawer will cover the lower part, so aim for the upper half
+      const bottom = panel ? panel.top - oy : ov.clientHeight * 0.6;
       return {x: 0, y: (top + bottom) / 2 - ov.clientHeight / 2};
     };
     const focusWorld = (w, touch = false) => {

@@ -23,7 +23,6 @@ export const ZOOM_DETAIL = 1.8;   // at or above this, ships draw as detailed hu
 export const ZOOM_FOLLOW = 2.0;   // at or above this, the camera centres on the followed body
 export const ZOOM_FOCUS = 3.5;    // double-click target zoom
 const ZOOM_GLIDE = 7;             // zoom approach rate (1/s)
-const FOCUS_GLIDE = 30;           // camera centre approach rate (1/s): tight lock on a followed world, still eased
 
 // Frame-rate independent exponential approach: after time dt the gap has closed by 1 - exp(-rate * dt).
 export function easeToward(cur, target, dt, rate) {
@@ -275,14 +274,14 @@ export class OrbitScene {
     // A focus lock keeps following while zooming in from far out (below ZOOM_FOLLOW), so the engine cannot pull the view to empty space.
     const p = this.followFn && (this.locked || this.zoomUser >= ZOOM_FOLLOW) ? this.followFn() : null;
     if (!p) { this.camF = null; return; }
-    if (!this.camF) this.camF = {x: c[2], y: c[3]};
     // the camera sits off the body by the screen shift, so the body is drawn at centre + shift
     const zb = c[4] * this.base;
     const sh = (typeof this.followShiftPx === 'function' ? this.followShiftPx() : this.followShiftPx) ?? {x: 0, y: 0};
-    const tx = p.x - sh.x / zb, ty = p.y - sh.y / (zb * (this.pitch ?? 1));   // toScreen scales y by the pitch too
-    this.camF.x = easeToward(this.camF.x, tx, dt, FOCUS_GLIDE);
-    this.camF.y = easeToward(this.camF.y, ty, dt, FOCUS_GLIDE);
-    c[2] = this.camF.x; c[3] = this.camF.y;
+    // Hard lock, every frame: the camera is the followed body's position plus the offset. No easing, so it cannot
+    // trail the orbit or pass through another point on the way.
+    c[2] = p.x - sh.x / zb;
+    c[3] = p.y - sh.y / (zb * (this.pitch ?? 1));   // toScreen scales y by the pitch too
+    this.camF = {x: c[2], y: c[3]};
     // Pocket mode (phones): the engine eases the screen centre toward its own panel-avoiding point after each step.
     // Pin it to the canvas middle, so the offset above lands the body exactly where the pocket is.
     if (typeof this.followShiftPx === 'function') { c[0] = this.w / 2; c[1] = this.h / 2; }
