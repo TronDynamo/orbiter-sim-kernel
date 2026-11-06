@@ -4,7 +4,7 @@ import {useEffect, useRef, useState} from "react";
 import {OrbitScene, ZOOM_DETAIL, ZOOM_FOCUS} from "../orbit/scene.js";
 import {BODY_STRIDE} from "../orbit/engine.js";
 import {ARK_POS} from "./galaxy.js";
-import {bootSystem, homeSystem, systemFromSector, kernelSystemFromSector, systemState, rehomeFleet, resourceFor, extraDestinations, RESOURCE_LABEL} from "./currentSystem.js";
+import {bootSystem, homeSystem, homeBuild, systemFromSector, kernelSystemFromSector, systemState, rehomeFleet, resourceFor, extraDestinations, RESOURCE_LABEL} from "./currentSystem.js";
 import {loadOrbiterKernel, TICKS_PER_SECOND, WEAPON, WORLD, CONDUIT_ERR, CONDUIT_RULES} from "./kernel/orbiterKernel.js";
 import {ARMORY, drawCage, drawMagma, drawIrradiated, drawBlackHole, drawSupernova} from "./armory.js";
 import {STAR_COLLAPSE, VORTEX, DRILL_CRACK_DISTANCE, PLANETS as PLANET_DEFS, STAR as STAR_DEF} from "../../config/planets.js";
@@ -156,6 +156,8 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       st.current = {...newState(), ...session.save.state};
     } else {
       kernel.beginAt(seedOffset(session.seed));
+      // A new campaign's home galaxy: the kernel must simulate the same worlds the scene draws (after beginAt resets it).
+      if (commanderRef.current) kernel.loadSystem(kernelSystemFromSector(homeBuild(commanderRef.current).sector));
     }
     scene.orbitScale = getSettings().orbitOpacity / 35;
     const syncKernel = () => {

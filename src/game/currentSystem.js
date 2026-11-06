@@ -199,11 +199,15 @@ function romanOrdinal(n) {
 
 // A commander's home system: a generated system with 3 to 8 planets (random per commander, stable for that commander),
 // given the commander's own sun colour, planet colours and planet sizes. Built the same way as any other sector.
-export function homeSystem(commanderId) {
+const HOME_ORBIT_START = 180, HOME_ORBIT_STEP = 80;
+// The commander's home sector and the system built from it (same result every time for the same commander).
+export function homeBuild(commanderId) {
   const id = `HOME-${commanderId}`.toUpperCase();
   const rng = makeRng(`home:${commanderId}`);
   const planetCount = 3 + Math.floor(rng() * (MAX_SYSTEM_PLANETS - 2));   // 3 to 8, random per commander
-  const sector = {id, name: id, starType: "Yellow Sol", anchorType: "sol", planets: makePlanets(id, planetCount, rng)};
+  // Home orbits are spaced wide enough that every track clearly clears the sun and reads as a real orbit.
+  const planets = makePlanets(id, planetCount, rng).map((p, i) => ({...p, orbitRadius: HOME_ORBIT_START + i * HOME_ORBIT_STEP}));
+  const sector = {id, name: id, starType: "Yellow Sol", anchorType: "sol", planets};
   const sys = systemFromSector(sector);
   // Real world names from the same word lists as the generated sectors, unique within this home.
   const used = new Set();
@@ -213,5 +217,6 @@ export function homeSystem(commanderId) {
     used.add(name);
     p.name = name;
   }
-  return applyHomeLook(sys, commanderId);
+  return {sector, sys: applyHomeLook(sys, commanderId)};
 }
+export function homeSystem(commanderId) { return homeBuild(commanderId).sys; }
