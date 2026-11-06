@@ -609,10 +609,10 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       const shift = narrow ? pocketShift : null;
       if (id && isPlanet(id)) {
         scene.setFollow(() => positions()?.[id] ?? null, shift);
-        scene.snapCamera(); scene.zoomTo(zoom); s0.focusId = id;
+        scene.snapCamera(); scene.zoomTo(zoom, true); s0.focusId = id;   // lock at once: no zoom glide through space
         say(`${planetName(id)} centred.`); refresh();
       } else if (id === "ark") {
-        scene.setFollow(() => arkState(st.current), shift); scene.snapCamera(); scene.zoomTo(zoom);
+        scene.setFollow(() => arkState(st.current), shift); scene.snapCamera(); scene.zoomTo(zoom, true);
         say("Ark Endeavor centred."); refresh();
       }
     };
