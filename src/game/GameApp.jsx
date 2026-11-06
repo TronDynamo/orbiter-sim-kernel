@@ -993,7 +993,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
     const onFocus = () => { if (s0.blurPaused) { s0.blurPaused = false; s0.paused = false; applySpeed(); refresh(); } };
     window.addEventListener("blur", onBlur);
     window.addEventListener("focus", onFocus);
-    window.__relic = {scene, u: s0, st, say, refresh, get kernel() { return kernel; }, resetKernel: () => { kernel.reset(); kBase = null; gainSeen.fill(0); creditSeen = 0; buildTick = 0; snapSeen.clear(); }};
+    window.__relic = {maxTension: RULES.MAX_TENSION, scene, u: s0, st, say, refresh, positions: () => positions(), hitBody: (p) => hitBody(st.current, positions(), p), get kernel() { return kernel; }, resetKernel: () => { kernel.reset(); kBase = null; gainSeen.fill(0); creditSeen = 0; buildTick = 0; snapSeen.clear(); }};
     applySpeed(); // a tutorial starts with the briefing open, so the clock must stop before the first frame
     return () => {
       cancelAnimationFrame(raf);
@@ -1356,7 +1356,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       ) : null}
 
       {u.current.shipyard ? (
-        <aside className="glass" style={{position: "absolute", right: 16, top: 84, bottom: 96, overflowY: "auto", width: 300, padding: 14, zIndex: 8, borderRadius: 12}}>
+        <aside className="glass shipyard-panel" style={{position: "absolute", right: 16, top: 84, bottom: 96, overflowY: "auto", width: 300, padding: 14, zIndex: 8, borderRadius: 12, overscrollBehavior: "contain", touchAction: "pan-y", WebkitOverflowScrolling: "touch"}}>
           <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6}}>
             <b>Shipyard</b>
             <button className="pill zelo" onClick={toggleShipyard}>Close</button>

@@ -128,6 +128,11 @@ body { font-family: Inter, system-ui, sans-serif; }
 .academy-skip { width: 100%; padding: 10px 14px; background: transparent; color: #94a3b8; border-color: rgba(148, 163, 184, 0.3); }
 .academy-skip:hover { color: #e2e8f0; }
 
+/* Shipyard list: a visible, thin scrollbar so the rest of the ships are easy to find. Wheel, trackpad and touch all scroll it. */
+.shipyard-panel { scrollbar-width: thin; scrollbar-color: rgba(56,189,248,0.7) transparent; }
+.shipyard-panel::-webkit-scrollbar { width: 6px; }
+.shipyard-panel::-webkit-scrollbar-thumb { background: rgba(56,189,248,0.7); border-radius: 3px; }
+
 /* Map gestures: a drag on the game canvas must not scroll the page. */
 canvas.stage { touch-action: none; }
 .hud-toast { top: 60px; }
