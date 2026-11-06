@@ -860,14 +860,14 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         ctx.save(); ctx.setLineDash([4, 6]); ctx.strokeStyle = "rgba(125,211,252,0.9)"; ctx.lineWidth = 1.5;
         ctx.beginPath(); ctx.moveTo(ark.x, ark.y); ctx.lineTo(dq.x, dq.y); ctx.stroke(); ctx.restore();
       }
-      // the commander's Ark art when zoomed in (screen-blended so its black backdrop vanishes), otherwise the arrow
+      // the commander's Ark art when zoomed in, otherwise the arrow
       const arkImg = scene.zoomUser >= ZOOM_DETAIL ? arkArt(st.current.commander) : null;
       if (arkImg) {
         const aw = 150 * scene.zoomUser / 2, ah = aw * arkImg.naturalHeight / arkImg.naturalWidth;
-        ctx.save(); ctx.globalCompositeOperation = "screen"; ctx.drawImage(arkImg, ark.x - aw / 2, ark.y - ah / 2, aw, ah); ctx.restore();
+        ctx.drawImage(arkImg, ark.x - aw / 2, ark.y - ah / 2, aw, ah);
       } else drawArk(ctx, ark.x, ark.y);
       if (s0.arkSel) { ctx.strokeStyle = "#7dd3fc"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(ark.x, ark.y, 24, 0, Math.PI * 2); ctx.stroke(); }
-      ctx.font = "12px system-ui"; ctx.fillStyle = "#cfd8e6"; ctx.fillText("Ark Endeavor", ark.x, ark.y - 20);
+      ctx.font = "12px system-ui"; ctx.fillStyle = "#cfd8e6"; ctx.fillText("Ark Endeavor", ark.x, arkImg ? ark.y - (150 * scene.zoomUser / 2) * (arkImg.naturalHeight / arkImg.naturalWidth) / 2 - 8 : ark.y - 20);
       for (const r of s.relays) {
         const q = toS(r);
         drawRelay(ctx, q.x, q.y);

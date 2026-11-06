@@ -58,14 +58,14 @@ export function commanderSprite(leaderId, role) {
   return spriteReady(SHIP_ART[key]) ? SHIP_ART[key] : null;
 }
 
-// Commander Ark art: public/assets/ark/<leader key>.jpg, loaded on first use. Null until decoded.
+// Commander Ark art: public/assets/ark/<leader key>.png (transparent, mockup panel removed), loaded on first use.
 const ARK_ART = {};
 export function arkArt(leaderId) {
   if (!leaderId) return null;
   const key = leaderId.split("_")[0];
   if (!ARK_ART[key]) {
     const img = new Image();
-    img.src = `${BASE}/ark/${key}.jpg`;
+    img.src = `${BASE}/ark/${key}.png`;
     ARK_ART[key] = img;
   }
   return spriteReady(ARK_ART[key]) ? ARK_ART[key] : null;
