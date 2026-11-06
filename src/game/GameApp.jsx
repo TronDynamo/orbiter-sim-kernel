@@ -26,7 +26,7 @@ import {SenateChamber} from "./SenateChamber.jsx";
 import {VictoryModal} from "./VictoryModal.jsx";
 import {RULES, newState, snapTethers, network, tick, tryTether, checkTether, cut, tetherAt, tensionOf, tensionColor, build, hitBody, distToTether, orderShip, shortfall, fireWeapon} from "./rules.js";
 import {SHIPS, SHIP_ORDER, COST_LABEL, drawShip, drawChevron, fleetPower, FLIGHT_LENGTH, DEPOT_COST} from "./ships.js";
-import {stepFleet, sendShip, shipPosition, interceptAt, depotPos, MAX_PROPELLANT, deploySatellite, SURVEY_TICKS, CARGO_CAP} from "./fleet.js";
+import {stepFleet, sendShip, shipPosition, interceptAt, depotPos, MAX_PROPELLANT, deploySatellite, SURVEY_TICKS, CARGO_CAP, IMPULSE, OVERCLOCK} from "./fleet.js";
 import {Icon, drawArk, drawRelay} from "./icons.jsx";
 import {Academy} from "./Academy.jsx";
 import {drawPseudo3DShip, sunLocal, emitPlume, updatePlumes, drawPlumes} from "./pseudo3d.js";
@@ -678,7 +678,18 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
             ctx.strokeStyle = "#38bdf8"; ctx.lineWidth = 1.2; ctx.setLineDash([3, 4]);
             ctx.beginPath(); ctx.arc(q.x, q.y, closeUp ? 18 : 8, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
             const T = f.to && P[f.to];
-            if (T && (f.mode === "transit" || f.mode === "surf")) {
+            if (T && f.mode === "transit") {
+              // Show where the world will be when this ship arrives, so players can time a meeting themselves.
+              const qw = shipPosition(f, P);
+              const speed = (IMPULSE[f.type] ?? 1.5) * (f.overclock ? OVERCLOCK.speed : 1);
+              const v = lastVel[f.to] ?? {x: 0, y: 0};
+              const tau = Math.hypot(T.x - qw.x, T.y - qw.y) / speed;
+              const is = toS({x: T.x + v.x * tau, y: T.y + v.y * tau});
+              ctx.strokeStyle = "rgba(56,189,248,0.6)"; ctx.lineWidth = 1;
+              ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(is.x, is.y); ctx.stroke();
+              ctx.strokeStyle = "rgba(56,189,248,0.9)"; ctx.setLineDash([2, 3]);
+              ctx.beginPath(); ctx.arc(is.x, is.y, closeUp ? 10 : 6, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+            } else if (T && f.mode === "surf") {
               const tq = toS(T); ctx.strokeStyle = "rgba(56,189,248,0.6)"; ctx.lineWidth = 1;
               ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(tq.x, tq.y); ctx.stroke();
             }
@@ -740,7 +751,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
     };
 
-    let fleetTick = -1, prevP = {};
+    let fleetTick = -1, prevP = {}, lastVel = {};
     let warpT = performance.now();
     let frames = 0, fpsT = performance.now(), prevStatus = null, lastAutosave = performance.now(), combatT = performance.now();
     const loop = (now) => {
@@ -757,6 +768,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           if (dt > 0) {
             const vel = {};
             for (const id of Object.keys(P)) if (prevP[id]) vel[id] = {x: (P[id].x - prevP[id].x) / dt, y: (P[id].y - prevP[id].y) / dt};
+            lastVel = vel; // the arrival marker predicts with the same world speeds the ships steer by
             for (const m of stepFleet(s, P, dt, {conduits: liveConduits(), velocity: vel})) say(m);
             if (s.jumpGate?.warp?.active) {
               advanceWarp(s.jumpGate, Math.max(0, (now - warpT) / 1000));
