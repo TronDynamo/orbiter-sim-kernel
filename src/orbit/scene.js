@@ -23,7 +23,7 @@ export const ZOOM_DETAIL = 1.8;   // at or above this, ships draw as detailed hu
 export const ZOOM_FOLLOW = 2.0;   // at or above this, the camera centres on the followed body
 export const ZOOM_FOCUS = 3.5;    // double-click target zoom
 const ZOOM_GLIDE = 7;             // zoom approach rate (1/s)
-const FOCUS_GLIDE = 6;            // camera centre approach rate (1/s)
+const FOCUS_GLIDE = 30;           // camera centre approach rate (1/s): tight lock on a followed world, still eased
 
 // Frame-rate independent exponential approach: after time dt the gap has closed by 1 - exp(-rate * dt).
 export function easeToward(cur, target, dt, rate) {
@@ -205,6 +205,11 @@ export class OrbitScene {
   }
 
   // Drag the map: move the camera focus by a screen-space delta (px), in world units at the current zoom.
+  // Put the camera centre on the followed body at once (no glide), so a zoom-in goes straight into it.
+  snapCamera() {
+    const p = this.followFn?.(); if (!p || !this.sim) return;
+    const c = this.sim.c; c[2] = p.x; c[3] = p.y; this.camF = {x: p.x, y: p.y}; this.pan = null;
+  }
   panBy(px, py) {
     const c = this.sim.c, z = c[4] * this.base, pitch = this.pitch ?? 1;
     if (!this.pan) this.pan = { x: c[2], y: c[3] };

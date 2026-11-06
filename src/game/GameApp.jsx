@@ -436,7 +436,10 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         refresh(); return;
       }
       const id = hitBody(st.current, P, p);
-      if (id) s0.drag = {from: id, cur: p, start: p};
+      // On a phone a finger on the focused world pans the map (a link would need two fingers to move the view);
+      // a tap on it still opens its Colony Governor.
+      if (id && !(e.pointerType === "touch" && id === s0.focusId && scene.followFn)) s0.drag = {from: id, cur: p, start: p};
+      else if (id) s0.pan = {x: e.clientX, y: e.clientY, moved: false, planet: id};
       else s0.pan = {x: e.clientX, y: e.clientY, moved: false}; // empty space: a drag pans the map, a tap deselects
       ov.setPointerCapture(e.pointerId);
     };
@@ -528,7 +531,8 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         // A tap on empty space sends the selected ship to that point. Dragging still pans.
         const ship = s0.selected != null ? st.current.fleet.find((f) => f.id === s0.selected) : null;
         const P = positions();
-        if (!s0.pan.moved && ship && P) { const r = orderBurn(ship, P, sendShipToPoint(st.current, ship, toWorld(e), P)); say(r.msg, r.ok); refresh(); }
+        if (!s0.pan.moved && s0.pan.planet) { s0.governor = s0.pan.planet; refresh(); }
+        else if (!s0.pan.moved && ship && P) { const r = orderBurn(ship, P, sendShipToPoint(st.current, ship, toWorld(e), P)); say(r.msg, r.ok); refresh(); }
         else if (!s0.pan.moved && s0.arkSel) { const r = sendArkToPoint(st.current, toWorld(e)); say(r.msg, r.ok); refresh(); }
         s0.pan = null;
         return;
@@ -596,10 +600,10 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       const shift = narrow ? pocketShift : null;
       if (id && isPlanet(id)) {
         scene.setFollow(() => positions()?.[id] ?? null, shift);
-        scene.zoomTo(zoom);
+        scene.snapCamera(); scene.zoomTo(zoom); s0.focusId = id;
         say(`${planetName(id)} centred.`); refresh();
       } else if (id === "ark") {
-        scene.setFollow(() => arkState(st.current), shift); scene.zoomTo(zoom);
+        scene.setFollow(() => arkState(st.current), shift); scene.snapCamera(); scene.zoomTo(zoom);
         say("Ark Endeavor centred."); refresh();
       }
     };
