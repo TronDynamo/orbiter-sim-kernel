@@ -78,6 +78,8 @@ const RAIDER_DPS_AGAINST_AID = 3;   // hull damage per raider per second against
 const AID_SPEED = 90;                // world units per second an allied wave closes on a raider
 const AID_HOLD = 140;                // it holds this far from its target
 const AID_STATION = 120;             // the station an allied wave holds beside the Ark
+const CONVOY_RADIUS = 80;            // convoy formation distance from the Ark
+const CONVOY_SPACING = 1.1;          // radians between convoy slots
 // Distance from point p to the segment a-b. Shots are swept along their path, so a fast round cannot skip a target.
 function segDist(p, a, b) {
   const vx = b.x - a.x, vy = b.y - a.y, len2 = vx * vx + vy * vy;
@@ -264,7 +266,26 @@ export function stepCombat(state, env) {
   // allied aid waves stay until destroyed or sent home. Each wave hits the nearest raider; raiders wear down its hull.
   // Ally kills pay no bounty.
   state.aid = state.aid ?? [];
+  // convoy waves take a formation slot around the Ark, in the order they joined
+  let slot = 0;
+  for (const a of state.aid) if (a.convoy) a.slot = slot++;
   for (const a of state.aid) {
+    // a convoy wave holds its slot beside the Ark, so it moves wherever the Ark goes
+    if (a.convoy) {
+      const ang = a.slot * CONVOY_SPACING + 0.4, R = CONVOY_RADIUS;
+      const tx = (env.ark?.x ?? 0) + Math.cos(ang) * R, ty = (env.ark?.y ?? 0) + Math.sin(ang) * R;
+      const d = Math.hypot(tx - a.x, ty - a.y), step = Math.min(d, AID_SPEED * dt * 1.5);
+      if (d > 0) { a.x += (tx - a.x) / d * step; a.y += (ty - a.y) / d * step; }
+      if (state.raiders.length) a.heading = Math.atan2(state.raiders[0].y - a.y, state.raiders[0].x - a.x);
+      continue;
+    }
+    // a wave the player dragged flies to its new point, then holds there as a station
+    if (a.dest) {
+      const d = Math.hypot(a.dest.x - a.x, a.dest.y - a.y), step = Math.min(d, AID_SPEED * dt);
+      if (d > 0) { a.x += (a.dest.x - a.x) / d * step; a.y += (a.dest.y - a.y) / d * step; a.heading = Math.atan2(a.dest.y - a.y, a.dest.x - a.x); }
+      if (d <= 2) { a.dest = null; a.station = {x: a.x, y: a.y}; a.phase = "station"; }
+      continue;
+    }
     // a called-in wave enters at the system edge and flies to its station beside the Ark, then fights from there
     if (a.phase == null) {
       const ang = ((Number(a.id?.length) || 0) * 1.7 + (state.nextId % 7)) % (Math.PI * 2);

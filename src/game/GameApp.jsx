@@ -18,6 +18,7 @@ import "./system.css";
 import {CommsTerminal} from "./CommsTerminal.jsx";
 import {applyChoice, openComms, applyRaiderChoice, allyForConflict, applyAllyChoice, requestAid, sendAidHome} from "./comms.js";
 import {AllyConflict} from "./AllyConflict.jsx";
+import {WavePanel} from "./WavePanel.jsx";
 import {RaiderHail} from "./RaiderHail.jsx";
 import {FACTIONS, factionById} from "./factions.js";
 import {GovernorPanel} from "./GovernorPanel.jsx";
@@ -380,6 +381,12 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       }
       if (picked && s0.selected === picked.id) { s0.selected = null; s0.inspect = false; applySpeed(); say("Ship deselected."); refresh(); return; }
       if (picked) { s0.shipDrag = {id: picked.id, start: p, cur: p}; s0.selected = picked.id; s0.panelHidden = true; say(`${SHIPS[picked.type].name} selected. Right-click a world to send it, click empty space to send it there, or tap twice on a phone.`); refresh(); return; }
+      // An allied wave: press and drag to move it (dragging out of a convoy frees it); a press without a drag selects it for its panel
+      {
+        const zw = scene.sim.c[4] * scene.base;
+        const aw = (combatRef.current.aid ?? []).find((a) => Math.hypot(a.x - p.x, a.y - p.y) <= 26 / zw);
+        if (aw) { s0.waveDrag = {id: aw.id, start: p, cur: p}; s0.waveSel = aw.id; refresh(); return; }
+      }
       // The Ark: press on it and drag a line to where it should go; release there to send it. A press without a drag selects it.
       const ark = arkState(st.current);
       if (Math.hypot(ark.x - p.x, ark.y - p.y) <= (e.pointerType === "touch" ? 40 : 22) / zb) {   // a fingertip needs a bigger target
@@ -416,6 +423,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       if (s0.drag) s0.drag.cur = toWorld(e);
       if (s0.arkDrag) s0.arkDrag.cur = toWorld(e);
       if (s0.shipDrag) s0.shipDrag.cur = toWorld(e);
+      if (s0.waveDrag) s0.waveDrag.cur = toWorld(e);
       const r = ov.getBoundingClientRect();
       s0.pointer = {x: e.clientX - r.left, y: e.clientY - r.top};
       s0.pointerWorld = toWorld(e); // the Arrival Ghost Pip previews the world under the pointer
@@ -430,6 +438,17 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         else if (d.wasSel) { s0.arkSel = false; say("Ark Endeavor deselected."); }
         else say("Ark Endeavor selected. Drag from it to move it.");
         refresh(); return;
+      }
+      if (s0.waveDrag) {
+        const d = s0.waveDrag, zu = scene.sim.c[4] * scene.base;
+        s0.waveDrag = null;
+        const w = (combatRef.current.aid ?? []).find((a) => a.id === d.id);
+        if (w && Math.hypot(d.cur.x - d.start.x, d.cur.y - d.start.y) > 8 / zu) {
+          w.dest = {x: d.cur.x, y: d.cur.y}; w.convoy = false; w.phase = "station";
+          say(`${factionById(w.id)?.name ?? "Allied fleet"} moves to the new position.`);
+        }
+        refresh();
+        return;
       }
       if (s0.shipDrag) {
         const d = s0.shipDrag, zu = scene.sim.c[4] * scene.base;
@@ -1273,6 +1292,18 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
     const r = sendAidHome(st.current, id);
     u.current.msg = r.msg; refresh();
   }
+  // allied wave helpers, by faction id
+  const waveById = (id) => (combatRef.current.aid ?? []).find((a) => a.id === id) ?? null;
+  function waveConvoy(id, on) {
+    const w = waveById(id); if (!w) return;
+    w.convoy = on; w.dest = null;
+    u.current.msg = on ? `${factionById(id)?.name} joins your convoy.` : `${factionById(id)?.name} leaves the convoy.`; refresh();
+  }
+  function waveSendHome(id) {
+    combatRef.current.aid = (combatRef.current.aid ?? []).filter((a) => a.id !== id);
+    u.current.waveSel = null;
+    u.current.msg = `${factionById(id)?.name ?? "The ally"} withdraws to their own space.`; refresh();
+  }
   function commsRequestAid() {
     const raiding = combatRef.current.raiders.length > 0;
     const id = st.current.comms.selected;
@@ -1529,6 +1560,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       ) : null}
 
       {u.current.comms ? <CommsTerminal s={s} onOpen={commsOpen} onChoose={commsChoose} onClose={toggleComms} raiding={combatRef.current.raiders.length > 0} onRequestAid={commsRequestAid} aidOn={aidOnStation(st.current.comms.selected)} onSendHome={commsSendHome} /> : null}
+      {u.current.waveSel && waveById(u.current.waveSel) ? <WavePanel wave={waveById(u.current.waveSel)} onConvoy={(on) => waveConvoy(u.current.waveSel, on)} onSendHome={() => waveSendHome(u.current.waveSel)} onClose={() => { u.current.waveSel = null; refresh(); }} /> : null}
       {u.current.hail ? <RaiderHail s={st.current} hail={u.current.hail} note={u.current.hailNote} onChoose={raiderChoose} onClose={raiderClose} /> : null}
       {u.current.allyHail && !u.current.hail ? <AllyConflict s={st.current} factionId={u.current.allyHail} note={u.current.hailNote} onChoose={allyChoose} onClose={allyClose} /> : null}
 
