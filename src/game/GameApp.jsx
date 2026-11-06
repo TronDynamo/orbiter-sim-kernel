@@ -150,7 +150,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
   // Starter worlds read config/planets.js; generated worlds carry the yield of their biome class (currentSystem.js).
   const yieldOf = (id) => PLANET_DEFS.find((d) => d.key === id)?.yield ?? sysRef.current.planets.find((p) => p.id === id)?.yield ?? DEFAULT_YIELD;
   const st = useRef(newState());
-  if (commanderRef.current && st.current.commander == null) st.current.commander = commanderRef.current; // saved with the campaign
+  if (commanderRef.current && st.current.commander == null) st.current.commander = commanderRef.current; // the commander's art and home look key off this
   const combatRef = useRef(newCombat());   // raiders, shots and debris; hulls and mounts live on the fleet
   const pipRef = useRef(null);             // tactical action picture-in-picture
   const u = useRef({drag: null, mode: null, msg: START_MSG, msgWin: false, paused: false, speed: 1, tick: 0, shipyard: false, armory: false, comms: false, governor: null, tech: false, senate: false, arm: null, hover: null, pointer: null, menu: false, confirm: null, autosaveAt: -1e9, fps: 0, selected: null, briefing: !!session.tutorial, depotPlace: false});
