@@ -608,13 +608,15 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
     // Two quick taps on the same spot are therefore caught on the window, before any panel or the canvas sees them.
     const onTapCapture = (e) => {
       if (e.pointerType !== "touch" || e.button !== 0) return;
-      if (e.target?.closest?.("button, input, select, textarea, a, [role=button]")) { s0.lastTap = null; return; }
+      // The second tap may land on a button in the panel the first tap opened; it still counts, and the button is left alone.
+      const onButton = !!e.target?.closest?.("button, input, select, textarea, a, [role=button]");
       const now = performance.now(), last = s0.lastTap, w = toWorld(e), zb = scene.sim.c[4] * scene.base;
-      if (last && now - last.t < 350 && Math.hypot(w.x - last.w.x, w.y - last.w.y) <= 30 / zb) {
-        s0.lastTap = null; s0.pendingSend = null; e.stopPropagation();
+      if (last && now - last.t < 450 && Math.hypot(w.x - last.w.x, w.y - last.w.y) <= 30 / zb) {
+        s0.lastTap = null; s0.pendingSend = null;
+        if (!onButton) e.stopPropagation();
         focusWorld(w, true); return;
       }
-      s0.lastTap = {t: now, w};
+      s0.lastTap = onButton ? null : {t: now, w};
     };
     window.addEventListener("pointerdown", onTapCapture, true);
     const onWheel = (e) => { e.preventDefault(); scene.zoomBy(e.deltaY < 0 ? 1.12 : 1 / 1.12); };

@@ -110,14 +110,9 @@ void main(){
   }
 }`;
 
-// A keyed body's surface is re-rendered this often (seconds). At 12 a second the turn and the moving light still
-// look continuous, and the shader runs a fraction as often as once per frame.
-const REFRESH_S = 1 / 12;
-
 export class BodyRenderer {
   constructor() {
     this.size = 512;
-    this.cache = new Map();   // key -> {cv, at, px}: last rendered frame of a body
     const cv = document.createElement('canvas');
     cv.width = cv.height = this.size;
     const gl = cv.getContext('webgl', { premultipliedAlpha: true, alpha: true, antialias: false, preserveDrawingBuffer: true });
@@ -154,35 +149,10 @@ export class BodyRenderer {
     this.ok = true;
   }
 
-  // Render one body and composite it onto ctx at (cx, cy, radius). A body with a key keeps its last frame and
-  // re-renders it at most every REFRESH_S seconds, or at once when its size changes. Shading, spin and the
-  // light direction are all recomputed at each re-render, so the planet still turns and its night side moves.
+  // Render one body into the offscreen canvas and composite it onto ctx at (cx, cy, radius).
   draw(ctx, cx, cy, radius, dpr, o) {
-    const px = Math.max(8, Math.min(this.size, Math.ceil(radius * 2 * dpr)));
-    if (o.key == null) {
-      this.renderInto(px, o);
-      ctx.drawImage(this.canvas, 0, this.size - px, px, px, cx - radius, cy - radius, radius * 2, radius * 2);
-      return;
-    }
-    let slot = this.cache.get(o.key);
-    if (!slot) {
-      slot = {cv: document.createElement('canvas'), at: -Infinity, px: 0};
-      this.cache.set(o.key, slot);
-    }
-    if (o.time - slot.at >= REFRESH_S || slot.px !== px) {
-      this.renderInto(px, o);
-      if (slot.px !== px) { slot.cv.width = slot.cv.height = px; }
-      slot.cv.getContext('2d').clearRect(0, 0, px, px);
-      // GL origin is bottom-left: the rendered square sits at the bottom of the GL canvas
-      slot.cv.getContext('2d').drawImage(this.canvas, 0, this.size - px, px, px, 0, 0, px, px);
-      slot.at = o.time; slot.px = px;
-    }
-    ctx.drawImage(slot.cv, cx - radius, cy - radius, radius * 2, radius * 2);
-  }
-
-  // Draws the body with the shader into the GL canvas, in a px-by-px square at its bottom.
-  renderInto(px, o) {
     const { gl, u } = this;
+    const px = Math.max(8, Math.min(this.size, Math.ceil(radius * 2 * dpr)));
     gl.viewport(0, 0, px, px);
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
@@ -197,5 +167,7 @@ export class BodyRenderer {
     gl.uniform3fv(u.uLight, o.light || [0, 0, 1]);
     gl.uniform3fv(u.uLightCol, o.lightCol || [1, 1, 1]);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    // GL origin is bottom-left: the rendered square sits at the bottom of the canvas
+    ctx.drawImage(this.canvas, 0, this.size - px, px, px, cx - radius, cy - radius, radius * 2, radius * 2);
   }
 }

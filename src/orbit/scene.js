@@ -437,7 +437,7 @@ export class OrbitScene {
     if (this.bodies.ok) {
       const st = STAR[g.id];
       this.bodies.draw(ctx, s.x, s.y, r, this.dpr, {
-        key: `star:${g.id}`,         kind: 0, time: this.real, rot: (this.sim ? this.sim.c[5] : this.real) * 0.07, /* rigid spin, follows Orbit Speed */ seed: g.id === 'origin' ? 3.1 : 11.7,
+        kind: 0, time: this.real, rot: (this.sim ? this.sim.c[5] : this.real) * 0.07, /* rigid spin, follows Orbit Speed */ seed: g.id === 'origin' ? 3.1 : 11.7,
         c0: st.c[0], c1: st.c[1], c2: st.c[2], c3: st.c[3],
       });
       return;
@@ -483,7 +483,7 @@ export class OrbitScene {
     if (this.bodies.ok) {
       const c1 = col.map((v) => v / 255);
             this.bodies.draw(ctx, s.x, s.y, R, this.dpr, {
-        key: `planet:${p.id}`, kind: p.molten ? 2 : 1, time: this.real, rot: this.spin * (0.22 + (idx % 4) * 0.06) + idx * 1.7, seed: 4.3 + idx * 7.1,
+        kind: p.molten ? 2 : 1, time: this.real, rot: this.spin * (0.22 + (idx % 4) * 0.06) + idx * 1.7, seed: 4.3 + idx * 7.1,
         bands: !p.molten && p.r >= 12 ? 5 : 0,
         c0: c1.map((v) => v * 0.32), c1, c2: c1.map((v) => v + (1 - v) * 0.55),
         light: L, lightCol: st.light,
