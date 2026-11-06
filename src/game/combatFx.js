@@ -181,3 +181,26 @@ export function drawHullDamage(ctx, q, pct, k, t, rand = Math.random) {
     ctx.stroke(); ctx.shadowBlur = 0;
   }
 }
+
+// Allied waves: the faction's cruiser art, turned toward its target, with a hull bar.
+// art: commanderSprite(leaderId, role) from assetLoader; falls back to a plain marker until the art decodes.
+export function drawAllyWaves(ctx, toS, aid, k, art) {
+  for (const a of aid) {
+    const p = toS({x: a.x, y: a.y});
+    const L = 56 * k, img = art(a.id, "cruiser");
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(a.heading ?? 0);
+    if (img) {
+      const h = L * img.naturalHeight / img.naturalWidth;
+      ctx.drawImage(img, -L / 2, -h / 2, L, h);
+    } else {
+      ctx.fillStyle = "#67e8f9";
+      ctx.beginPath(); ctx.arc(0, 0, L * 0.2, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+    const frac = Math.max(0, Math.min(1, (a.hull ?? 0) / (a.hullMax ?? 120)));
+    ctx.fillStyle = "rgba(2,6,23,0.8)"; ctx.fillRect(p.x - 18 * k, p.y + 22 * k, 36 * k, 4 * k);
+    ctx.fillStyle = "#34d399"; ctx.fillRect(p.x - 18 * k, p.y + 22 * k, 36 * k * frac, 4 * k);
+  }
+}

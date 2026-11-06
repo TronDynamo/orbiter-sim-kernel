@@ -37,7 +37,7 @@ import {drawPseudo3DShip, sunLocal, emitPlume, updatePlumes, drawPlumes} from ".
 import {commanderSprite, ASSET_BASE, arkArt, raiderArt} from "./assetLoader.js";
 import {enginesFor} from "./thrusters.js";
 import {shadowAt, drawUmbra, drawLensing, drawDebrisBelt} from "./stellarFx.js";
-import {drawCombatFx, drawHullDamage} from "./combatFx.js";
+import {drawCombatFx, drawHullDamage, drawAllyWaves} from "./combatFx.js";
 import {newCombat, stepCombat, weldSparks, mountsOf, MOUNTS, SWAP_COST, nextMount, engaged} from "./combat.js";
 import {createAudio} from "./audio.js";
 
@@ -670,6 +670,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       {
         const cb = combatRef.current, k = Math.max(0.6, Math.min(2, scene.zoomUser));
         drawCombatFx(ctx, toS, cb, k, now / 1000, {detail: scene.zoomUser >= ZOOM_DETAIL, art: raiderArt});
+        drawAllyWaves(ctx, toS, cb.aid ?? [], k, (id, role) => commanderSprite(id, role));
         for (const f of s.fleet) {
           const max = hullMax(f), hp = f.hp ?? max;
           if (hp >= max) continue;
@@ -1054,7 +1055,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           const raidNow = !!s0.raidNow; s0.raidNow = false;
           // radar bodies: the star and every world on the map block line of sight
           const bodies = [{x: P.core.x, y: P.core.y, r: STAR_DEF.radius}, ...sys.planets.filter((p) => P[p.id]).map((p) => ({x: P[p.id].x, y: P[p.id].y, r: PLANET_DEFS.find((d) => d.key === p.id)?.r ?? 10}))];
-          for (const ev of stepCombat(combatRef.current, {dt: cdt, fleet: s.fleet, planets, core: P.core, pos: (f) => shipPosition(f, P), tech: s.tech, edgeR, raidNow, bodies, danger: systemDanger(sys)})) {
+          for (const ev of stepCombat(combatRef.current, {dt: cdt, fleet: s.fleet, planets, core: P.core, pos: (f) => shipPosition(f, P), tech: s.tech, edgeR, raidNow, bodies, danger: systemDanger(sys), ark: P.ark})) {
             if (ev.kind === "kill") s.credits += ev.bounty;
             if (ev.kind === "theft") s.credits = Math.max(0, s.credits - ev.amount);
             if (ev.kind === "raid" && !u.current.hail) { u.current.hail = {ids: ev.ids, n: ev.n}; u.current.comms = false; }   // a hail takes the screen; comms can be reopened
