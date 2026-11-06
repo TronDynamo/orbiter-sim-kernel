@@ -5,4 +5,6 @@ char_lunara.png, char_bjorn.png, char_xyria.png, char_boreas.png, char_ssarath.p
 char_leon.png, char_zephyra.png, char_morvath.png, char_solaria.png, char_fenris.png,
 char_ren.png, char_vexkiri.png, char_unit734.png, char_vance.png, char_strix.png
 
+Raider warband leader (shown in the incoming raider hail): char_raider_warband.png
+
 A missing file shows the procedural holographic avatar in the game (see src/game/portraits.js).
