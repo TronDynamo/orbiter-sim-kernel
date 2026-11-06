@@ -93,7 +93,7 @@ export const ALLY_CHOICES = [
   {key: "help", label: "Ask them to help", line: "Our enemies are yours. Stand with us against these raiders."},
   {key: "stand", label: "Ask them to stand down", line: "Keep out of this. We will handle it ourselves."},
 ];
-export const AID = {n: 2, ttl: 60, dps: 4};   // an aid wave: ships, seconds on station, damage per ship per second
+export const AID = {n: 2, dps: 4, hull: 120};   // an aid wave: ships, damage per ship per second, hull points. It stays until destroyed or sent home.
 export const strainOf = (state, id) => state.strain?.[id] ?? 0;
 
 // The first allied faction (not the player's commander) that can be asked about this conflict, or null.
@@ -102,7 +102,7 @@ export function allyForConflict(state, asked = new Set()) {
 }
 
 // Resolves an ally choice. Returns {ok, msg, aid}: aid is an aid wave to add to combat, or null.
-export function applyAllyChoice(state, factionId, key) {
+export function applyAllyChoice(state, factionId, key, onStation = false) {
   const f = factionById(factionId), c = ALLY_CHOICES.find((x) => x.key === key);
   if (!f || !c) return {ok: false, msg: "No reply.", aid: null};
   const before = opinionOf(state, factionId);
@@ -110,6 +110,7 @@ export function applyAllyChoice(state, factionId, key) {
     state.opinion[factionId] = clampOpinion(before + 2);
     return {ok: true, msg: `${f.name} stands down. Respect +2.`, aid: null};
   }
+  if (onStation) return {ok: true, msg: `${f.name} is already fighting beside you.`, aid: null};
   if (strainOf(state, factionId) >= ALLY_STRAIN_LIMIT) {
     return {ok: true, msg: `${f.name} will not risk their other alliances again.`, aid: null};
   }
@@ -119,8 +120,14 @@ export function applyAllyChoice(state, factionId, key) {
 }
 
 // Comms request: an ally at respect asks for aid against raiders in your system. Same rules as a conflict request.
-export function requestAid(state, factionId, raidersPresent) {
+export function requestAid(state, factionId, raidersPresent, onStation = false) {
   if (!raidersPresent) return {ok: false, msg: "No raiders in your system to fight.", aid: null};
   if (opinionOf(state, factionId) < ALLY_RESPECT) return {ok: false, msg: `They will only fight beside you at respect ${ALLY_RESPECT}.`, aid: null};
-  return applyAllyChoice(state, factionId, "help");
+  return applyAllyChoice(state, factionId, "help", onStation);
+}
+
+// Sends an aid wave home from comms. Costs nothing and keeps respect.
+export function sendAidHome(state, factionId) {
+  const f = factionById(factionId);
+  return {ok: true, msg: `${f ? f.name : "The ally"} withdraws to their own space.`};
 }

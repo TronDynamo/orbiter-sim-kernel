@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {allyForConflict, applyAllyChoice, ALLY_STRAIN_LIMIT, opinionOf, ALLY_RESPECT} from "../src/game/comms.js";
+import {allyForConflict, applyAllyChoice, ALLY_STRAIN_LIMIT, opinionOf, ALLY_RESPECT, sendAidHome} from "../src/game/comms.js";
 import {stepCombat, newCombat} from "../src/game/combat.js";
 import {FACTIONS} from "../src/game/factions.js";
 
@@ -43,7 +43,7 @@ test("standing down raises respect and sends no aid", () => {
 test("aid wave destroys raiders without paying a bounty", () => {
   const c = newCombat();
   c.raiders.push({id: 1, x: 300, y: 0, vx: 0, vy: 0, hp: 2, maxHp: 2, mounts: [], bounty: 50});
-  c.aid = [{id: ally, n: 2, dps: 4, ttl: 10}];
+  c.aid = [{id: ally, n: 2, dps: 4, hull: 120}];
   let kills = [];
   for (let i = 0; i < 40 && c.raiders.length; i++) {
     const ev = stepCombat(c, {dt: 0.05, fleet: [], planets: [], core: {x: 0, y: 0}, pos: () => null, tech: {}, rand: () => 0.5, bodies: []});
@@ -51,4 +51,37 @@ test("aid wave destroys raiders without paying a bounty", () => {
   }
   assert.equal(c.raiders.length, 0);
   assert.ok(kills.every((k) => k.bounty === 0));
+});
+
+test("a request is refused while the ally's wave is already on station", () => {
+  const s = base(); s.opinion[ally] = 30;
+  const r = applyAllyChoice(s, ally, "help", true);
+  assert.equal(r.aid, null);
+  assert.equal(s.strain[ally] ?? 0, 0);
+});
+
+test("an aid wave stays on station with no raiders until it is sent home or destroyed", () => {
+  const c = newCombat();
+  c.aid = [{id: ally, n: 2, dps: 4, hull: 120}];
+  for (let i = 0; i < 2400; i++) stepCombat(c, {dt: 0.05, fleet: [], planets: [], core: {x: 0, y: 0}, pos: () => null, tech: {}, rand: () => 0.5, bodies: []});
+  assert.equal(c.aid.length, 1, "still on station after 120 seconds");
+});
+
+test("raiders wear an aid wave's hull down until it is lost", () => {
+  const c = newCombat();
+  c.raiders.push({id: 1, x: 1e6, y: 0, vx: 0, vy: 0, hp: 1e9, maxHp: 1e9, mounts: [], bounty: 0});
+  c.aid = [{id: ally, n: 2, dps: 4, hull: 120}];
+  let lost = [];
+  for (let i = 0; i < 4000 && c.aid.length; i++) {
+    lost.push(...stepCombat(c, {dt: 0.05, fleet: [], planets: [], core: {x: 0, y: 0}, pos: () => null, tech: {}, rand: () => 0.5, bodies: []}).filter((e) => e.kind === "aidLost"));
+  }
+  assert.equal(c.aid.length, 0);
+  assert.equal(lost.length, 1);
+});
+
+test("sending a wave home keeps respect", () => {
+  const s = base(); s.opinion[ally] = 30;
+  const r = sendAidHome(s, ally);
+  assert.equal(r.ok, true);
+  assert.equal(opinionOf(s, ally), 30);
 });

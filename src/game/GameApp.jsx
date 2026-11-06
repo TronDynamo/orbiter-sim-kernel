@@ -16,7 +16,7 @@ import {getSettings} from "./settings.js";
 import {saveGame, loadGame} from "./saveManager.js";
 import "./system.css";
 import {CommsTerminal} from "./CommsTerminal.jsx";
-import {applyChoice, openComms, applyRaiderChoice, allyForConflict, applyAllyChoice, requestAid} from "./comms.js";
+import {applyChoice, openComms, applyRaiderChoice, allyForConflict, applyAllyChoice, requestAid, sendAidHome} from "./comms.js";
 import {AllyConflict} from "./AllyConflict.jsx";
 import {RaiderHail} from "./RaiderHail.jsx";
 import {FACTIONS} from "./factions.js";
@@ -1063,8 +1063,8 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           }
         }
         // an ally in the system asks whether to join the fight while raiders are here and no aid is on station
-        if (combatRef.current.raiders.length && !u.current.hail && !u.current.allyHail && !(combatRef.current.aid ?? []).length) {
-          const ally = allyForConflict(st.current, u.current.allyAsked ?? new Set());
+        if (combatRef.current.raiders.length && !u.current.hail && !u.current.allyHail) {
+          const ally = allyForConflict(st.current, new Set([...(u.current.allyAsked ?? []), ...(combatRef.current.aid ?? []).map((a) => a.id)]));
           if (ally) { u.current.allyHail = ally; u.current.comms = false; refresh(); }
         }
         drawOverlay(P, now);
@@ -1252,7 +1252,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
   }
   function allyChoose(key) {
     const id = u.current.allyHail; if (!id) return;
-    const r = applyAllyChoice(st.current, id, key);
+    const r = applyAllyChoice(st.current, id, key, aidOnStation(id));
     if (r.aid) combatRef.current.aid = [...(combatRef.current.aid ?? []), r.aid];
     u.current.allyAsked = new Set([...(u.current.allyAsked ?? []), id]);
     u.current.allyHail = null; u.current.hailNote = null; st.current.msg = r.msg; st.current.msgWin = false; refresh();
@@ -1264,9 +1264,18 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
     if (r.depart) combatRef.current.raiders = combatRef.current.raiders.filter((x) => !h.ids.includes(x.id));
     u.current.hail = null; u.current.hailNote = null; st.current.msg = r.msg; st.current.msgWin = false; refresh();
   }
+  // allied waves on station, by faction id
+  const aidOnStation = (id) => (combatRef.current.aid ?? []).some((a) => a.id === id);
+  function commsSendHome() {
+    const id = st.current.comms.selected;
+    combatRef.current.aid = (combatRef.current.aid ?? []).filter((a) => a.id !== id);
+    const r = sendAidHome(st.current, id);
+    u.current.msg = r.msg; refresh();
+  }
   function commsRequestAid() {
     const raiding = combatRef.current.raiders.length > 0;
-    const r = requestAid(st.current, st.current.comms.selected, raiding);
+    const id = st.current.comms.selected;
+    const r = requestAid(st.current, id, raiding, aidOnStation(id));
     if (r.aid) combatRef.current.aid = [...(combatRef.current.aid ?? []), r.aid];
     u.current.msg = r.msg; refresh();
   }
@@ -1518,7 +1527,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         </div>
       ) : null}
 
-      {u.current.comms ? <CommsTerminal s={s} onOpen={commsOpen} onChoose={commsChoose} onClose={toggleComms} raiding={combatRef.current.raiders.length > 0} onRequestAid={commsRequestAid} /> : null}
+      {u.current.comms ? <CommsTerminal s={s} onOpen={commsOpen} onChoose={commsChoose} onClose={toggleComms} raiding={combatRef.current.raiders.length > 0} onRequestAid={commsRequestAid} aidOn={aidOnStation(st.current.comms.selected)} onSendHome={commsSendHome} /> : null}
       {u.current.hail ? <RaiderHail s={st.current} hail={u.current.hail} note={u.current.hailNote} onChoose={raiderChoose} onClose={raiderClose} /> : null}
       {u.current.allyHail && !u.current.hail ? <AllyConflict s={st.current} factionId={u.current.allyHail} note={u.current.hailNote} onChoose={allyChoose} onClose={allyClose} /> : null}
 

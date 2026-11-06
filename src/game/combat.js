@@ -74,6 +74,7 @@ export function newCombat() {
 }
 
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const RAIDER_DPS_AGAINST_AID = 3;   // hull damage per raider per second against an allied wave
 // Distance from point p to the segment a-b. Shots are swept along their path, so a fast round cannot skip a target.
 function segDist(p, a, b) {
   const vx = b.x - a.x, vy = b.y - a.y, len2 = vx * vx + vy * vy;
@@ -257,14 +258,18 @@ export function stepCombat(state, env) {
     }
   }
 
-  // allied aid: each wave fights the nearest raider until its time on station runs out. Ally kills pay no bounty.
-  state.aid = (state.aid ?? []).filter((a) => (a.ttl -= dt) > 0);
+  // allied aid waves stay until destroyed or sent home. Each wave hits the nearest raider; raiders wear down its hull.
+  // Ally kills pay no bounty.
+  state.aid = state.aid ?? [];
   for (const a of state.aid) {
     if (!state.raiders.length) break;
     const target = state.raiders.reduce((best, r) => (dist(r, {x: 0, y: 0}) < dist(best, {x: 0, y: 0}) ? r : best));
     target.bounty = 0;
     target.hp -= a.n * a.dps * dt;
+    a.hull = (a.hull ?? a.hullMax ?? 0) - state.raiders.length * RAIDER_DPS_AGAINST_AID * dt;
   }
+  for (const a of state.aid.filter((x) => (x.hull ?? 1) <= 0)) events.push({kind: "aidLost", id: a.id, msg: `Allied wave lost in the fight.`});
+  state.aid = state.aid.filter((a) => (a.hull ?? 1) > 0);
 
   // mounts: a ready mount with a target starts its spool (lances) or fires (everything else)
   const alive = new Set();

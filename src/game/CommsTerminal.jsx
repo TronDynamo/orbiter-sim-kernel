@@ -7,7 +7,7 @@ import {COST_LABEL} from "./ships.js";
 import "./comms.css";
 import {LeaderPortrait} from "./LeaderPortrait.jsx";
 
-export function CommsTerminal({s, onOpen, onChoose, onClose, raiding = false, onRequestAid}) {
+export function CommsTerminal({s, onOpen, onChoose, onClose, raiding = false, onRequestAid, aidOn = false, onSendHome}) {
   // the player's own commander is not a rival to talk to, so the roster leaves them out
   const others = FACTIONS.filter((x) => x.id !== s.commander);
   const f = factionById(s.comms.selected) && s.comms.selected !== s.commander ? factionById(s.comms.selected) : others[0];
@@ -64,7 +64,12 @@ export function CommsTerminal({s, onOpen, onChoose, onClose, raiding = false, on
             ))}
           </div>
           <div className="comms-choices">
-            {f.id !== s.commander && op >= ALLY_RESPECT ? (
+            {f.id !== s.commander && aidOn ? (
+              <button className="pill zelo" title="Send this ally's fleet back to their own space" onClick={() => onSendHome(f.id)}>
+                Send home · fighting beside you
+              </button>
+            ) : null}
+            {f.id !== s.commander && !aidOn && op >= ALLY_RESPECT ? (
               <button className="pill zelo" disabled={!raiding} title={raiding ? "Ask this ally to fight the raiders in your system" : "No raiders in your system"}
                 onClick={() => onRequestAid(f.id)}>
                 Request aid{raiding ? "" : " · no raiders"}
