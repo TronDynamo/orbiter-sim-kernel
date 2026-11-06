@@ -183,11 +183,17 @@ export function stepFleet(s, P, ticks, ctx) {
 
 // Issues a flight order to a world or a fuel depot. Returns {ok, msg}. A ship in orbit surfs when a live conduit joins
 // its world to the target; otherwise it burns for the target, provided it has the propellant for the trip.
-export function sendShip(s, f, targetId, P, conduits, targetName) {
+// lead: 'auto' (default) steers at where the world will be on arrival; 'manual' flies to where the world is right now
+// and holds there, so the player times the meeting themselves. Depots always dock, so they stay on auto.
+export function sendShip(s, f, targetId, P, conduits, targetName, lead = 'auto') {
   const name = SHIPS[f.type]?.name ?? 'Ship';
   if (f.mode === 'orbit' && f.planet === targetId) return {ok: false, msg: `${name} is already in orbit around ${targetName}.`};
   const T = P[targetId];
   if (!T) return {ok: false, msg: 'That target is out of reach.'};
+  if (lead === 'manual' && !String(targetId).startsWith('depot')) {
+    const r = sendShipToPoint(s, f, {x: T.x, y: T.y}, P);
+    return r.ok ? {ok: true, msg: `${name} burns for where ${targetName} is now (manual lead).`} : r;
+  }
   if (f.type === 'freighter' && resOf(s, targetId) && targetId !== homeOf(s) && !(s.surveyed ?? CHARTED_AT_START)[targetId]) {
     return {ok: false, msg: `Scan ${targetName} with a Survey Probe before siphoning it.`};
   }

@@ -256,7 +256,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
           const dest = hit.startsWith("depot") ? "the fuel depot" : planetName(hit);
           if (s0.pendingSend === hit) {
             s0.pendingSend = null;
-            const r = orderBurn(ship, P, sendShip(st.current, ship, hit, P, liveConduits(), dest));
+            const r = orderBurn(ship, P, sendShip(st.current, ship, hit, P, liveConduits(), dest, u.current.lead ?? "auto"));
             say(r.msg, r.ok); refresh(); return;
           }
           s0.pendingSend = hit;
@@ -424,7 +424,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       if (!ship) { s0.selected = null; refresh(); return; }
       const id = hitBody(st.current, P, toWorld(e));
       if (!id || !(isPlanet(id) || id.startsWith("depot"))) { const r = orderBurn(ship, P, sendShipToPoint(st.current, ship, toWorld(e), P)); say(r.msg, r.ok); refresh(); return; }
-      const r = orderBurn(ship, P, sendShip(st.current, ship, id, P, liveConduits(), id.startsWith("depot") ? "the fuel depot" : planetName(id)));
+      const r = orderBurn(ship, P, sendShip(st.current, ship, id, P, liveConduits(), id.startsWith("depot") ? "the fuel depot" : planetName(id), u.current.lead ?? "auto"));
       say(r.msg, r.ok); refresh();
     };
     // The camera follows a ship while zoomed in past ZOOM_FOLLOW. Stops once that ship is no longer selected.
@@ -1082,6 +1082,12 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
   function closeSoon(key) { setTimeout(() => { u.current[key] = false; refresh(); }, 400); }
   function toggleShipyard() { if (u.current.msg === START_MSG) u.current.msg = ""; u.current.shipyard = !u.current.shipyard; u.current.armory = false; refresh(); }
   function toggleArmory() { u.current.armory = !u.current.armory; u.current.shipyard = false; refresh(); }
+  // Lead: auto steers a ship at where a moving world will be; manual flies it to where the world is now.
+  function toggleLead() {
+    u.current.lead = (u.current.lead ?? "auto") === "auto" ? "manual" : "auto";
+    flash(u.current.lead === "manual" ? "Manual lead: ships fly to where a world is now. Use the ghost pip to aim." : "Auto lead: ships steer at where a world will be on arrival.", true);
+    refresh();
+  }
   function toggleTech() { u.current.tech = !u.current.tech; u.current.shipyard = false; u.current.armory = false; refresh(); }
   function researchNow(key) { const r = researchTech(st.current, key); u.current.msg = r.msg; refresh(); }
   function convene() {
@@ -1229,6 +1235,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         </div>
         <div className="hud-dock-group">
           <button className={"hud-btn" + (u.current.shipyard ? " on" : "")} onClick={toggleShipyard}><Icon name="shipyard" size={14} /> Shipyard</button>
+          <button className={"hud-btn" + ((u.current.lead ?? "auto") === "manual" ? " on" : "")} onClick={toggleLead} title="Auto: ships lead a moving world. Manual: ships fly to where it is now.">{(u.current.lead ?? "auto") === "manual" ? "Lead: Manual" : "Lead: Auto"}</button>
           <button className={"hud-btn" + (u.current.armory ? " on" : "")} onClick={toggleArmory}><Icon name="armory" size={14} /> Armory</button>
           <button className={"hud-btn" + (u.current.comms ? " on" : "")} onClick={toggleComms}><Icon name="comms" size={14} /> Comms</button>
           <button className={"hud-btn" + (s.senate.dismissed ? "" : " flash-alert")} onClick={openSenate}><Icon name="senate" size={14} /> Senate</button>
