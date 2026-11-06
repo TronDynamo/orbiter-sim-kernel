@@ -1,7 +1,7 @@
 // Orbiter: Stellar Conquest screen. Reuses Orbit's solar-system scene (C++ WebAssembly orbit engine,
 // planets, dying star, starfield, styling). Tethers, the Ark and mission telemetry sit on top.
 import {useEffect, useRef, useState} from "react";
-import {OrbitScene, ZOOM_DETAIL, ZOOM_FOCUS} from "../orbit/scene.js";
+import {OrbitScene, ZOOM_DETAIL, ZOOM_FOLLOW, ZOOM_MAX} from "../orbit/scene.js";
 import {BODY_STRIDE} from "../orbit/engine.js";
 import {ARK_POS} from "./galaxy.js";
 import {bootSystem, homeSystem, homeBuild, legacyCommander, systemDanger, systemFromSector, kernelSystemFromSector, systemState, rehomeFleet, resourceFor, extraDestinations, RESOURCE_LABEL} from "./currentSystem.js";
@@ -436,8 +436,11 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         refresh(); return;
       }
       const id = hitBody(st.current, P, p);
-      if (id) s0.drag = {from: id, cur: p, start: p};
-      else s0.pan = {x: e.clientX, y: e.clientY, moved: false}; // empty space: a drag pans the map, a tap deselects
+      // On a phone a finger on the focused world pans the map (a link would need two fingers to move the view);
+      // a tap on it still opens its Colony Governor.
+      if (id && !(e.pointerType === "touch" && id === s0.focusId && scene.followFn)) s0.drag = {from: id, cur: p, start: p};
+      else if (id) s0.pan = {x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, moved: false, planet: id, touch: e.pointerType === "touch"};
+      else s0.pan = {x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, moved: false, touch: e.pointerType === "touch"}; // empty space: a drag pans the map, a tap deselects
       ov.setPointerCapture(e.pointerId);
     };
     const onMove = (e) => {
@@ -455,7 +458,9 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       }
       if (s0.pan) {
         const dx = e.clientX - s0.pan.x, dy = e.clientY - s0.pan.y;
-        if (!s0.pan.moved && Math.hypot(dx, dy) < 4) return;
+        // Touch needs a wider slop: a fingertip wobbles more than a mouse, and a wobble must not cancel a planet's follow.
+        s0.touchDelta = Math.round(Math.hypot(e.clientX - s0.pan.x0, e.clientY - s0.pan.y0));
+        if (!s0.pan.moved && Math.hypot(dx, dy) < (s0.pan.touch ? 14 : 4)) return;
         s0.pan.moved = true; s0.pan.x = e.clientX; s0.pan.y = e.clientY;
         scene.panBy(dx, dy);
         return;
@@ -528,7 +533,8 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         // A tap on empty space sends the selected ship to that point. Dragging still pans.
         const ship = s0.selected != null ? st.current.fleet.find((f) => f.id === s0.selected) : null;
         const P = positions();
-        if (!s0.pan.moved && ship && P) { const r = orderBurn(ship, P, sendShipToPoint(st.current, ship, toWorld(e), P)); say(r.msg, r.ok); refresh(); }
+        if (!s0.pan.moved && s0.pan.planet) { s0.governor = s0.pan.planet; refresh(); }
+        else if (!s0.pan.moved && ship && P) { const r = orderBurn(ship, P, sendShipToPoint(st.current, ship, toWorld(e), P)); say(r.msg, r.ok); refresh(); }
         else if (!s0.pan.moved && s0.arkSel) { const r = sendArkToPoint(st.current, toWorld(e)); say(r.msg, r.ok); refresh(); }
         s0.pan = null;
         return;
@@ -577,18 +583,33 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       return f && P2 ? shipPosition(f, P2) : null;
     };
     // Glide and zoom to a world (or the Ark) at world point w. Used by double-click and by a double-tap on touch screens.
+    // On a phone the world sits in the clear band between the top resource HUD and the Colony panel.
+    // Measured from the real edges each frame, so it stays centred on any viewport height.
+    const pocketShift = () => {
+      const oy = ov.getBoundingClientRect().top;
+      // the lowest of the top controls: the resource bar, the pause row and the ARK badge
+      const tops = [".hud-ribbon", ".hud-controls", ".hud-ark-badge"].map((q) => document.querySelector(q)?.getBoundingClientRect().bottom ?? 0);
+      const panel = [...document.querySelectorAll("aside")].find((a) => a.textContent.includes("Colony Governor"))?.getBoundingClientRect();
+      const top = Math.max(...tops) - oy;
+      // no panel yet: assume the drawer will cover the lower part, so aim for the upper half
+      const bottom = panel ? panel.top - oy : ov.clientHeight * 0.6;
+      return {x: 0, y: (top + bottom) / 2 - ov.clientHeight / 2};
+    };
     const focusWorld = (w, touch = false) => {
       const P = positions(); if (!P) return;
       const id = hitBody(st.current, P, w) ?? (touch ? nearestPlanet(P, w) : null);
+      const narrow = ov.clientWidth < 700;   // phones: centred in the pocket
+      // Focus zoom is capped low so the planet stays clearly visible while the camera glides smoothly with it.
+      // Desktop 2.5, phone 1.6; no close-up zoom on a focus.
+      const zoom = narrow ? 1.6 : 2.5;
+      scene.zoomCap = ZOOM_MAX;
+      const shift = narrow ? pocketShift : null;
       if (id && isPlanet(id)) {
-        // On a phone the info panel covers the lower half, so the world is drawn in the upper part of the view.
-        const narrow = ov.clientWidth < 700;
-        scene.setFollow(() => positions()?.[id] ?? null, narrow ? {x: 0, y: -0.19 * ov.clientHeight} : null);
-        scene.zoomTo(ZOOM_FOCUS);
+        scene.setFollow(() => positions()?.[id] ?? null, shift);
+        scene.pitch = 1; scene.snapCamera(); scene.zoomTo(zoom, true); s0.focusId = id;   // rings stay flat: no pitch on focus   // lock at once: no zoom glide through space
         say(`${planetName(id)} centred.`); refresh();
       } else if (id === "ark") {
-        // The Ark centres the camera so its commander art can be seen up close.
-        scene.setFollow(() => arkState(st.current)); scene.zoomTo(ZOOM_FOCUS);
+        scene.setFollow(() => arkState(st.current), shift); scene.snapCamera(); scene.zoomTo(zoom, true);
         say("Ark Endeavor centred."); refresh();
       }
     };
@@ -1263,6 +1284,27 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
     const onFocus = () => { if (s0.blurPaused) { s0.blurPaused = false; s0.paused = false; applySpeed(); refresh(); } };
     window.addEventListener("blur", onBlur);
     window.addEventListener("focus", onFocus);
+    // Debug readout for phone checks: add ?debugcam=1 to the URL. Off by default.
+    let dbgEl = null, dbgTimer = null;
+    if (new URLSearchParams(window.location.search).get("debugcam") === "1") {
+      dbgEl = document.createElement("pre");
+      dbgEl.setAttribute("aria-hidden", "true");
+      dbgEl.style.cssText = "position:fixed;right:8px;top:120px;z-index:99;margin:0;padding:6px 8px;font:11px/1.35 ui-monospace,Menlo,monospace;color:#fff;background:#000;border:1px solid #ff0;border-radius:6px;pointer-events:none;white-space:pre";
+      document.body.appendChild(dbgEl);
+      dbgTimer = setInterval(() => {
+        const sc = scene, c = sc.sim?.c ?? [];
+        const followActive = !!sc.followFn && !sc.pan && (sc.locked || sc.zoomUser >= ZOOM_FOLLOW);
+        dbgEl.textContent = [
+          `followActive   ${followActive}`,
+          `panning        ${!!sc.pan || !!s0.pan}`,
+          `focusedPlanet  ${s0.focusId ?? "-"}`,
+          `engineSelected ${sc.selected ?? "-"}`,
+          `camera.zoom    ${sc.zoomUser.toFixed(2)}`,
+          `engine.zoom    ${(c[4] ?? 0).toFixed(2)} target ${sc.zoomTarget.toFixed(2)}`,
+          `touchMoveDelta ${s0.touchDelta ?? 0}px`,
+        ].join("\n");
+      }, 100);
+    }
     window.__relic = {maxTension: RULES.MAX_TENSION, scene, u: s0, st, combat: () => combatRef.current, say, refresh, positions: () => positions(), hitBody: (p) => hitBody(st.current, positions(), p), get kernel() { return kernel; }, resetKernel: () => { kernel.reset(); kBase = null; gainSeen.fill(0); creditSeen = 0; buildTick = 0; snapSeen.clear(); }};
     applySpeed(); // a tutorial starts with the briefing open, so the clock must stop before the first frame
     return () => {
@@ -1274,6 +1316,8 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       ov.removeEventListener("contextmenu", onCtx);
       ov.removeEventListener("wheel", onWheel);
       ov.removeEventListener("dblclick", onDbl);
+      if (dbgTimer) clearInterval(dbgTimer);
+      dbgEl?.remove();
       window.removeEventListener("pointerdown", onTapCapture, true);
       ov.removeEventListener("pointerdown", onDown);
       ov.removeEventListener("pointermove", onMove);

@@ -19,11 +19,11 @@ const ZOOM = 1.6;
 
 // Camera tuning. Zoom is a range from full-system view to close inspection.
 export const ZOOM_MIN = 0.3, ZOOM_MAX = 4.5;
+export const ZOOM_CLOSE = 40;     // close-up cap, unlocked once a world has been focused (fills the screen with a small world)
 export const ZOOM_DETAIL = 1.8;   // at or above this, ships draw as detailed hulls instead of chevrons
 export const ZOOM_FOLLOW = 2.0;   // at or above this, the camera centres on the followed body
 export const ZOOM_FOCUS = 3.5;    // double-click target zoom
 const ZOOM_GLIDE = 7;             // zoom approach rate (1/s)
-const FOCUS_GLIDE = 6;            // camera centre approach rate (1/s)
 
 // Frame-rate independent exponential approach: after time dt the gap has closed by 1 - exp(-rate * dt).
 export function easeToward(cur, target, dt, rate) {
@@ -193,7 +193,7 @@ export class OrbitScene {
     this.zoomTo(this.zoomTarget * f, snap);
   }
   zoomTo(z, snap = false) {
-    this.zoomTarget = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z));
+    this.zoomTarget = Math.max(ZOOM_MIN, Math.min(this.zoomCap ?? ZOOM_MAX, z));
     if (snap) { this.zoomUser = this.zoomTarget; this.base = this.baseRaw * this.zoomUser; }
   }
   // Camera follows fn() while zoomed in at or above ZOOM_FOLLOW. Pass null to release.
@@ -201,11 +201,18 @@ export class OrbitScene {
   setFollow(fn, shiftPx = null) {
     this.followFn = fn ?? null;
     this.followShiftPx = shiftPx ?? {x: 0, y: 0};
+    this.locked = false;
     this.pan = null; // following a body takes the camera back from a manual pan
   }
 
   // Drag the map: move the camera focus by a screen-space delta (px), in world units at the current zoom.
+  // Put the camera centre on the followed body at once (no glide), so a zoom-in goes straight into it.
+  snapCamera() {
+    const p = this.followFn?.(); if (!p || !this.sim) return;
+    const c = this.sim.c; c[2] = p.x; c[3] = p.y; this.camF = {x: p.x, y: p.y}; this.pan = null; this.locked = true;
+  }
   panBy(px, py) {
+    this.locked = false;
     const c = this.sim.c, z = c[4] * this.base, pitch = this.pitch ?? 1;
     if (!this.pan) this.pan = { x: c[2], y: c[3] };
     this.pan.x -= px / z; this.pan.y -= py / (z * pitch);
@@ -265,15 +272,20 @@ export class OrbitScene {
   followCamera(dt) {
     const c = this.sim.c;
     if (this.pan) { c[2] = this.pan.x; c[3] = this.pan.y; return; }
-    const p = this.followFn && this.zoomUser >= ZOOM_FOLLOW ? this.followFn() : null;
+    // A focus lock keeps following while zooming in from far out (below ZOOM_FOLLOW), so the engine cannot pull the view to empty space.
+    const p = this.followFn && (this.locked || this.zoomUser >= ZOOM_FOLLOW) ? this.followFn() : null;
     if (!p) { this.camF = null; return; }
-    if (!this.camF) this.camF = {x: c[2], y: c[3]};
     // the camera sits off the body by the screen shift, so the body is drawn at centre + shift
-    const zb = c[4] * this.base, sh = this.followShiftPx ?? {x: 0, y: 0};
-    const tx = p.x - sh.x / zb, ty = p.y - sh.y / (zb * (this.pitch ?? 1));   // toScreen scales y by the pitch too
-    this.camF.x = easeToward(this.camF.x, tx, dt, FOCUS_GLIDE);
-    this.camF.y = easeToward(this.camF.y, ty, dt, FOCUS_GLIDE);
-    c[2] = this.camF.x; c[3] = this.camF.y;
+    const zb = c[4] * this.base;
+    const sh = (typeof this.followShiftPx === 'function' ? this.followShiftPx() : this.followShiftPx) ?? {x: 0, y: 0};
+    // Hard lock, every frame: the camera is the followed body's position plus the offset. No easing, so it cannot
+    // trail the orbit or pass through another point on the way.
+    c[2] = p.x - sh.x / zb;
+    c[3] = p.y - sh.y / (zb * (this.pitch ?? 1));   // toScreen scales y by the pitch too
+    this.camF = {x: c[2], y: c[3]};
+    // Pocket mode (phones): the engine eases the screen centre toward its own panel-avoiding point after each step.
+    // Pin it to the canvas middle, so the offset above lands the body exactly where the pocket is.
+    if (typeof this.followShiftPx === 'function') { c[0] = this.w / 2; c[1] = this.h / 2; }
   }
 
   applyPositions() {
@@ -323,6 +335,8 @@ export class OrbitScene {
       this.sim.setView(this.w, this.h, this.base, this.panelWidth);
       this.sim.setParams(this.speed, this.density === 'dense' ? 700 : 260, ZOOM, SEL_SCALE, ORBIT_Y, SIN_E);
       this.sim.step(dt);
+      // refresh world positions first, so the follow lock uses this frame's planet position (not last frame's)
+      this.applyPositions();
       this.followCamera(dt);
       this.applyPositions();
       this.real = this.sim.c[6];
