@@ -109,10 +109,17 @@ function drawVent(ctx, toS, e, k) {
   ctx.fillStyle = g; ctx.beginPath(); ctx.arc(q.x, q.y, r, 0, Math.PI * 2); ctx.fill();
 }
 
-// Raiders: crimson wedges with a hot leading edge.
-function drawRaider(ctx, toS, r, k) {
+// Raiders: crimson wedges with a hot leading edge, or their design's art when zoomed in (opts.detail with opts.art).
+function drawRaider(ctx, toS, r, k, opts) {
   const q = toS(r), a = Math.atan2(r.vy, r.vx);
   ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(a);
+  const img = opts?.detail && opts.art ? opts.art(r) : null;
+  if (img) {
+    const L = 46 * k, h = L * img.naturalHeight / img.naturalWidth;
+    ctx.drawImage(img, -L / 2, -h / 2, L, h);
+    ctx.restore();
+    return;
+  }
   ctx.fillStyle = "#7f1d1d"; ctx.strokeStyle = "#fca5a5"; ctx.lineWidth = 1 * k; ctx.shadowColor = "#ef4444"; ctx.shadowBlur = 8;
   ctx.beginPath(); ctx.moveTo(8 * k, 0); ctx.lineTo(-6 * k, -5 * k); ctx.lineTo(-3 * k, 0); ctx.lineTo(-6 * k, 5 * k); ctx.closePath();
   ctx.fill(); ctx.stroke();
@@ -132,8 +139,8 @@ function drawCharge(ctx, toS, ch, k, t) {
 }
 
 // Draws everything in one combat state. cb: combat state, toS: world to canvas, k: size scale, t: seconds.
-export function drawCombatFx(ctx, toS, cb, k, t) {
-  for (const r of cb.raiders) drawRaider(ctx, toS, r, k);
+export function drawCombatFx(ctx, toS, cb, k, t, opts) {
+  for (const r of cb.raiders) drawRaider(ctx, toS, r, k, opts);
   const idx = new Map();
   for (const sh of cb.shots) {
     if (sh.kind === "kinetic") drawCoilTracer(ctx, toS, sh, k);

@@ -70,3 +70,16 @@ export function arkArt(leaderId) {
   }
   return spriteReady(ARK_ART[key]) ? ARK_ART[key] : null;
 }
+
+// Raider ship designs: public/assets/raiders/<name>.png, nose along +x. Each raider takes one by its id.
+export const RAIDER_DESIGNS = ["red-capital", "red-cruiser", "gray-cruiser", "green-frigate", "orange-blade", "purple-cruiser"];
+const RAIDER_ART = {};
+export function raiderArt(id) {
+  const name = RAIDER_DESIGNS[Math.abs(Number(id) || 0) % RAIDER_DESIGNS.length];
+  if (!RAIDER_ART[name]) {
+    const img = new Image();
+    img.src = `${BASE}/raiders/${name}.png`;
+    RAIDER_ART[name] = img;
+  }
+  return spriteReady(RAIDER_ART[name]) ? RAIDER_ART[name] : null;
+}

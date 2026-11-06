@@ -32,7 +32,7 @@ import {arkState, sendArkToPoint, stepArk, arkRadiation, stepFleet, stepRetreat,
 import {Icon, drawArk, drawRelay} from "./icons.jsx";
 import {Academy} from "./Academy.jsx";
 import {drawPseudo3DShip, sunLocal, emitPlume, updatePlumes, drawPlumes} from "./pseudo3d.js";
-import {commanderSprite, ASSET_BASE, arkArt} from "./assetLoader.js";
+import {commanderSprite, ASSET_BASE, arkArt, raiderArt} from "./assetLoader.js";
 import {enginesFor} from "./thrusters.js";
 import {shadowAt, drawUmbra, drawLensing, drawDebrisBelt} from "./stellarFx.js";
 import {drawCombatFx, drawHullDamage} from "./combatFx.js";
@@ -667,7 +667,7 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
       // warship combat: raiders, weapon discharge, impacts and debris, then hull damage on each ship
       {
         const cb = combatRef.current, k = Math.max(0.6, Math.min(2, scene.zoomUser));
-        drawCombatFx(ctx, toS, cb, k, now / 1000);
+        drawCombatFx(ctx, toS, cb, k, now / 1000, {detail: scene.zoomUser >= ZOOM_DETAIL, art: raiderArt});
         for (const f of s.fleet) {
           const max = hullMax(f), hp = f.hp ?? max;
           if (hp >= max) continue;
