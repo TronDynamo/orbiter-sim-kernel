@@ -27,7 +27,7 @@ import {SenateChamber} from "./SenateChamber.jsx";
 import {VictoryModal} from "./VictoryModal.jsx";
 import {RULES, newState, snapTethers, network, tick, tryTether, checkTether, cut, tetherAt, tensionOf, tensionColor, build, hitBody, distToTether, orderShip, shortfall, fireWeapon} from "./rules.js";
 import {SHIPS, SHIP_ORDER, COST_LABEL, drawShip, drawChevron, fleetPower, FLIGHT_LENGTH, DEPOT_COST, ARMOR, hullMax} from "./ships.js";
-import {arkState, sendArkToPoint, stepArk, arkRadiation, stepFleet, sendShip, sendShipToPoint, emergencyBurn, shipPosition, interceptAt, depotPos, MAX_PROPELLANT, deploySatellite, SURVEY_TICKS, CARGO_CAP, IMPULSE, OVERCLOCK, predictOrbit} from "./fleet.js";
+import {arkState, sendArkToPoint, stepArk, arkRadiation, stepFleet, stepRetreat, sendShip, sendShipToPoint, emergencyBurn, shipPosition, interceptAt, depotPos, MAX_PROPELLANT, deploySatellite, SURVEY_TICKS, CARGO_CAP, IMPULSE, OVERCLOCK, predictOrbit} from "./fleet.js";
 import {Icon, drawArk, drawRelay} from "./icons.jsx";
 import {Academy} from "./Academy.jsx";
 import {drawPseudo3DShip, sunLocal, emitPlume, updatePlumes, drawPlumes} from "./pseudo3d.js";
@@ -890,6 +890,13 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
             const vel = {};
             for (const id of Object.keys(P)) if (prevP[id]) vel[id] = {x: (P[id].x - prevP[id].x) / dt, y: (P[id].y - prevP[id].y) / dt};
             lastVel = vel; // the arrival marker predicts with the same world speeds the ships steer by
+            // a ship whose hull is critical breaks off to the Ark; the camera follows it there
+            const ret = stepRetreat(s, P, dt);
+            for (const m of ret.msgs) say(m);
+            if (ret.started.length) {
+              const rid = ret.started[0];
+              scene.setFollow(() => { const f = st.current.fleet.find((x) => x.id === rid); return f && positions() ? shipPosition(f, positions()) : null; });
+            }
             // ships on an attack order chase their raider and hold station at gun range
             for (const f of s.fleet) {
               if (f.attack == null) continue;

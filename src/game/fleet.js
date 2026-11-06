@@ -330,3 +330,38 @@ export function interceptAt(s, planetId) {
   if (f.hp <= 0) { s.fleet.splice(i, 1); return {ship: f, destroyed: true}; }
   return {ship: f, destroyed: false};
 }
+
+// Retreat: a ship whose hull falls below RETREAT_AT of its maximum breaks off to the Ark. It burns toward the Ark
+// as the Ark moves, and once within ARK_DOCK of it, it holds there and repairs at HULL_REPAIR_PER_TICK until whole.
+// Returns {msgs, started} where started lists the ship ids that have just begun retreating (for the camera to follow).
+export const RETREAT_AT = 0.3, ARK_DOCK = 60;
+export function stepRetreat(s, P, ticks) {
+  const msgs = [], started = [];
+  const a = arkState(s);
+  for (const f of s.fleet) {
+    const max = hullMax(f) || 100;
+    if (f.hp === undefined) continue;
+    const name = SHIPS[f.type]?.name ?? 'Ship';
+    if (!f.retreat && f.mode !== 'docked' && f.hp < max * RETREAT_AT) {
+      f.retreat = true; started.push(f.id);
+      msgs.push(`${name} breaks off for the Ark: hull critical.`);
+    }
+    if (!f.retreat) continue;
+    f.attack = null;                                   // a retreating ship drops any attack order
+    if (f.hp >= max) {
+      f.retreat = false; f.repairing = false; f.thrust = 0;
+      msgs.push(`${name} is repaired and back under command.`);
+      continue;
+    }
+    const q = shipPosition(f, P);
+    if (Math.hypot(a.x - q.x, a.y - q.y) <= ARK_DOCK) {
+      if (!f.repairing) msgs.push(`${name} is docked with the Ark for repairs.`);
+      f.repairing = true; f.mode = 'hold'; f.x = a.x; f.y = a.y; f.thrust = 0; f.dest = null;
+      f.hp = Math.min(max, f.hp + HULL_REPAIR_PER_TICK * ticks);
+    } else {
+      f.repairing = false; f.mode = 'transit'; f.to = null; f.leadTo = null;
+      f.x = q.x; f.y = q.y; f.dest = {x: a.x, y: a.y}; f.thrust = 1;
+    }
+  }
+  return {msgs, started};
+}
