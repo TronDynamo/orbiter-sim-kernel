@@ -5,7 +5,7 @@
 import {PLANETS} from "../../config/planets.js";
 import {SHIPS, hullMax} from "./ships.js";
 import {bankShip} from "./pseudo3d.js";
-import {RULES} from "./rules.js";
+import {RULES, arkOrbitSlot, ARK_ORBIT0} from "./rules.js";
 import {ARK_POS} from "./galaxy.js";
 import {EMERGENCY} from "./emergency.js";
 
@@ -79,7 +79,8 @@ export function depotPos(d, P) {
 export function shipPosition(f, P) {
   if (isOrbiting(f)) {
     const c = P[f.planet] ?? {x: 0, y: 0};
-    return {x: c.x + SHIP_ORBIT * Math.cos(f.ang), y: c.y + SHIP_ORBIT * Math.sin(f.ang)};
+    const r = f.orbitR ?? SHIP_ORBIT;
+    return {x: c.x + r * Math.cos(f.ang), y: c.y + r * Math.sin(f.ang)};
   }
   if (f.mode === 'docked') return P[f.depot] ?? {x: f.x ?? 0, y: f.y ?? 0};
   if (f.mode === 'surf') {
@@ -119,6 +120,11 @@ export function stepFleet(s, P, ticks, ctx) {
     const burn = f.overclock ? OVERCLOCK.burn : 1;
     const speed = (IMPULSE[f.type] ?? 1.5) * boost * (f.emergency ? 1 + EMERGENCY.thrust : 1);
     if (isOrbiting(f)) {
+      // the Ark refuels the shared tanks and mends hulls in orbit around it, the same as a depot
+      if (f.planet === 'ark' && f.mode === 'orbit') {
+        s.propellant = Math.min(MAX_PROPELLANT, s.propellant + REFUEL_PER_TICK * ticks);
+        f.hp = Math.min(max, f.hp + HULL_REPAIR_PER_TICK * ticks);
+      }
       f.ang += ORBIT_RATE * ticks;
       if (f.mode === 'survey') {
         f.surveyLeft = Math.max(0, (f.surveyLeft ?? SURVEY_TICKS) - ticks);
@@ -334,7 +340,7 @@ export function interceptAt(s, planetId) {
 // Retreat: a ship whose hull falls below RETREAT_AT of its maximum breaks off to the Ark. It burns toward the Ark
 // as the Ark moves, and once within ARK_DOCK of it, it holds there and repairs at HULL_REPAIR_PER_TICK until whole.
 // Returns {msgs, started} where started lists the ship ids that have just begun retreating (for the camera to follow).
-export const RETREAT_AT = 0.3, ARK_DOCK = 60;
+export const RETREAT_AT = 0.3, ARK_DOCK = 90;
 export function stepRetreat(s, P, ticks) {
   const msgs = [], started = [];
   const a = arkState(s);
@@ -354,10 +360,13 @@ export function stepRetreat(s, P, ticks) {
       continue;
     }
     const q = shipPosition(f, P);
-    if (Math.hypot(a.x - q.x, a.y - q.y) <= ARK_DOCK) {
-      if (!f.repairing) msgs.push(`${name} is docked with the Ark for repairs.`);
-      f.repairing = true; f.mode = 'hold'; f.x = a.x; f.y = a.y; f.thrust = 0; f.dest = null;
-      f.hp = Math.min(max, f.hp + HULL_REPAIR_PER_TICK * ticks);
+    if (f.planet === 'ark' && f.mode === 'orbit') {
+      // already in orbit around the Ark: the orbit branch repairs it
+    } else if (Math.hypot(a.x - q.x, a.y - q.y) <= ARK_DOCK) {
+      const slot = arkOrbitSlot(s.fleet, f.id);
+      f.mode = 'orbit'; f.planet = 'ark'; f.orbitR = slot.r; f.ang = slot.ang; f.from = null; f.to = null; f.dest = null; f.thrust = 0;
+      f.repairing = true;
+      msgs.push(`${name} takes an Ark orbit for repairs.`);
     } else {
       f.repairing = false; f.mode = 'transit'; f.to = null; f.leadTo = null;
       f.x = q.x; f.y = q.y; f.dest = {x: a.x, y: a.y}; f.thrust = 1;

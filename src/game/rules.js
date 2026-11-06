@@ -187,6 +187,15 @@ export function tetherAt(state, P, pt, pad = 10) {
   return best;
 }
 
+// Ships in orbit around the Ark each get their own radius, so no two share a spot. Returns the first free one.
+export const ARK_ORBIT0 = 60, ARK_ORBIT_GAP = 24;
+export function arkOrbitSlot(fleet, skipId) {
+  const taken = fleet.filter((f) => f.planet === 'ark' && f.mode === 'orbit' && f.id !== skipId && f.orbitR != null).map((f) => f.orbitR);
+  let k = 0;
+  while (taken.some((r) => Math.abs(r - (ARK_ORBIT0 + k * ARK_ORBIT_GAP)) < ARK_ORBIT_GAP / 2)) k += 1;
+  return {r: ARK_ORBIT0 + k * ARK_ORBIT_GAP, ang: k * 2.4};
+}
+
 // One game second: production, upkeep, radiation, collapse, win/lose. Returns events.
 export function tick(state, P) {
   const events = [];
@@ -202,9 +211,9 @@ export function tick(state, P) {
   state.queue = state.queue.filter((q) => {
     q.left -= 1;
     if (q.left > 0) return true;
-    // every new hull launches from the Ark Endeavor and holds position beside it until ordered
-    const ark = state.ark ?? ARK_POS;
-    state.fleet.push({id: q.id, type: q.type, mode: 'hold', x: ark.x, y: ark.y, heading: 0, thrust: 0, hp: SHIPS[q.type].hull});
+    // every new hull launches from the Ark Endeavor and takes a free orbit around it
+    const slot = arkOrbitSlot(state.fleet, null);
+    state.fleet.push({id: q.id, type: q.type, mode: 'orbit', planet: 'ark', orbitR: slot.r, ang: slot.ang, heading: 0, thrust: 0, hp: SHIPS[q.type].hull});
     events.push({msg: `${SHIPS[q.type].name} launched from the Ark Endeavor.`});
     return false;
   });
