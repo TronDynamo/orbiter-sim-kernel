@@ -60,6 +60,13 @@ export const BIOME_CLASS = {
   "Cryo-Glacier": "glacier", "Nitrogen Ice": "glacier", "Frozen Cryo-Sphere": "glacier", "Ice Drift": "glacier",
   // Diamond
   "Carbon Diamond": "diamond", "Precursor Ruin": "diamond", "Crystal Shard": "diamond", "Nebula Veil": "diamond",
+  // Generator biome keys (galaxyGenerator.js BIOMES). Without these every generated world fell back to basalt.
+  "magma-forge": "basalt", "volcanic-obsidian": "basalt", "irradiated-glass": "basalt", "shattered-mantle": "basalt",
+  "radium-basin": "basalt", "barren-moon": "basalt", "ship-graveyard": "basalt",
+  "diamondite": "diamond", "crystal-shard": "diamond", "precursor": "diamond",
+  "pelagic-ocean": "pelagic", "fungal-jungle": "pelagic", "living-biohive": "pelagic",
+  "methane-storm": "methane", "storm-gas-dwarf": "methane",
+  "glacial-cryo": "glacier",
 };
 export function yieldClassOf(biome) {
   return YIELD_CLASSES[BIOME_CLASS[biome]] ?? YIELD_CLASSES.basalt;
