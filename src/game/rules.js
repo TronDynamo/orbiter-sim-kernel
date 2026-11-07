@@ -242,7 +242,9 @@ export function tick(state, P) {
     return false;
   });
   for (const id of ['thalassa', 'aeros']) if (net.has(id)) state.hull -= 0.03 * rad;
-  state.fuel -= RULES.LIFE_FUEL + state.tethers.length * RULES.TETHER_FUEL;
+  // Fuel is burned only while the Ark or one of our ships is under way. Parked, the Ark and fleet use none.
+  const underway = !!state.ark?.dest || (state.fleet ?? []).some((f) => f.mode === 'transit' || f.dest || (f.thrust ?? 0) > 0);
+  if (underway) state.fuel -= RULES.LIFE_FUEL + state.tethers.length * RULES.TETHER_FUEL;
   state.fuel = Math.max(0, state.fuel);
   state.year = Math.floor(state.lastTick / RULES.YEAR_SECONDS) + 1;
   // radiation is not a yearly climb: it rises only when a nova has gone off, and only the Ark inside the blast zone takes it
