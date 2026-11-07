@@ -1018,7 +1018,6 @@ function GameSession({kernel, session, onRestart, onLoad, onQuit}) {
         ctx.drawImage(arkImg, ark.x - aw / 2, ark.y - ah / 2, aw, ah);
       } else drawArk(ctx, ark.x, ark.y);
       if (s0.arkSel) { ctx.strokeStyle = "#7dd3fc"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(ark.x, ark.y, 24, 0, Math.PI * 2); ctx.stroke(); }
-      ctx.font = "12px system-ui"; ctx.fillStyle = "#cfd8e6"; ctx.fillText("Ark Endeavor", ark.x, arkImg ? ark.y - arkSize * (arkImg.naturalHeight / arkImg.naturalWidth) / 2 - 8 : ark.y - 20);
       for (const r of s.relays) {
         const q = toS(r);
         drawRelay(ctx, q.x, q.y);
